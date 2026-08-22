@@ -1,10 +1,6 @@
 # 🧈 MASLOOPTIMIZER (v0.3.1)
 
 <p align="center">
-  <img src="icon/maslo.jpg" width="120" height="120" style="border-radius: 50%;" alt="MASLOOPTIMIZER Logo" />
-</p>
-
-<p align="center">
   <b>Комплексна утиліта для тонкого налаштування, очищення та діагностики Windows 10/11 на .NET 8</b><br>
   <i>Створено з нуля для себе, переписано на C# у колаборації з AI.</i>
 </p>
