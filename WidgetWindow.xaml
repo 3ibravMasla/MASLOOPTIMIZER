@@ -1,0 +1,204 @@
+<Window x:Class="MASLOOPTIMIZER.WidgetWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MASLO_HUD_WIDGET" Height="340" Width="430"
+        WindowStartupLocation="Manual" Top="80" Left="80"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize"
+        MinWidth="280" MinHeight="220">
+
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI, Segoe UI Variable Display"/>
+        </Style>
+
+        <Style x:Key="WidgetActionBtn" TargetType="Button">
+            <Setter Property="Background" Value="#141824"/>
+            <Setter Property="Foreground" Value="#F8FAFC"/>
+            <Setter Property="FontSize" Value="10.5"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Padding" Value="4,6"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderBrush" Value="#222B3D"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="btnBrd" Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}" 
+                                BorderThickness="{TemplateBinding BorderThickness}" 
+                                CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="btnBrd" Property="Background" Value="#1F293D"/>
+                                <Setter TargetName="btnBrd" Property="BorderBrush" Value="#00FF9D"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="btnBrd" Property="Background" Value="#05D384"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ResizeThumbStyle" TargetType="Thumb">
+            <Setter Property="Cursor" Value="SizeNWSE"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="Transparent" Width="14" Height="14">
+                            <Path Data="M 10,2 L 12,2 L 12,12 L 2,12 L 2,10 L 10,10 Z M 6,6 L 8,6 L 8,12 L 6,12 Z" Fill="#00FF9D" Opacity="0.65"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Viewbox Stretch="Uniform">
+        <Border x:Name="MainWidgetBorder" Width="430" Height="340" Background="#E80A0D14" BorderBrush="#00FF9D" BorderThickness="1.8"
+                CornerRadius="14" Padding="14,10" Margin="4" Cursor="SizeAll" MouseLeftButtonDown="Border_MouseLeftButtonDown">
+            <Border.Effect>
+                <DropShadowEffect x:Name="MainGlow" BlurRadius="18" ShadowDepth="2" Direction="270" Color="#00FF9D" Opacity="0.35"/>
+            </Border.Effect>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Хедер -->
+                <Grid Grid.Row="0" Margin="0,2,0,8">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="10" Margin="0,-4,-2,0">
+                        <Button x:Name="BtnSettings" Content="⚙️" FontSize="13" Background="Transparent" BorderThickness="0" Foreground="#94A3B8" Cursor="Hand" Padding="3,1" ToolTip="Налаштування підсвітки, тем та автозапуску" Click="BtnSettings_Click"/>
+                        <TextBlock x:Name="BtnCloseWidget" Text="✕" FontSize="13.5" FontWeight="Black" Foreground="#64748B" Cursor="Hand" Margin="5,2,2,0" VerticalAlignment="Center" ToolTip="Приховати в трей" MouseDown="BtnCloseWidget_MouseDown"/>
+                    </StackPanel>
+
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" x:Name="TxtBrandLeft" Text="MASL" FontSize="24" FontWeight="Black" 
+                                   Foreground="#00FF9D" VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                        <Border Grid.Column="1" x:Name="LogoBorder" Width="86" Height="86" CornerRadius="43" BorderBrush="#00FF9D" BorderThickness="2.6" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <Border.Effect>
+                                <DropShadowEffect x:Name="LogoGlow" BlurRadius="18" Color="#00FF9D" Opacity="0.7"/>
+                            </Border.Effect>
+                            <Image x:Name="WidgetLogo" Width="82" Height="82" Stretch="UniformToFill">
+                                <Image.Clip>
+                                    <EllipseGeometry Center="41,41" RadiusX="41" RadiusY="41"/>
+                                </Image.Clip>
+                            </Image>
+                        </Border>
+
+                        <TextBlock Grid.Column="2" Text="PTIMIZER" FontSize="24" FontWeight="Black" 
+                                   Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                    </Grid>
+                </Grid>
+
+                <!-- Телеметрія -->
+                <Border Grid.Row="1" Background="#10141F" CornerRadius="8" Padding="10,7" Margin="0,0,0,7" BorderBrush="#1C2436" BorderThickness="1">
+                    <StackPanel>
+                        <!-- CPU -->
+                        <Grid Margin="0,0,0,2.5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="🔥 CPU: " FontSize="11" FontWeight="Bold" Foreground="#94A3B8"/>
+                            <TextBlock Grid.Column="1" x:Name="TxtCpuModel" Text="CPU" FontSize="11" FontWeight="SemiBold" Foreground="#F8FAFC" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtCpuLoad" Text="0%" FontSize="11" FontWeight="Black" Foreground="#00FF9D" Margin="4,0,0,0"/>
+                        </Grid>
+
+                        <!-- GPU -->
+                        <Grid Margin="0,0,0,2.5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="🎮 GPU: " FontSize="11" FontWeight="Bold" Foreground="#94A3B8"/>
+                            <TextBlock Grid.Column="1" x:Name="TxtGpuModel" Text="GPU" FontSize="11" FontWeight="SemiBold" Foreground="#F8FAFC" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtGpuLoad" Text="0%" FontSize="11" FontWeight="Black" Foreground="#38BDF8" Margin="4,0,0,0"/>
+                        </Grid>
+
+                        <!-- RAM -->
+                        <Grid Margin="0,0,0,2.5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="⚡ RAM: " FontSize="11" FontWeight="Bold" Foreground="#94A3B8"/>
+                            <TextBlock Grid.Column="1" x:Name="TxtRamUsage" Text="Завантаження..." FontSize="11" FontWeight="SemiBold" Foreground="#F8FAFC" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtRamPercent" Text="0%" FontSize="11" FontWeight="Black" Foreground="#F59E0B" Margin="4,0,0,0"/>
+                        </Grid>
+
+                        <!-- Диск C: & Мережа -->
+                        <Grid Margin="0,0,0,2.5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                <TextBlock Text="💾 C: " FontSize="10.5" FontWeight="Bold" Foreground="#94A3B8"/>
+                                <TextBlock x:Name="TxtDiskUsage" Text="0 / 0 ГБ" FontSize="10.5" FontWeight="SemiBold" Foreground="#F8FAFC"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="🌐 " FontSize="10.5" Foreground="#94A3B8"/>
+                                <TextBlock x:Name="TxtNetSpeed" Text="↓ 0 KB/s  ↑ 0 KB/s" FontSize="10.5" FontWeight="SemiBold" Foreground="#38BDF8"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Uptime -->
+                        <Grid Margin="0,0,0,3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="⏱️ Uptime: " FontSize="10.5" FontWeight="Bold" Foreground="#94A3B8"/>
+                            <TextBlock Grid.Column="1" x:Name="TxtUptime" Text="Розрахунок..." FontSize="10.5" FontWeight="SemiBold" Foreground="#A78BFA"/>
+                        </Grid>
+
+                        <ProgressBar x:Name="ProgressRam" Height="4" Background="#0A0D14" Foreground="#00FF9D" BorderThickness="0" Minimum="0" Maximum="100" Value="50"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Кнопки швидких дій -->
+                <Grid Grid.Row="2" VerticalAlignment="Bottom">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Button Grid.Row="0" Grid.Column="0" x:Name="BtnOpenApp" Style="{StaticResource WidgetActionBtn}" Content="🚀 Оптимізатор" ToolTip="Відкрити головне вікно MASLOOPTIMIZER" Click="BtnOpenApp_Click"/>
+                    <Button Grid.Row="0" Grid.Column="1" x:Name="BtnTaskMgr" Style="{StaticResource WidgetActionBtn}" Content="📊 Диспетчер" ToolTip="Відкрити Диспетчер завдань Windows" Click="BtnTaskMgr_Click"/>
+                    <Button Grid.Row="0" Grid.Column="2" x:Name="BtnReboot" Style="{StaticResource WidgetActionBtn}" Content="🔄 Перезапуск" ToolTip="Чисте повне перезавантаження ПК (з підтвердженням)" Click="BtnReboot_Click"/>
+
+                    <Button Grid.Row="1" Grid.Column="0" x:Name="BtnFlushRam" Style="{StaticResource WidgetActionBtn}" Content="🧹 Очистити ОЗП" ToolTip="Очистити робочі набори пам'яті процесів" Click="BtnFlushRam_Click"/>
+                    <Button Grid.Row="1" Grid.Column="1" x:Name="BtnEmptyTrash" Style="{StaticResource WidgetActionBtn}" Content="🗑️ Кошик" ToolTip="Очистити кошик Windows на всіх дисках" Click="BtnEmptyTrash_Click"/>
+                    <Button Grid.Row="1" Grid.Column="2" x:Name="BtnShutdown" Style="{StaticResource WidgetActionBtn}" Content="🛑 Вимкнути ПК" ToolTip="Повне вимкнення комп'ютера (з підтвердженням)" Click="BtnShutdown_Click"/>
+
+                    <Thumb Grid.Row="1" Grid.Column="2" x:Name="ResizeThumb" Style="{StaticResource ResizeThumbStyle}" 
+                           HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3" DragDelta="ResizeThumb_DragDelta"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Viewbox>
+</Window>

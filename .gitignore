@@ -1,0 +1,16 @@
+﻿bin/
+obj/
+_build_release/
+backups/
+logs/
+presets/
+.vs/
+.vscode/
+*.exe
+*.dll
+*.pdb
+*.zip
+*.user
+*.suo
+*.tmp
+*.log

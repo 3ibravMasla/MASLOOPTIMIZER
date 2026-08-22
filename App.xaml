@@ -1,0 +1,104 @@
+﻿<Application x:Class="MASLOOPTIMIZER.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <!-- Базові кольори Cyber Dark за замовчуванням -->
+        <SolidColorBrush x:Key="WindowBg" Color="#0B0C10"/>
+        <SolidColorBrush x:Key="HeaderBg" Color="#12141C"/>
+        <SolidColorBrush x:Key="HeaderBorder" Color="#1E2230"/>
+        <SolidColorBrush x:Key="SidebarBg" Color="#10121A"/>
+        <SolidColorBrush x:Key="SidebarBorder" Color="#1A1E2B"/>
+        <SolidColorBrush x:Key="CardBg" Color="#151722"/>
+        <SolidColorBrush x:Key="CardBorder" Color="#212536"/>
+        <SolidColorBrush x:Key="ActionBtnBg" Color="#181B26"/>
+        <SolidColorBrush x:Key="ActionBtnBorder" Color="#262C3E"/>
+        <SolidColorBrush x:Key="NavBtnBg" Color="Transparent"/>
+        <SolidColorBrush x:Key="NavBtnHover" Color="#181B28"/>
+        <SolidColorBrush x:Key="NavBtnActive" Color="#1E2333"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#F1F5F9"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#94A3B8"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#64748B"/>
+        <SolidColorBrush x:Key="StatusBg" Color="#12141C"/>
+        <SolidColorBrush x:Key="StatusBorder" Color="#1E2230"/>
+        <SolidColorBrush x:Key="AccentGreen" Color="#00FF9D"/>
+        <SolidColorBrush x:Key="BadgeBg" Color="#161924"/>
+        <SolidColorBrush x:Key="ProgressTrack" Color="#181B26"/>
+        <SolidColorBrush x:Key="ProgressFill" Color="#00FF9D"/>
+        <SolidColorBrush x:Key="ChipBg" Color="#1E2235"/>
+        <SolidColorBrush x:Key="ChipBorder" Color="#334155"/>
+        <SolidColorBrush x:Key="ChipText" Color="#CBD5E1"/>
+        <SolidColorBrush x:Key="ChipHoverBg" Color="#2A344A"/>
+        <SolidColorBrush x:Key="ChipActiveBg" Color="#0078D4"/>
+
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI, Segoe UI Variable Display"/>
+        </Style>
+
+        <!-- Стиль навігаційних кнопок сайдбара -->
+        <Style x:Key="SidebarNavBtn" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource NavBtnBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="Margin" Value="0,0,0,3"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Name="NavBorder" Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}" BorderThickness="1" BorderBrush="Transparent">
+                            <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBorder" Property="Background" Value="{DynamicResource NavBtnHover}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Стиль кнопок дій у шапці -->
+        <Style x:Key="HeaderActionBtn" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource ActionBtnBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ActionBtnBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Name="BtnBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Background" Value="{DynamicResource ChipHoverBg}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Стиль апаратних бейджів -->
+        <Style x:Key="HwBadge" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource BadgeBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ActionBtnBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
+    </Application.Resources>
+</Application>
