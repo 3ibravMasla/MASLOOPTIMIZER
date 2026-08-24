@@ -3,7 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MASLOOPTIMIZER — Історія дій та логи" Height="500" Width="720"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource WindowBg}" ResizeMode="NoResize"
-        WindowStyle="None" AllowsTransparency="True">
+        WindowStyle="None" AllowsTransparency="True"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
 
     <Border BorderBrush="{DynamicResource AccentGreen}" BorderThickness="1.5" CornerRadius="10" Background="{DynamicResource HeaderBg}" Padding="20">
         <Grid>
@@ -13,6 +14,7 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
+            <!-- Header -->
             <Grid Grid.Row="0" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -22,11 +24,12 @@
                     <TextBlock Text="📊 ІСТОРІЯ ДІЙ ТА СИСТЕМНИЙ ЖУРНАЛ" FontSize="14" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
                     <TextBlock Text="Журнал виконання твіків, аналізу та службових операцій" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>
                 </StackPanel>
-                <Button Grid.Column="1" Content="✕" Background="Transparent" Foreground="{DynamicResource TextMuted}" FontWeight="Bold" FontSize="14" BorderThickness="0" Cursor="Hand" Click="BtnClose_Click"/>
+                <Button Grid.Column="1" Content="✕" Background="Transparent" Foreground="{DynamicResource TextMuted}" FontWeight="Bold" FontSize="14" BorderThickness="0" Cursor="Hand" IsCancel="True" Click="BtnClose_Click"/>
             </Grid>
 
+            <!-- Logs View -->
             <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,12">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ScrollViewer x:Name="LogsScrollViewer" VerticalScrollBarVisibility="Auto">
                     <ItemsControl x:Name="LogsItemsControl">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
@@ -48,8 +51,9 @@
                 </ScrollViewer>
             </Border>
 
+            <!-- Footer -->
             <Grid Grid.Row="2">
-                <Button HorizontalAlignment="Right" Content="Закрити" Style="{StaticResource HeaderActionBtn}" Click="BtnClose_Click"/>
+                <Button HorizontalAlignment="Right" Content="Закрити" Style="{StaticResource HeaderActionBtn}" IsCancel="True" Click="BtnClose_Click"/>
             </Grid>
         </Grid>
     </Border>

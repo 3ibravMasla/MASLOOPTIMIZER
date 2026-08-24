@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -10,7 +11,6 @@ public class LocalizationManager : INotifyPropertyChanged
 
     public string CurrentLanguage { get; private set; } = "UK";
 
-    // Словник швидкого доступу
     private readonly Dictionary<string, Dictionary<string, string>> _translations = new()
     {
         ["UK"] = new()
@@ -73,6 +73,7 @@ public class LocalizationManager : INotifyPropertyChanged
         {
             CurrentLanguage = langCode;
             OnPropertyChanged("Item[]");
+            OnPropertyChanged(nameof(CurrentLanguage));
         }
     }
 

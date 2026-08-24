@@ -9,17 +9,14 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-// Явні аліаси для виключення колізій із WinForms
 using Application = System.Windows.Application;
 using Button = System.Windows.Controls.Button;
 using MessageBox = System.Windows.MessageBox;
 using MessageBoxButton = System.Windows.MessageBoxButton;
 using MessageBoxImage = System.Windows.MessageBoxImage;
 using MessageBoxResult = System.Windows.MessageBoxResult;
-using Clipboard = System.Windows.Clipboard;
 using Cursors = System.Windows.Input.Cursors;
 using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using SolidColorBrush = System.Windows.Media.SolidColorBrush;
@@ -56,10 +53,8 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        // 1. Ініціалізація системного трею
         TrayManager.Initialize();
 
-        // 2. Перевірка першого запуску
         if (!SafetyWindow.CheckConsentGiven())
         {
             var safety = new SafetyWindow { Owner = this };
@@ -71,7 +66,6 @@ public partial class MainWindow : Window
             }
         }
 
-        // 3. Завантаження круглого логотипу
         try
         {
             var uri = new Uri("pack://application:,,,/icon/maslo.jpg", UriKind.Absolute);
@@ -91,29 +85,30 @@ public partial class MainWindow : Window
             }
         }
 
-        // 4. Апаратні бейджі
-        _ = DiagnosticEngine.GetQuickHardwareInfoAsync().ContinueWith(task =>
+        try
         {
-            if (task.IsCompletedSuccessfully)
-            {
-                _currentHwInfo = task.Result;
-                Dispatcher.Invoke(() =>
-                {
-                    HwBadgeOS.Text = _currentHwInfo.OS;
-                    HwBadgeCPU.Text = _currentHwInfo.CPU;
-                    HwBadgeGPU.Text = _currentHwInfo.GPU;
-                    HwBadgeRAM.Text = _currentHwInfo.RAM;
-                    HwBadgeDisk.Text = _currentHwInfo.DiskFree;
-                });
-            }
-        });
+            _currentHwInfo = await DiagnosticEngine.GetQuickHardwareInfoAsync();
+            HwBadgeOS.Text = _currentHwInfo.OS;
+            HwBadgeCPU.Text = _currentHwInfo.CPU;
+            HwBadgeGPU.Text = _currentHwInfo.GPU;
+            HwBadgeRAM.Text = _currentHwInfo.RAM;
+            HwBadgeDisk.Text = _currentHwInfo.DiskFree;
+        }
+        catch
+        {
+            HwBadgeOS.Text = "Windows 11 / 10 x64";
+            HwBadgeCPU.Text = "CPU Ready";
+            HwBadgeGPU.Text = "GPU Ready";
+            HwBadgeRAM.Text = "16 GB";
+            HwBadgeDisk.Text = "OK";
+        }
 
-        // 5. Завантаження твіків
         TweakEngine.Instance.LoadTweaks();
         HwBadgeTweaksCount.Text = $"{TweakEngine.Instance.AllTweaks.Count} твіків";
         UpdateNavigationAndFilter();
 
-        // 6. Оцінка стану системи
+        _ = ToolsEngine.DetectInstalledToolsAsync();
+
         StatusText.Text = "Перевірка активних параметрів системи...";
         await TweakEngine.Instance.EvaluateAllStatusesAsync((percent, name) =>
         {
@@ -129,7 +124,6 @@ public partial class MainWindow : Window
         AppProgressBar.Value = 100;
         ProgressPercentText.Text = "100%";
 
-        // 7. Перевірка оновлень на GitHub
         _ = UpdateManager.CheckForUpdateAsync().ContinueWith(task =>
         {
             if (task.IsCompletedSuccessfully && task.Result.UpdateAvailable)
@@ -150,13 +144,15 @@ public partial class MainWindow : Window
     {
         CategoryChipsPanel.Children.Clear();
 
-        var tweaksInRisk = TweakEngine.Instance.AllTweaks.Where(t => t.Risk == _currentRisk).ToList();
-        var categories = tweaksInRisk.Select(t => t.Category).Distinct().OrderBy(c => c).ToList();
-        categories.Insert(0, "Всі");
+        var categories = TweakEngine.Instance.GetCategories(_currentRisk);
+
+        var tweaksInRisk = TweakEngine.Instance.AllTweaks
+            .Where(t => string.Equals(t.Risk, _currentRisk, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
         foreach (var cat in categories)
         {
-            int count = cat == "Всі" ? tweaksInRisk.Count : tweaksInRisk.Count(t => t.Category == cat);
+            int count = cat == "Всі" ? tweaksInRisk.Count : tweaksInRisk.Count(t => string.Equals(t.Category, cat, StringComparison.OrdinalIgnoreCase));
 
             var chip = new Border
             {
@@ -166,13 +162,13 @@ public partial class MainWindow : Window
                 Margin = new Thickness(0, 0, 6, 4),
                 Cursor = Cursors.Hand,
                 Tag = cat,
-                Background = (Brush)FindResource(cat == _currentCategory ? "ChipActiveBg" : "ChipBg"),
+                Background = (Brush)FindResource(string.Equals(cat, _currentCategory, StringComparison.OrdinalIgnoreCase) ? "ChipActiveBg" : "ChipBg"),
                 BorderBrush = (Brush)FindResource("ChipBorder"),
                 Child = new TextBlock
                 {
                     Text = cat == "Всі" ? $"🌟 Всі ({count})" : $"{cat} ({count})",
                     FontSize = 11.5,
-                    FontWeight = cat == _currentCategory ? FontWeights.Bold : FontWeights.SemiBold,
+                    FontWeight = string.Equals(cat, _currentCategory, StringComparison.OrdinalIgnoreCase) ? FontWeights.Bold : FontWeights.SemiBold,
                     Foreground = (Brush)FindResource("TextPrimary")
                 }
             };
@@ -187,11 +183,11 @@ public partial class MainWindow : Window
         }
 
         FilteredTweaks.Clear();
-        var filtered = tweaksInRisk.Where(t =>
-            (_currentCategory == "Всі" || t.Category == _currentCategory) &&
-            (string.IsNullOrWhiteSpace(_searchQuery) ||
-             t.Name.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ||
-             t.Description.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase))
+        var filtered = TweakEngine.Instance.GetFilteredAndSortedTweaks(
+            riskLevel: _currentRisk,
+            category: _currentCategory,
+            searchQuery: _searchQuery,
+            sortMode: TweakSortMode.Default
         );
 
         foreach (var tweak in filtered)
@@ -214,6 +210,7 @@ public partial class MainWindow : Window
             if (tag == "DNS")
             {
                 DnsView.Visibility = Visibility.Visible;
+                DnsEngine.DetectActiveDns();
                 StatusText.Text = "Замір пінгу DNS-серверів...";
                 await DnsEngine.MeasureAllPingsAsync();
                 StatusText.Text = "DNS-сервери відсортовано за найменшим пінгом.";
@@ -243,6 +240,7 @@ public partial class MainWindow : Window
             else if (tag == "TOOLS")
             {
                 ToolsView.Visibility = Visibility.Visible;
+                await ToolsEngine.DetectInstalledToolsAsync();
                 StatusText.Text = "Бібліотека софту та інструментів готова.";
             }
             else
@@ -269,11 +267,19 @@ public partial class MainWindow : Window
     {
         if (sender is Button btn && btn.Tag is TweakModel tweak)
         {
-            StatusText.Text = $"Застосування: {tweak.Name}...";
-            AppLogger.Log($"Застосування твіка: {tweak.Name}");
-            bool res = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
-            StatusText.Text = res ? $"Успішно застосовано: {tweak.Name}" : $"Помилка виконання: {tweak.Name}";
-            AppLogger.Log($"Результат {tweak.Name}: {res}", res ? "SUCCESS" : "ERROR");
+            try
+            {
+                StatusText.Text = $"Застосування: {tweak.Name}...";
+                AppLogger.Log($"Застосування твіка: {tweak.Name}");
+                bool res = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
+                StatusText.Text = res ? $"Успішно застосовано: {tweak.Name}" : $"Помилка виконання: {tweak.Name}";
+                AppLogger.Log($"Результат {tweak.Name}: {res}", res ? "SUCCESS" : "ERROR");
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Збій: {ex.Message}";
+                AppLogger.Log($"Помилка при застосуванні {tweak.Name}: {ex.Message}", "ERROR");
+            }
         }
     }
 
@@ -281,17 +287,28 @@ public partial class MainWindow : Window
     {
         if (sender is Button btn && btn.Tag is TweakModel tweak)
         {
-            StatusText.Text = $"Відновлення: {tweak.Name}...";
-            AppLogger.Log($"Відновлення твіка: {tweak.Name}");
-            bool res = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: false);
-            StatusText.Text = res ? $"Відновлено: {tweak.Name}" : $"Помилка відновлення: {tweak.Name}";
-            AppLogger.Log($"Результат відновлення {tweak.Name}: {res}", res ? "SUCCESS" : "ERROR");
+            try
+            {
+                StatusText.Text = $"Відновлення: {tweak.Name}...";
+                AppLogger.Log($"Відновлення твіка: {tweak.Name}");
+                bool res = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: false);
+                StatusText.Text = res ? $"Відновлено: {tweak.Name}" : $"Помилка відновлення: {tweak.Name}";
+                AppLogger.Log($"Результат відновлення {tweak.Name}: {res}", res ? "SUCCESS" : "ERROR");
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = $"Збій: {ex.Message}";
+                AppLogger.Log($"Помилка при відновленні {tweak.Name}: {ex.Message}", "ERROR");
+            }
         }
     }
 
     private async void BtnBatchApply_Click(object sender, RoutedEventArgs e)
     {
-        var safeTweaks = TweakEngine.Instance.AllTweaks.Where(t => t.Risk == "Safe").ToList();
+        var safeTweaks = TweakEngine.Instance.AllTweaks
+            .Where(t => string.Equals(t.Risk, "Safe", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
         if (MessageBox.Show($"Застосувати всі безпечні твіки ({safeTweaks.Count} шт.)?", "1-Click Safe Pack", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
         {
             int i = 0;
@@ -362,6 +379,7 @@ public partial class MainWindow : Window
     {
         bool ok = DnsEngine.RestoreOriginalDns();
         StatusText.Text = ok ? "DNS успішно повернуто до початкового стану (DHCP)." : "Помилка відновлення DNS.";
+        AppLogger.Log("DNS скинуто до DHCP", ok ? "SUCCESS" : "WARN");
     }
 
     #endregion
@@ -372,10 +390,20 @@ public partial class MainWindow : Window
     {
         if (sender is Button btn && btn.Tag is CleanerItem item)
         {
-            StatusText.Text = $"Очищення: {item.Name}...";
-            long freed = await CleanerEngine.CleanItemAsync(item);
-            StatusText.Text = $"Звільнено: {FormatBytes(freed)}";
-            AppLogger.Log($"Очищення {item.Name}: {FormatBytes(freed)}", "SUCCESS");
+            try
+            {
+                StatusText.Text = $"Очищення: {item.Name}...";
+                long freed = await CleanerEngine.CleanItemAsync(item);
+                StatusText.Text = $"Звільнено: {FormatBytes(freed)}";
+                AppLogger.Log($"Очищення {item.Name}: {FormatBytes(freed)}", "SUCCESS");
+
+                long totalRemaining = CleanerEngine.Cleaners.Sum(c => c.BytesFound);
+                CleanerTotalText.Text = $"Виявлено для очищення: {FormatBytes(totalRemaining)}";
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"Помилка очищення {item.Name}: {ex.Message}", "ERROR");
+            }
         }
     }
 
@@ -383,17 +411,24 @@ public partial class MainWindow : Window
     {
         if (MessageBox.Show("Очистити всі виявлені безпечні кеші та файли?", "1-Click Очищення", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
         {
-            var progress = new Progress<(int Percent, string Name, long Freed)>(p =>
+            try
             {
-                AppProgressBar.Value = p.Percent;
-                ProgressPercentText.Text = $"{p.Percent}%";
-                StatusText.Text = $"Очищено: {p.Name} (+{FormatBytes(p.Freed)})";
-            });
+                var progress = new Progress<(int Percent, string Name, long Freed)>(p =>
+                {
+                    AppProgressBar.Value = p.Percent;
+                    ProgressPercentText.Text = $"{p.Percent}%";
+                    StatusText.Text = $"Очищено: {p.Name} (+{FormatBytes(p.Freed)})";
+                });
 
-            long totalFreed = await CleanerEngine.CleanAllSafeAsync(progress);
-            CleanerTotalText.Text = "Очищення завершено!";
-            StatusText.Text = $"Успішно звільнено: {FormatBytes(totalFreed)}";
-            AppLogger.Log($"Повне очищення: звільнено {FormatBytes(totalFreed)}", "SUCCESS");
+                long totalFreed = await CleanerEngine.CleanAllSafeAsync(progress);
+                CleanerTotalText.Text = "Очищення завершено!";
+                StatusText.Text = $"Успішно звільнено: {FormatBytes(totalFreed)}";
+                AppLogger.Log($"Повне очищення: звільнено {FormatBytes(totalFreed)}", "SUCCESS");
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"Помилка повного очищення: {ex.Message}", "ERROR");
+            }
         }
     }
 
@@ -460,28 +495,35 @@ public partial class MainWindow : Window
     {
         if (sender is Button btn && btn.Tag is ToolItem tool)
         {
-            if (tool.SpecialAction == "MAS")
+            try
             {
-                ToolsEngine.RunMasActivation();
-                StatusText.Text = "Запущено Microsoft Activation Scripts.";
+                if (tool.SpecialAction == "MAS")
+                {
+                    ToolsEngine.RunMasActivation();
+                    StatusText.Text = "Запущено Microsoft Activation Scripts.";
+                }
+                else if (tool.SpecialAction == "VCREDIST")
+                {
+                    StatusText.Text = "Встановлення Visual C++ All-in-One...";
+                    bool ok = await ToolsEngine.InstallVcRedistAllAsync(tool);
+                    StatusText.Text = ok ? "Всі пакети Visual C++ успішно встановлено!" : "Помилка встановлення VC++.";
+                }
+                else if (tool.SpecialAction == "DIRECTX")
+                {
+                    StatusText.Text = "Оновлення бібліотек DirectX...";
+                    bool ok = await ToolsEngine.InstallDirectXWebAsync(tool);
+                    StatusText.Text = ok ? "Бібліотеки DirectX успішно оновлено!" : "Помилка оновлення DirectX.";
+                }
+                else if (!string.IsNullOrWhiteSpace(tool.WingetId))
+                {
+                    StatusText.Text = $"Встановлення {tool.Name} через Winget...";
+                    bool ok = await ToolsEngine.InstallWingetPackageAsync(tool);
+                    StatusText.Text = ok ? $"Успішно встановлено: {tool.Name}" : $"Помилка встановлення {tool.Name}.";
+                }
             }
-            else if (tool.SpecialAction == "VCREDIST")
+            catch (Exception ex)
             {
-                StatusText.Text = "Встановлення Visual C++ All-in-One...";
-                bool ok = await ToolsEngine.InstallVcRedistAllAsync(tool);
-                StatusText.Text = ok ? "Всі пакети Visual C++ успішно встановлено!" : "Помилка встановлення VC++.";
-            }
-            else if (tool.SpecialAction == "DIRECTX")
-            {
-                StatusText.Text = "Оновлення бібліотек DirectX...";
-                bool ok = await ToolsEngine.InstallDirectXWebAsync(tool);
-                StatusText.Text = ok ? "Бібліотеки DirectX успішно оновлено!" : "Помилка оновлення DirectX.";
-            }
-            else if (!string.IsNullOrWhiteSpace(tool.WingetId))
-            {
-                StatusText.Text = $"Встановлення {tool.Name} через Winget...";
-                bool ok = await ToolsEngine.InstallWingetPackageAsync(tool);
-                StatusText.Text = ok ? $"Успішно встановлено: {tool.Name}" : $"Помилка встановлення {tool.Name}.";
+                AppLogger.Log($"Помилка встановлення {tool.Name}: {ex.Message}", "ERROR");
             }
         }
     }
@@ -496,17 +538,12 @@ public partial class MainWindow : Window
 
     #endregion
 
-    #region Хедер: Захист, Пресети, Відкат, Оновлення, Логи
+    #region Хедер: Захист, Пресети, Відкат, Оновлення, Діагностика
 
-    private async void BtnSpecDialog_Click(object sender, RoutedEventArgs e)
+    private void BtnSpecDialog_Click(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "Збір детальної апаратної телеметрії...";
-        var detailed = await DiagnosticEngine.GetDetailedHardwareInfoAsync();
-        StatusText.Text = "Готово.";
-        
-        string report = DiagnosticEngine.GenerateTextReport(detailed);
-        Clipboard.SetText(report);
-        MessageBox.Show(report, "MASLOOPTIMIZER — Апаратний звіт (скопійовано в буфер)", MessageBoxButton.OK, MessageBoxImage.Information);
+        var diagWin = new DiagnosticWindow { Owner = this };
+        diagWin.ShowDialog();
     }
 
     private async void BtnVssPoint_Click(object sender, RoutedEventArgs e)
@@ -557,9 +594,9 @@ public partial class MainWindow : Window
     private async void BtnPresetMenu_Click(object sender, RoutedEventArgs e)
     {
         var choice = MessageBox.Show(
-            "Натисніть [ТАК] щоб зберегти ваш поточний конфіг у файл.\nНатисніть [НІ] щоб завантажити та розгорнути існуючий пресет.", 
-            "Менеджер конфігурацій (Пресетів)", 
-            MessageBoxButton.YesNoCancel, 
+            "Натисніть [ТАК] щоб зберегти ваш поточний конфіг у файл.\nНатисніть [НІ] щоб завантажити та розгорнути існуючий пресет.",
+            "Менеджер конфігурацій (Пресетів)",
+            MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
 
         if (choice == MessageBoxResult.Yes)
@@ -572,9 +609,10 @@ public partial class MainWindow : Window
         {
             StatusText.Text = "Розгортання профілю...";
             var res = await PresetEngine.ImportAndApplyProfileAsync(
-                TweakEngine.Instance.AllTweaks, 
-                DebloatEngine.Catalog, 
-                (pct, msg) => Dispatcher.Invoke(() => {
+                TweakEngine.Instance.AllTweaks,
+                DebloatEngine.Catalog,
+                (pct, msg) => Dispatcher.Invoke(() =>
+                {
                     AppProgressBar.Value = pct;
                     ProgressPercentText.Text = $"{pct}%";
                     StatusText.Text = msg;

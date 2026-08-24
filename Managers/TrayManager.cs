@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
 using Application = System.Windows.Application;
@@ -44,8 +45,8 @@ public static class TrayManager
             else
             {
                 string? exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
-                _notifyIcon.Icon = !string.IsNullOrEmpty(exePath) 
-                    ? Icon.ExtractAssociatedIcon(exePath) ?? SystemIcons.Application 
+                _notifyIcon.Icon = !string.IsNullOrEmpty(exePath)
+                    ? Icon.ExtractAssociatedIcon(exePath) ?? SystemIcons.Application
                     : SystemIcons.Application;
             }
         }
@@ -54,7 +55,7 @@ public static class TrayManager
             _notifyIcon.Icon = SystemIcons.Application;
         }
 
-        _notifyIcon.Text = "MASLOOPTIMIZER Enterprise";
+        _notifyIcon.Text = "MASLOOPTIMIZER";
         _notifyIcon.Visible = true;
 
         var contextMenu = new ContextMenuStrip
@@ -67,7 +68,7 @@ public static class TrayManager
         mOpenApp.Font = new Font("Segoe UI", 9.5f, System.Drawing.FontStyle.Bold);
 
         var mToggleWidget = new ToolStripMenuItem("📌 Віджет моніторингу", null, (s, e) => ToggleWidget());
-        var mFlushRam = new ToolStripMenuItem("🧹 Очистити пам'ять ОЗП", null, (s, e) => FlushRamQuick());
+        var mFlushRam = new ToolStripMenuItem("🧹 Очистити пам'ять ОЗП", null, async (s, e) => await FlushRamQuickAsync());
         var mEmptyTrash = new ToolStripMenuItem("🗑️ Очистити весь кошик", null, (s, e) => EmptyTrashQuick());
         var mExit = new ToolStripMenuItem("🛑 Повний вихід", null, (s, e) => FullExit());
         mExit.ForeColor = ColorTranslator.FromHtml("#F87171");
@@ -108,6 +109,7 @@ public static class TrayManager
             if (Widget == null || !Widget.IsLoaded)
             {
                 Widget = new WidgetWindow();
+                Widget.Closed += (s, e) => Widget = null;
                 Widget.Show();
             }
             else
@@ -122,29 +124,36 @@ public static class TrayManager
         });
     }
 
-    private static void FlushRamQuick()
+    private static async Task FlushRamQuickAsync()
     {
-        try
+        await Task.Run(() =>
         {
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            EmptyWorkingSet(Process.GetCurrentProcess().Handle);
-
-            foreach (var proc in Process.GetProcesses())
+            try
             {
-                try
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                EmptyWorkingSet(Process.GetCurrentProcess().Handle);
+
+                foreach (var proc in Process.GetProcesses())
                 {
-                    if (!proc.HasExited && proc.Id > 4)
+                    try
                     {
-                        EmptyWorkingSet(proc.Handle);
+                        if (!proc.HasExited && proc.Id > 4 && !proc.ProcessName.Equals("System", StringComparison.OrdinalIgnoreCase))
+                        {
+                            EmptyWorkingSet(proc.Handle);
+                        }
+                    }
+                    catch { }
+                    finally
+                    {
+                        proc.Dispose(); // Звільнення нативних системних дескрипторів
                     }
                 }
-                catch { }
             }
+            catch { }
+        });
 
-            _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "ОЗП успішно оптимізовано та очищено!", ToolTipIcon.Info);
-        }
-        catch { }
+        _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "ОЗП успішно оптимізовано та очищено!", ToolTipIcon.Info);
     }
 
     private static void EmptyTrashQuick()

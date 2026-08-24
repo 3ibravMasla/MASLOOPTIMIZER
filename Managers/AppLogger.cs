@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
@@ -24,6 +25,7 @@ public static class AppLogger
     public static ObservableCollection<LogEntry> SessionLogs { get; } = new();
     private static readonly string LogDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
     private static readonly string LogFilePath = Path.Combine(LogDirectory, $"optimizer_{DateTime.Now:yyyy-MM-dd}.log");
+    private static readonly object _fileLock = new();
 
     public static void Log(string message, string level = "INFO")
     {
@@ -40,12 +42,16 @@ public static class AppLogger
             if (SessionLogs.Count > 500) SessionLogs.RemoveAt(0);
         });
 
-        try
+        // Потокобезпечний запис у файл
+        lock (_fileLock)
         {
-            if (!Directory.Exists(LogDirectory)) Directory.CreateDirectory(LogDirectory);
-            string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{entry.Level}] {entry.Message}{Environment.NewLine}";
-            File.AppendAllText(LogFilePath, line);
+            try
+            {
+                if (!Directory.Exists(LogDirectory)) Directory.CreateDirectory(LogDirectory);
+                string line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{entry.Level}] {entry.Message}{Environment.NewLine}";
+                File.AppendAllText(LogFilePath, line);
+            }
+            catch { }
         }
-        catch { }
     }
 }

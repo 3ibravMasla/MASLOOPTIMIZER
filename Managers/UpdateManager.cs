@@ -12,13 +12,10 @@ namespace MASLOOPTIMIZER;
 
 public static class UpdateManager
 {
-    public const string CurrentVersion = "0.3.1";
+    public const string CurrentVersion = "0.3.2";
     private const string RepoOwner = "3ibravMasla";
     private const string RepoName = "MASLOOPTIMIZER";
 
-    /// <summary>
-    /// Безпечна перевірка релізів на GitHub API
-    /// </summary>
     public static async Task<(bool UpdateAvailable, string NewVersion, string DownloadUrl)> CheckForUpdateAsync()
     {
         try
@@ -44,7 +41,6 @@ public static class UpdateManager
                 {
                     if (remoteVer > localVer)
                     {
-                        // Шукаємо готовий бінарник .exe в Assets
                         string exeUrl = release.Assets?
                             .FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))?
                             .BrowserDownloadUrl ?? string.Empty;
@@ -57,17 +53,11 @@ public static class UpdateManager
                 }
             }
         }
-        catch
-        {
-            // Безпечний фолбек за відсутності мережі або ліміту GitHub API
-        }
+        catch { }
 
         return (false, CurrentVersion, string.Empty);
     }
 
-    /// <summary>
-    /// Автономне завантаження, підміна та перезапуск бінарника
-    /// </summary>
     public static async Task DownloadAndInstallUpdateAsync(string downloadUrl, IProgress<double>? progress = null)
     {
         try
@@ -104,7 +94,7 @@ public static class UpdateManager
                 }
             }
 
-            // Надійний батник оновлення з циклом очікування звільнення файлу
+            // Заміна timeout на ping для стабільності у NoWindow фоновому режимі
             string batContent = $@"@echo off
 chcp 65001 > nul
 setlocal enabledelayedexpansion
@@ -114,7 +104,7 @@ set ""NEWFILE={tempNewExePath}""
 set RETRIES=0
 
 :loop
-timeout /t 1 /nobreak > nul
+ping 127.0.0.1 -n 2 > nul
 del /f /q ""!TARGET!"" > nul 2>&1
 if not exist ""!TARGET!"" goto replace
 
@@ -153,6 +143,10 @@ del ""%~f0"" > nul 2>&1
     {
         version = new Version(0, 0);
         if (string.IsNullOrWhiteSpace(verStr)) return false;
+
+        // Очищаємо можливі постфікси (наприклад, "-beta", "-hotfix")
+        int dashIdx = verStr.IndexOf('-');
+        if (dashIdx > 0) verStr = verStr.Substring(0, dashIdx);
 
         var parts = verStr.Split('.');
         if (parts.Length == 1) verStr += ".0.0";

@@ -11,6 +11,33 @@ using System.Threading.Tasks;
 
 namespace MASLOOPTIMIZER;
 
+public enum CleanerSortMode
+{
+    SizeDescending,
+    SizeAscending,
+    SafeFirst,
+    NameAscending,
+    Category
+}
+
+public class CleanerStats
+{
+    public long TotalBytesFound { get; set; }
+    public long SafeBytesFound { get; set; }
+    public int TotalItemsCount { get; set; }
+    public int SafeItemsCount { get; set; }
+    public string TotalSizeFormatted => FormatBytes(TotalBytesFound);
+    public string SafeSizeFormatted => FormatBytes(SafeBytesFound);
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024 * 1024):N2} ГБ";
+        if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):N2} МБ";
+        if (bytes >= 1024) return $"{bytes / 1024.0:N2} КБ";
+        return $"{bytes} Байт";
+    }
+}
+
 public class CleanerItem : INotifyPropertyChanged
 {
     public string Id { get; set; } = string.Empty;
@@ -32,9 +59,28 @@ public class CleanerItem : INotifyPropertyChanged
         get => _bytesFound;
         set
         {
-            _bytesFound = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(SizeFormatted));
+            if (_bytesFound != value)
+            {
+                _bytesFound = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(SizeFormatted));
+                OnPropertyChanged(nameof(StatusColor));
+            }
+        }
+    }
+
+    private bool _isBusy;
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            if (_isBusy != value)
+            {
+                _isBusy = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ActionButtonText));
+            }
         }
     }
 
@@ -49,6 +95,10 @@ public class CleanerItem : INotifyPropertyChanged
             return $"{BytesFound} Байт";
         }
     }
+
+    public string StatusColor => BytesFound > 0 ? "#38BDF8" : "#64748B";
+    public string SafetyBadge => IsSafeBatch ? "🟢 БЕЗПЕЧНО" : "🟡 РУЧНИЙ РЕЖИМ";
+    public string ActionButtonText => IsBusy ? "⏳ Очищення..." : "🧹 Очистити";
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -66,7 +116,7 @@ public static class CleanerEngine
     public static List<CleanerItem> Cleaners { get; } = new()
     {
         // =========================================================================
-        // 1. GPU ТА ІГРОВІ КЕШІ
+        // 1. GPU ТА ІГРОВІ КЕШІ (100% БЕЗПЕЧНО)
         // =========================================================================
         new()
         {
@@ -74,9 +124,9 @@ public static class CleanerEngine
             Name = "Кеш шейдерів GPU (DirectX / NVIDIA / AMD / Intel / Vulkan)",
             Category = "Ігри & GPU",
             IsSafeBatch = true,
-            Description = "Очищає скомпільований кеш шейдерів. Усуває мікрофризи та артефакти після оновлення драйверів.",
-            Benefits = "Звільняє від 1 до 10+ ГБ на SSD та запобігає конфліктам старих шейдерів.",
-            SideEffects = "При першому запуску гри відбудеться коротка фонова компіляція свіжих шейдерів.",
+            Description = "Очищає скомпільований кеш шейдерів графічного драйвера. Усуває мікрофризи та артефакти після оновлень драйверів.",
+            Benefits = "Звільняє від 1 до 10+ ГБ на SSD та запобігає збоям старого графічного кешу.",
+            SideEffects = "При першому запуску гри відбудеться швидка фонова перекомпіляція шейдерів.",
             TargetPaths = new()
             {
                 Path.Combine(LocalAppData, "D3DSCache"),
@@ -95,7 +145,7 @@ public static class CleanerEngine
             Name = "Залишки інсталяторів драйверів NVIDIA / AMD",
             Category = "Ігри & GPU",
             IsSafeBatch = true,
-            Description = "Видаляє тимчасові розпаковані пакети встановлення драйверів GPU.",
+            Description = "Видаляє тимчасові розпаковані пакети встановлення відеодрайверів GPU.",
             Benefits = "Миттєве звільнення від 1 до 5+ ГБ дискового простору.",
             SideEffects = "Не впливає на поточний встановлений відеодрайвер.",
             TargetPaths = new()
@@ -108,7 +158,7 @@ public static class CleanerEngine
         new()
         {
             Id = "clean_game_launchers_cache",
-            Name = "Веб-кеш лаунчерів (Steam / Epic Games / Battle.net)",
+            Name = "Веб-кеш лаунчерів (Steam / Epic Games / Battle.net / EA / Ubisoft)",
             Category = "Ігри & GPU",
             IsSafeBatch = true,
             Description = "Очищає тимчасовий веб-кеш вбудованих браузерів у лаунчерах.",
@@ -118,12 +168,14 @@ public static class CleanerEngine
             {
                 Path.Combine(LocalAppData, @"Steam\htmlcache"),
                 Path.Combine(LocalAppData, @"EpicGamesLauncher\Saved\webcache"),
-                Path.Combine(LocalAppData, @"Battle.net\Browser\Cache")
+                Path.Combine(LocalAppData, @"Battle.net\Browser\Cache"),
+                Path.Combine(LocalAppData, @"Electronic Arts\EA Desktop\Cache"),
+                Path.Combine(LocalAppData, @"Ubisoft Game Launcher\cache")
             }
         },
 
         // =========================================================================
-        // 2. БЕЗПЕЧНИЙ СИСТЕМНИЙ КЕШ
+        // 2. БЕЗПЕЧНИЙ СИСТЕМНИЙ КЕШ (100% БЕЗПЕЧНО)
         // =========================================================================
         new()
         {
@@ -131,7 +183,7 @@ public static class CleanerEngine
             Name = "Тимчасові файли користувача (%TEMP%)",
             Category = "Безпечний кеш",
             IsSafeBatch = true,
-            Description = "Залишкові файли інсталяторів, розпаковані архіви та кеш поточного сеансу.",
+            Description = "Залишкові файли інсталяторів, тимчасові розпаковані архіви та кеш сеансу користувача.",
             Benefits = "Повністю безпечне звільнення системного розділу.",
             TargetPaths = new() { Path.GetTempPath() }
         },
@@ -142,28 +194,33 @@ public static class CleanerEngine
             Category = "Безпечний кеш",
             IsSafeBatch = true,
             Description = "Тимчасові системні файли фонових служб Windows.",
-            Benefits = "Очищення залишків системних операцій.",
+            Benefits = "Очищення залишків системних інсталяцій.",
             TargetPaths = new() { Path.Combine(WinDir, "Temp") }
         },
         new()
         {
             Id = "clean_wu_cache",
-            Name = "Кеш завантажених оновлень Windows (SoftwareDistribution)",
+            Name = "Кеш завантажених оновлень (SoftwareDistribution)",
             Category = "Безпечний кеш",
             IsSafeBatch = true,
-            Description = "Завантажені пакети Windows Update, які вже були успішно інстальовані.",
+            Description = "Завантажені пакети Windows Update, які вже були успішно інстальовані в систему.",
             Benefits = "Звільняє до 3–10 ГБ на диску C:, виправляє помилки центру оновлень.",
             TargetPaths = new() { Path.Combine(WinDir, @"SoftwareDistribution\Download") }
         },
         new()
         {
             Id = "clean_cbs_logs",
-            Name = "Журнали обслуговування компонентів (CBS Logs)",
+            Name = "Журнали обслуговування компонентів (CBS & Setup Logs)",
             Category = "Безпечний кеш",
             IsSafeBatch = true,
-            Description = "Застарілі журнали обслуговування компонентів після роботи SFC/DISM.",
-            Benefits = "Звільняє від 500 МБ до 2+ ГБ системного простору.",
-            TargetPaths = new() { Path.Combine(WinDir, @"Logs\CBS") }
+            Description = "Застарілі журнали обслуговування компонентів після роботи SFC/DISM та установки апдейтів.",
+            Benefits = "Звільняє від 500 МБ до 3+ ГБ системного простору.",
+            TargetPaths = new()
+            {
+                Path.Combine(WinDir, @"Logs\CBS"),
+                Path.Combine(WinDir, @"Logs\MoSetup"),
+                Path.Combine(WinDir, "Panther")
+            }
         },
         new()
         {
@@ -178,10 +235,10 @@ public static class CleanerEngine
         new()
         {
             Id = "clean_recycle_bin",
-            Name = "Кошик Windows (Recycle Bin)",
+            Name = "Кошик Windows (Recycle Bin на всіх дисках)",
             Category = "Безпечний кеш",
             IsSafeBatch = true,
-            Description = "Остаточне очищення Кошика на всіх активних дисках.",
+            Description = "Остаточне очищення Кошика на всіх підключених дисках.",
             Benefits = "Повертає реальний вільний дисковий простір.",
             SideEffects = "Файли неможливо буде відновити засобами Провідника.",
             CustomSizeCalculator = async () => await Task.Run(GetRecycleBinTotalSize),
@@ -189,28 +246,30 @@ public static class CleanerEngine
         },
 
         // =========================================================================
-        // 3. БРАУЗЕРИ ТА ДОДАТКИ
+        // 3. БРАУЗЕРИ ТА ДОДАТКИ (100% БЕЗПЕЧНО: ПАРОЛІ ТА СЕСІЇ НЕ ЧІПАЮТЬСЯ)
         // =========================================================================
         new()
         {
             Id = "clean_browser_cache",
-            Name = "Кеш браузерів (Chrome / Edge / Brave / Opera / Firefox)",
+            Name = "Кеш Chromium-браузерів (Chrome / Edge / Brave / Opera / Opera GX)",
             Category = "Браузери & Додатки",
             IsSafeBatch = true,
-            Description = "Очищає виключно тимчасовий кеш медіа та скриптів. Зберігає всі паролі, історію та сесії.",
-            Benefits = "Звільняє від 1 до 5 ГБ пам'яті, відновлює швидкість браузерів.",
+            Description = "Очищає виключно тимчасовий кеш медіа, скриптів та GPU. Зберігає всі паролі, історію та активні сесії.",
+            Benefits = "Звільняє від 1 до 5+ ГБ пам'яті, відновлює швидкість рендерингу сторінок.",
             SideEffects = "При повторному відкритті сайти підвантажуватимуть картинки трохи довше.",
             TargetPaths = new()
             {
                 Path.Combine(LocalAppData, @"Google\Chrome\User Data\Default\Cache"),
                 Path.Combine(LocalAppData, @"Google\Chrome\User Data\Default\Code Cache"),
                 Path.Combine(LocalAppData, @"Google\Chrome\User Data\Default\GPUCache"),
+                Path.Combine(LocalAppData, @"Google\Chrome\User Data\Default\DawnCache"),
                 Path.Combine(LocalAppData, @"Microsoft\Edge\User Data\Default\Cache"),
                 Path.Combine(LocalAppData, @"Microsoft\Edge\User Data\Default\Code Cache"),
                 Path.Combine(LocalAppData, @"Microsoft\Edge\User Data\Default\GPUCache"),
                 Path.Combine(LocalAppData, @"BraveSoftware\Brave-Browser\User Data\Default\Cache"),
                 Path.Combine(LocalAppData, @"BraveSoftware\Brave-Browser\User Data\Default\Code Cache"),
-                Path.Combine(LocalAppData, @"Mozilla\Firefox\Profiles")
+                Path.Combine(LocalAppData, @"Opera Software\Opera Stable\Cache"),
+                Path.Combine(LocalAppData, @"Opera Software\Opera GX Stable\Cache")
             }
         },
         new()
@@ -239,8 +298,8 @@ public static class CleanerEngine
             Name = "Кеш Microsoft Store та WinGet",
             Category = "Браузери & Додатки",
             IsSafeBatch = true,
-            Description = "Очищає завантажені пакети та тимчасові каталоги магазину і пакетного менеджера.",
-            Benefits = "Усуває помилки під час встановлення та оновлення програм.",
+            Description = "Очищає завантажені інсталяційні пакети та тимчасові каталоги магазину і пакетного менеджера.",
+            Benefits = "Усуває помилки під час встановлення та оновлення софту.",
             TargetPaths = new()
             {
                 Path.Combine(LocalAppData, @"Packages\Microsoft.WindowsStore_8wekyb3d8bbwe\LocalCache"),
@@ -249,7 +308,7 @@ public static class CleanerEngine
         },
 
         // =========================================================================
-        // 4. ДАМПИ, ЖУРНАЛИ ТА ДІАГНОСТИКА (MANUAL ONLY)
+        // 4. ДАМПИ, ЖУРНАЛИ ТА ДІАГНОСТИКА (РУЧНИЙ РЕЖИМ)
         // =========================================================================
         new()
         {
@@ -266,6 +325,7 @@ public static class CleanerEngine
                 Path.Combine(WinDir, "Minidump"),
                 Path.Combine(WinDir, "MEMORY.DMP"),
                 Path.Combine(ProgramData, @"Microsoft\Windows\WER\ReportArchive"),
+                Path.Combine(ProgramData, @"Microsoft\Windows\WER\Temp"),
                 Path.Combine(LocalAppData, @"Microsoft\Windows\WER\ReportArchive")
             }
         },
@@ -289,7 +349,7 @@ public static class CleanerEngine
             IsSafeBatch = false,
             Description = "Бази даних збережених мініатюр зображень та відео (thumbcache_*.db).",
             Benefits = "Звільняє місце на SSD та виправляє відображення пошкоджених значків.",
-            SideEffects = "Провідник заново створюватиме ескізи при відкритті папок із фото/відео.",
+            SideEffects = "Короткочасно перезапускає Провідник. Ескізи створюватимуться заново.",
             TargetPaths = new() { Path.Combine(LocalAppData, @"Microsoft\Windows\Explorer") },
             CustomCleaner = async () => await Task.Run(CleanThumbnailCache)
         },
@@ -301,7 +361,7 @@ public static class CleanerEngine
         {
             Id = "clean_dism_winsxs",
             Name = "Глибоке стиснення WinSxS (DISM Component Cleanup)",
-            Category = "Безпечний кеш",
+            Category = "Системне стиснення",
             IsSafeBatch = false,
             IsDism = true,
             Description = "Стиснення та видалення застарілих версій системних компонентів у сховищі WinSxS.",
@@ -310,6 +370,70 @@ public static class CleanerEngine
             CustomCleaner = async () => await Task.Run(RunDismCleanup)
         }
     };
+
+    #region Контекстне сортування, фільтрація та статистика
+
+    public static IEnumerable<CleanerItem> GetFilteredAndSortedItems(
+        string? category = null,
+        string? searchQuery = null,
+        CleanerSortMode sortMode = CleanerSortMode.SizeDescending,
+        bool safeOnly = false)
+    {
+        var query = Cleaners.AsEnumerable();
+
+        if (safeOnly)
+        {
+            query = query.Where(c => c.IsSafeBatch);
+        }
+
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("Всі", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(c => string.Equals(c.Category, category, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            string q = searchQuery.Trim();
+            query = query.Where(c =>
+                c.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                c.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                c.Benefits.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                c.Category.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return sortMode switch
+        {
+            CleanerSortMode.SizeDescending => query.OrderByDescending(c => c.BytesFound),
+            CleanerSortMode.SizeAscending => query.OrderBy(c => c.BytesFound),
+            CleanerSortMode.SafeFirst => query.OrderByDescending(c => c.IsSafeBatch).ThenByDescending(c => c.BytesFound),
+            CleanerSortMode.NameAscending => query.OrderBy(c => c.Name),
+            CleanerSortMode.Category => query.OrderBy(c => c.Category).ThenByDescending(c => c.BytesFound),
+            _ => query.OrderByDescending(c => c.BytesFound)
+        };
+    }
+
+    public static List<string> GetCategories()
+    {
+        var categories = Cleaners.Select(c => c.Category).Distinct().OrderBy(c => c).ToList();
+        categories.Insert(0, "Всі");
+        return categories;
+    }
+
+    public static CleanerStats GetStatistics()
+    {
+        long totalFound = Cleaners.Sum(c => c.BytesFound);
+        long safeFound = Cleaners.Where(c => c.IsSafeBatch).Sum(c => c.BytesFound);
+
+        return new CleanerStats
+        {
+            TotalBytesFound = totalFound,
+            SafeBytesFound = safeFound,
+            TotalItemsCount = Cleaners.Count,
+            SafeItemsCount = Cleaners.Count(c => c.IsSafeBatch)
+        };
+    }
+
+    #endregion
 
     #region Публічні методи виконання
 
@@ -340,6 +464,7 @@ public static class CleanerEngine
 
     public static async Task<long> CleanItemAsync(CleanerItem item)
     {
+        item.IsBusy = true;
         long freed = 0;
 
         if (item.CustomCleaner != null)
@@ -360,6 +485,7 @@ public static class CleanerEngine
         }
 
         item.BytesFound = 0;
+        item.IsBusy = false;
         return freed;
     }
 
@@ -376,7 +502,7 @@ public static class CleanerEngine
             long freed = await CleanItemAsync(item);
             totalFreed += freed;
             progress?.Report((pct, item.Name, freed));
-            await Task.Delay(15);
+            await Task.Delay(20);
         }
 
         return totalFreed;
@@ -414,7 +540,6 @@ public static class CleanerEngine
                     try
                     {
                         var di = new DirectoryInfo(dir);
-                        // Пропускаємо Junctions та Симлінки для безпеки
                         if ((di.Attributes & FileAttributes.ReparsePoint) == 0)
                         {
                             stack.Push(dir);
@@ -554,24 +679,21 @@ public static class CleanerEngine
     {
         string dir = Path.Combine(LocalAppData, @"Microsoft\Windows\Explorer");
         if (!Directory.Exists(dir)) return 0;
-
         long freed = 0;
         try
         {
+            foreach (var p in Process.GetProcessesByName("explorer")) { try { p.Kill(); p.WaitForExit(1000); } catch { } }
             var di = new DirectoryInfo(dir);
             foreach (var file in di.GetFiles("thumbcache_*.db", SearchOption.TopDirectoryOnly))
             {
-                try
-                {
-                    long sz = file.Length;
-                    file.Attributes = FileAttributes.Normal;
-                    file.Delete();
-                    freed += sz;
-                }
-                catch { }
+                try { long sz = file.Length; file.Attributes = FileAttributes.Normal; file.Delete(); freed += sz; } catch { }
             }
         }
         catch { }
+        finally
+        {
+            if (Process.GetProcessesByName("explorer").Length == 0) Process.Start("explorer.exe");
+        }
         return freed;
     }
 

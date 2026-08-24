@@ -10,6 +10,24 @@ using Microsoft.Win32;
 
 namespace MASLOOPTIMIZER;
 
+public enum DebloatSortMode
+{
+    Default,
+    InstalledFirst,
+    UninstalledFirst,
+    NameAscending,
+    NameDescending,
+    Category
+}
+
+public class DebloatStats
+{
+    public int Total { get; set; }
+    public int Installed { get; set; }
+    public int Removed => Total - Installed;
+    public double CleanPercentage => Total > 0 ? Math.Round((Removed / (double)Total) * 100, 1) : 0;
+}
+
 public class DebloatItem : INotifyPropertyChanged
 {
     public string Id { get; set; } = string.Empty;
@@ -26,15 +44,43 @@ public class DebloatItem : INotifyPropertyChanged
         get => _isInstalled;
         set
         {
-            _isInstalled = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(StatusText));
-            OnPropertyChanged(nameof(StatusColor));
+            if (_isInstalled != value)
+            {
+                _isInstalled = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StatusText));
+                OnPropertyChanged(nameof(StatusColor));
+                OnPropertyChanged(nameof(ActionButtonText));
+            }
+        }
+    }
+
+    private bool _isBusy;
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            if (_isBusy != value)
+            {
+                _isBusy = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ActionButtonText));
+            }
         }
     }
 
     public string StatusText => IsInstalled ? "🟢 ВСТАНОВЛЕНО" : "⚪ НЕМАЄ В СИСТЕМІ";
     public string StatusColor => IsInstalled ? "#107C41" : "#2A2D3D";
+
+    public string ActionButtonText
+    {
+        get
+        {
+            if (IsBusy) return "⏳ Обробка...";
+            return IsInstalled ? "🗑️ Видалити" : "↩️ Відновити";
+        }
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -313,7 +359,7 @@ public static class DebloatEngine
             Category = "Зв'язок & Пошта",
             PackageMatch = "*Getstarted*|*QuickAssist*",
             Description = "Спливаючі рекламні підказки та засіб швидкої віддаленої допомоги.",
-            StoreId = "9WZDNCRFJ364"
+            StoreId = "9WZDNCRFJ0MP"
         },
 
         // =========================================================================
@@ -329,6 +375,62 @@ public static class DebloatEngine
             StoreId = ""
         }
     };
+
+    #region Контекстна фільтрація, сортування та статистика
+
+    public static IEnumerable<DebloatItem> GetFilteredAndSortedItems(
+        string? category = null,
+        string? searchQuery = null,
+        DebloatSortMode sortMode = DebloatSortMode.Default)
+    {
+        var query = Catalog.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("Всі", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(d => string.Equals(d.Category, category, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            string q = searchQuery.Trim();
+            query = query.Where(d =>
+                d.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.Id.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.PackageMatch.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.StoreId.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return sortMode switch
+        {
+            DebloatSortMode.InstalledFirst => query.OrderByDescending(d => d.IsInstalled).ThenBy(d => d.Name),
+            DebloatSortMode.UninstalledFirst => query.OrderBy(d => d.IsInstalled).ThenBy(d => d.Name),
+            DebloatSortMode.NameAscending => query.OrderBy(d => d.Name),
+            DebloatSortMode.NameDescending => query.OrderByDescending(d => d.Name),
+            DebloatSortMode.Category => query.OrderBy(d => d.Category).ThenBy(d => d.Name),
+            _ => query.OrderBy(d => d.Name)
+        };
+    }
+
+    public static List<string> GetCategories()
+    {
+        var categories = Catalog.Select(d => d.Category).Distinct().OrderBy(c => c).ToList();
+        categories.Insert(0, "Всі");
+        return categories;
+    }
+
+    public static DebloatStats GetStatistics()
+    {
+        int total = Catalog.Count;
+        int installed = Catalog.Count(d => d.IsInstalled);
+        return new DebloatStats
+        {
+            Total = total,
+            Installed = installed
+        };
+    }
+
+    #endregion
 
     #region Сканування системи
 
@@ -385,7 +487,8 @@ public static class DebloatEngine
 
     public static async Task<bool> UninstallPackageAsync(DebloatItem item)
     {
-        return await Task.Run(() =>
+        item.IsBusy = true;
+        bool result = await Task.Run(() =>
         {
             try
             {
@@ -399,7 +502,6 @@ public static class DebloatEngine
                     .Select(p => p.Trim().Trim('*'))
                     .ToList();
 
-                // 1. Видалення з активного профілю користувачів
                 var userPkgs = pkgManager.FindPackagesForUser(string.Empty)
                     .Where(p => patterns.Any(pat => p.Id.Name.Contains(pat, StringComparison.OrdinalIgnoreCase) && !p.Id.Name.Contains("ExperienceHost", StringComparison.OrdinalIgnoreCase)))
                     .ToList();
@@ -413,7 +515,6 @@ public static class DebloatEngine
                     catch { }
                 }
 
-                // 2. Повне вилучення системного дистрибутива (Provisioned Package) через PowerShell/DISM
                 foreach (var pat in patterns)
                 {
                     RunPowerShellQuiet($"Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -like '*{pat}*' -and $_.DisplayName -notlike '*ExperienceHost*' }} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue");
@@ -427,6 +528,9 @@ public static class DebloatEngine
                 return false;
             }
         });
+
+        item.IsBusy = false;
+        return result;
     }
 
     #endregion
@@ -435,7 +539,8 @@ public static class DebloatEngine
 
     public static async Task<bool> RestorePackageAsync(DebloatItem item)
     {
-        return await Task.Run(() =>
+        item.IsBusy = true;
+        bool result = await Task.Run(() =>
         {
             if (item.IsSpecialService)
             {
@@ -465,7 +570,6 @@ public static class DebloatEngine
                 catch { }
             }
 
-            // Перевіряємо, чи повернувся пакунок у систему
             var pkgManager = new Windows.Management.Deployment.PackageManager();
             var pkgs = pkgManager.FindPackagesForUser(string.Empty);
             restoredLocally = pkgs.Any(p => patterns.Any(pat => p.Id.Name.Contains(pat, StringComparison.OrdinalIgnoreCase)));
@@ -478,6 +582,9 @@ public static class DebloatEngine
             item.IsInstalled = restoredLocally;
             return restoredLocally;
         });
+
+        item.IsBusy = false;
+        return result;
     }
 
     public static void RestoreViaStore(DebloatItem item)
@@ -528,13 +635,11 @@ public static class DebloatEngine
     {
         try
         {
-            // 1. Зупинка процесів
             foreach (var proc in Process.GetProcessesByName("OneDrive"))
             {
                 try { proc.Kill(); proc.WaitForExit(1000); } catch { }
             }
 
-            // 2. Запуск деінсталятора
             string sys32 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "OneDriveSetup.exe");
             string sysWow64 = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"SysWOW64\OneDriveSetup.exe");
             string userSetup = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\OneDrive\Update\OneDriveSetup.exe");
@@ -554,7 +659,6 @@ public static class DebloatEngine
                 proc?.WaitForExit(15000);
             }
 
-            // 3. Прибирання іконки OneDrive з бічної панелі Провідника
             using (var key = Registry.ClassesRoot.OpenSubKey(@"CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}", true))
             {
                 key?.SetValue("System.IsPinnedToNameSpaceTree", 0, RegistryValueKind.DWord);

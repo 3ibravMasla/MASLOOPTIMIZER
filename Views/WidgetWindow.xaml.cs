@@ -14,15 +14,12 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
-// Явні аліаси для усунення колізій типів між WPF та WinForms
+// Явні аліаси для виключення колізій із WinForms
+using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Brushes = System.Windows.Media.Brushes;
-using Brush = System.Windows.Media.Brush;
 using SolidColorBrush = System.Windows.Media.SolidColorBrush;
-using MenuItem = System.Windows.Controls.MenuItem;
-using ContextMenu = System.Windows.Controls.ContextMenu;
-using Separator = System.Windows.Controls.Separator;
 
 namespace MASLOOPTIMIZER;
 
@@ -125,7 +122,7 @@ public partial class WidgetWindow : Window
         {
             _shutdownCancelTimer.Stop();
             _shutdownConfirm = false;
-            BtnShutdown.Content = "🛑 Вимкнути ПК";
+            BtnShutdown.Content = "🛑 Вимкнути";
             BtnShutdown.Background = HexBrush("#141824");
             BtnShutdown.Foreground = HexBrush("#F8FAFC");
         };
@@ -137,7 +134,7 @@ public partial class WidgetWindow : Window
         };
     }
 
-    private void WidgetWindow_Loaded(object sender, RoutedEventArgs e)
+    private async void WidgetWindow_Loaded(object sender, RoutedEventArgs e)
     {
         LoadEmbeddedLogo();
 
@@ -148,6 +145,14 @@ public partial class WidgetWindow : Window
         }
         catch { }
 
+        try
+        {
+            var hw = await DiagnosticEngine.GetQuickHardwareInfoAsync();
+            TxtCpuModel.Text = hw.CPU;
+            TxtGpuModel.Text = hw.GPU;
+        }
+        catch { }
+
         RestoreStateFromRegistry();
         UpdateNetworkBaseline();
         _timer.Start();
@@ -155,6 +160,7 @@ public partial class WidgetWindow : Window
 
     private void LoadEmbeddedLogo()
     {
+        bool loaded = false;
         try
         {
             var uri = new Uri("pack://application:,,,/icon/maslo.jpg", UriKind.Absolute);
@@ -164,14 +170,28 @@ public partial class WidgetWindow : Window
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.EndInit();
             WidgetLogo.Source = bitmap;
+            loaded = true;
         }
-        catch
+        catch { }
+
+        if (!loaded)
         {
-            string logoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon", "maslo.jpg");
-            if (File.Exists(logoPath))
+            try
             {
-                WidgetLogo.Source = new BitmapImage(new Uri(logoPath, UriKind.Absolute));
+                string logoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon", "maslo.jpg");
+                if (File.Exists(logoPath))
+                {
+                    WidgetLogo.Source = new BitmapImage(new Uri(logoPath, UriKind.Absolute));
+                    loaded = true;
+                }
             }
+            catch { }
+        }
+
+        if (!loaded)
+        {
+            WidgetLogo.Visibility = Visibility.Collapsed;
+            TxtLogoFallback.Visibility = Visibility.Visible;
         }
     }
 
@@ -213,8 +233,8 @@ public partial class WidgetWindow : Window
             UpdateNetworkTraffic();
 
             var uptime = TimeSpan.FromMilliseconds(Environment.TickCount64);
-            TxtUptime.Text = uptime.Days > 0 
-                ? $"{uptime.Days}д {uptime.Hours}г {uptime.Minutes}хв" 
+            TxtUptime.Text = uptime.Days > 0
+                ? $"{uptime.Days}д {uptime.Hours}г {uptime.Minutes}хв"
                 : $"{uptime.Hours}г {uptime.Minutes}хв";
         }
         catch { }
@@ -305,8 +325,8 @@ public partial class WidgetWindow : Window
 
     private static string FormatSpeed(double bytesPerSec)
     {
-        if (bytesPerSec >= 1024 * 1024) return $"{bytesPerSec / (1024 * 1024):N1} MB/s";
-        if (bytesPerSec >= 1024) return $"{bytesPerSec / (1024 * 1024):N0} KB/s";
+        if (bytesPerSec >= 1024 * 1024) return $"{bytesPerSec / (1024.0 * 1024.0):N1} MB/s";
+        if (bytesPerSec >= 1024) return $"{bytesPerSec / 1024.0:N0} KB/s";
         return $"{bytesPerSec:N0} B/s";
     }
 
@@ -322,9 +342,9 @@ public partial class WidgetWindow : Window
         _rgbTimer.Stop();
         _pulseTimer.Stop();
 
-        MainWidgetBorder.Background = HexBrush("#E80A0D14");
+        MainWidgetBorder.Background = HexBrush("#F00B0E17");
         MainWidgetBorder.BorderThickness = new Thickness(1.8);
-        MainGlow.Opacity = 0.35;
+        MainGlow.Opacity = 0.40;
         LogoGlow.Opacity = 0.70;
 
         switch (themeName)
@@ -458,6 +478,8 @@ public partial class WidgetWindow : Window
         }
         catch { }
 
+        ChkTopMost.IsChecked = Topmost;
+        ChkAutostart.IsChecked = IsAutostartEnabled();
         ApplyTheme(_currentTheme);
     }
 
@@ -491,7 +513,7 @@ public partial class WidgetWindow : Window
 
     #endregion
 
-    #region Керування вікном
+    #region Керування вікном та Налаштування
 
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -506,105 +528,52 @@ public partial class WidgetWindow : Window
     {
         Width = Math.Max(280, Width + e.HorizontalChange);
         Height = Math.Max(200, Height + e.VerticalChange);
+    }
+
+    private void ResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
         SaveStateToRegistry();
     }
 
     private void BtnCloseWidget_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        SaveStateToRegistry();
-        Hide();
+        if (e.LeftButton == MouseButtonState.Pressed)
+        {
+            SaveStateToRegistry();
+            Hide();
+        }
     }
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {
-        var cm = BuildContextMenu();
-        cm.PlacementTarget = BtnSettings;
-        cm.Placement = PlacementMode.Bottom;
-        cm.IsOpen = true;
+        MainHudView.Visibility = Visibility.Collapsed;
+        SettingsOverlay.Visibility = Visibility.Visible;
     }
 
-    private ContextMenu BuildContextMenu()
+    private void BtnBackFromSettings_Click(object sender, RoutedEventArgs e)
     {
-        var cm = new ContextMenu
-        {
-            Background = HexBrush("#0D111A"),
-            BorderBrush = HexBrush("#00FF9D"),
-            BorderThickness = new Thickness(1.2)
-        };
+        SettingsOverlay.Visibility = Visibility.Collapsed;
+        MainHudView.Visibility = Visibility.Visible;
+        SaveStateToRegistry();
+    }
 
-        var mThemes = new MenuItem { Header = "🎨 Підсвітка та Стиль віджета" };
-        var themes = new[]
+    private void ThemeChip_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is string tag)
         {
-            ("Emerald", "🌟 Смарагдовий Неон"),
-            ("Rainbow", "🌈 RGB Райдуга (Жива анімація)"),
-            ("Pulse", "💓 Пульсація (Pulse Neon)"),
-            ("ToxicLime", "⚡ Токсичний Лайм"),
-            ("CyberCyan", "💎 Кібер Неон"),
-            ("LavaOrange", "🔥 Вогняний Вулкан"),
-            ("Crimson", "🩸 Crimson Blood"),
-            ("Violet", "🔮 Ультрафіолет"),
-            ("AmberGold", "👑 Золотий Буст"),
-            ("GhostGlass", "👻 Прозоре Скло"),
-            ("Stealth", "🌑 Stealth Matte")
-        };
-
-        foreach (var (id, title) in themes)
-        {
-            var tItem = new MenuItem
-            {
-                Header = title,
-                IsCheckable = true,
-                IsChecked = _currentTheme == id
-            };
-            tItem.Click += (s, e) => ApplyTheme(id);
-            mThemes.Items.Add(tItem);
+            ApplyTheme(tag);
         }
+    }
 
-        var mAuto = new MenuItem
-        {
-            Header = "🚀 Автозапуск віджета разом з Windows",
-            IsCheckable = true,
-            IsChecked = IsAutostartEnabled()
-        };
-        mAuto.Click += (s, e) => SetAutostart(!IsAutostartEnabled());
+    private void ChkAutostart_Click(object sender, RoutedEventArgs e)
+    {
+        SetAutostart(ChkAutostart.IsChecked == true);
+    }
 
-        var mTop = new MenuItem
-        {
-            Header = "📌 Поверх усіх вікон (TopMost)",
-            IsCheckable = true,
-            IsChecked = Topmost
-        };
-        mTop.Click += (s, e) =>
-        {
-            Topmost = !Topmost;
-            SaveStateToRegistry();
-        };
-
-        var mOpen = new MenuItem
-        {
-            Header = "⚡ Відкрити MASLOOPTIMIZER",
-            FontWeight = FontWeights.Bold,
-            Foreground = HexBrush("#00FF9D")
-        };
-        mOpen.Click += (s, e) => TrayManager.ShowMainWindow();
-
-        var mClose = new MenuItem
-        {
-            Header = "✕ Сховати віджет",
-            Foreground = HexBrush("#F87171")
-        };
-        mClose.Click += (s, e) => Hide();
-
-        cm.Items.Add(mThemes);
-        cm.Items.Add(new Separator());
-        cm.Items.Add(mAuto);
-        cm.Items.Add(mTop);
-        cm.Items.Add(new Separator());
-        cm.Items.Add(mOpen);
-        cm.Items.Add(new Separator());
-        cm.Items.Add(mClose);
-
-        return cm;
+    private void ChkTopMost_Click(object sender, RoutedEventArgs e)
+    {
+        Topmost = ChkTopMost.IsChecked == true;
+        SaveStateToRegistry();
     }
 
     #endregion
@@ -621,20 +590,30 @@ public partial class WidgetWindow : Window
         Process.Start(new ProcessStartInfo { FileName = "taskmgr.exe", UseShellExecute = true });
     }
 
-    private void BtnFlushRam_Click(object sender, RoutedEventArgs e)
+    private async void BtnFlushRam_Click(object sender, RoutedEventArgs e)
     {
         BtnFlushRam.Content = "⏳...";
         GC.Collect();
         GC.WaitForPendingFinalizers();
 
-        foreach (var proc in Process.GetProcesses())
+        await Task.Run(() =>
         {
-            try
+            foreach (var proc in Process.GetProcesses())
             {
-                if (!proc.HasExited && proc.Id > 4) EmptyWorkingSet(proc.Handle);
+                try
+                {
+                    if (!proc.HasExited && proc.Id > 4 && !proc.ProcessName.Equals("System", StringComparison.OrdinalIgnoreCase))
+                    {
+                        EmptyWorkingSet(proc.Handle);
+                    }
+                }
+                catch { }
+                finally
+                {
+                    proc.Dispose();
+                }
             }
-            catch { }
-        }
+        });
 
         BtnFlushRam.Content = "✓ Звільнено";
         var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };

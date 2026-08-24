@@ -1,7 +1,6 @@
 ﻿<Application x:Class="MASLOOPTIMIZER.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <!-- Базові кольори Cyber Dark за замовчуванням -->
         <SolidColorBrush x:Key="WindowBg" Color="#0B0C10"/>
@@ -16,6 +15,7 @@
         <SolidColorBrush x:Key="NavBtnBg" Color="Transparent"/>
         <SolidColorBrush x:Key="NavBtnHover" Color="#181B28"/>
         <SolidColorBrush x:Key="NavBtnActive" Color="#1E2333"/>
+        <SolidColorBrush x:Key="NavBtnBorderActive" Color="#00FF9D"/>
         <SolidColorBrush x:Key="TextPrimary" Color="#F1F5F9"/>
         <SolidColorBrush x:Key="TextSecondary" Color="#94A3B8"/>
         <SolidColorBrush x:Key="TextMuted" Color="#64748B"/>
@@ -23,6 +23,7 @@
         <SolidColorBrush x:Key="StatusBorder" Color="#1E2230"/>
         <SolidColorBrush x:Key="AccentGreen" Color="#00FF9D"/>
         <SolidColorBrush x:Key="BadgeBg" Color="#161924"/>
+        <SolidColorBrush x:Key="BadgeText" Color="#94A3B8"/>
         <SolidColorBrush x:Key="ProgressTrack" Color="#181B26"/>
         <SolidColorBrush x:Key="ProgressFill" Color="#00FF9D"/>
         <SolidColorBrush x:Key="ChipBg" Color="#1E2235"/>
@@ -30,6 +31,10 @@
         <SolidColorBrush x:Key="ChipText" Color="#CBD5E1"/>
         <SolidColorBrush x:Key="ChipHoverBg" Color="#2A344A"/>
         <SolidColorBrush x:Key="ChipActiveBg" Color="#0078D4"/>
+        <SolidColorBrush x:Key="ChipActiveBorder" Color="#38BDF8"/>
+        <SolidColorBrush x:Key="ChipActiveText" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="StatusStdBg" Color="#2A2D3D"/>
+        <SolidColorBrush x:Key="StatusStdText" Color="#94A3B8"/>
 
         <Style TargetType="TextBlock">
             <Setter Property="FontFamily" Value="Segoe UI, Segoe UI Variable Display"/>

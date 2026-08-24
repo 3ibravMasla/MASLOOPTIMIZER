@@ -68,7 +68,7 @@
         </Style>
     </Window.Resources>
 
-    <Border BorderBrush="#F59E0B" BorderThickness="1.5" CornerRadius="10" Background="#10131E" ClipToBounds="True">
+    <Border BorderBrush="#F59E0B" BorderThickness="1.5" CornerRadius="10" Background="#10131E" ClipToBounds="True" MouseLeftButtonDown="Border_MouseLeftButtonDown">
         <Grid>
             <!-- Водяний фоновий знак логотипу -->
             <Image x:Name="BgLogoImage" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.12"/>

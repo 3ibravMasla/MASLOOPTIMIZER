@@ -10,6 +10,16 @@ using System.Threading.Tasks;
 
 namespace MASLOOPTIMIZER;
 
+public enum DnsSortMode
+{
+    FastestFirst,
+    SlowestFirst,
+    ActiveFirst,
+    NameAscending,
+    NameDescending,
+    Category
+}
+
 public class DnsPreset : INotifyPropertyChanged
 {
     public string Name { get; set; } = string.Empty;
@@ -29,11 +39,30 @@ public class DnsPreset : INotifyPropertyChanged
             OnPropertyChanged();
             OnPropertyChanged(nameof(PingText));
             OnPropertyChanged(nameof(PingColor));
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(StatusColor));
+        }
+    }
+
+    private bool _isActive;
+    public bool IsActive
+    {
+        get => _isActive;
+        set
+        {
+            _isActive = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StatusText));
+            OnPropertyChanged(nameof(StatusColor));
+            OnPropertyChanged(nameof(ButtonText));
         }
     }
 
     public string PingText => Ping < 900 ? $"{Ping} ms" : "Timeout";
     public string PingColor => Ping < 30 ? "#107C41" : (Ping < 70 ? "#D87A00" : "#C42B1C");
+    public string StatusText => IsActive ? "🟢 АКТИВНИЙ" : (Ping < 900 ? "⚪ ДОСТУПНИЙ" : "🔴 ТАЙМАУТ");
+    public string StatusColor => IsActive ? "#107C41" : (Ping < 900 ? "#2A2D3D" : "#C42B1C");
+    public string ButtonText => IsActive ? "✓ Активний" : "⚡ Застосувати";
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -399,6 +428,88 @@ public static class DnsEngine
         }
     };
 
+    #region Контекстна фільтрація, сортування та категорії
+
+    /// <summary>
+    /// Отримує відфільтровані та відсортовані DNS-пресети за контекстом
+    /// </summary>
+    public static IEnumerable<DnsPreset> GetFilteredAndSortedPresets(
+        string? category = null,
+        string? searchQuery = null,
+        DnsSortMode sortMode = DnsSortMode.FastestFirst)
+    {
+        var query = Catalog.AsEnumerable();
+
+        // 1. Фільтрація за категорією
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("Всі", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(d => string.Equals(d.Category, category, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // 2. Пошуковий запит (назва, IP, опис)
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            string q = searchQuery.Trim();
+            query = query.Where(d =>
+                d.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.Primary.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.Secondary.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // 3. Контекстне сортування
+        return sortMode switch
+        {
+            DnsSortMode.FastestFirst => query.OrderBy(d => d.Ping),
+            DnsSortMode.SlowestFirst => query.OrderByDescending(d => d.Ping),
+            DnsSortMode.ActiveFirst => query.OrderByDescending(d => d.IsActive).ThenBy(d => d.Ping),
+            DnsSortMode.NameAscending => query.OrderBy(d => d.Name),
+            DnsSortMode.NameDescending => query.OrderByDescending(d => d.Name),
+            DnsSortMode.Category => query.OrderBy(d => d.Category).ThenBy(d => d.Ping),
+            _ => query.OrderBy(d => d.Ping)
+        };
+    }
+
+    /// <summary>
+    /// Отримує унікальний список категорій DNS
+    /// </summary>
+    public static List<string> GetCategories()
+    {
+        var categories = Catalog.Select(d => d.Category).Distinct().OrderBy(c => c).ToList();
+        categories.Insert(0, "Всі");
+        return categories;
+    }
+
+    /// <summary>
+    /// Детектує поточний активний DNS у системі та оновлює статус пресетів
+    /// </summary>
+    public static void DetectActiveDns()
+    {
+        try
+        {
+            var activeAdapter = GetPhysicalActiveAdapters().FirstOrDefault();
+            if (activeAdapter == null) return;
+
+            var ipProps = activeAdapter.GetIPProperties();
+            var dnsAddrs = ipProps.DnsAddresses
+                .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                .Select(a => a.ToString())
+                .ToList();
+
+            string primaryDns = dnsAddrs.Count > 0 ? dnsAddrs[0] : string.Empty;
+
+            foreach (var preset in Catalog)
+            {
+                preset.IsActive = !string.IsNullOrEmpty(primaryDns) &&
+                    (preset.Primary.Equals(primaryDns, StringComparison.OrdinalIgnoreCase) ||
+                     preset.Secondary.Equals(primaryDns, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+        catch { }
+    }
+
+    #endregion
+
     #region Замір Ping та Сортування
 
     public static async Task MeasureAllPingsAsync()
@@ -411,7 +522,7 @@ public static class DnsEngine
             try
             {
                 using var pinger = new Ping();
-                var reply = await pinger.SendPingAsync(host, 300);
+                var reply = await pinger.SendPingAsync(host, 500);
                 results[host] = (reply.Status == IPStatus.Success) ? (int)reply.RoundtripTime : 999;
             }
             catch
@@ -430,7 +541,10 @@ public static class DnsEngine
             }
         }
 
-        // Автоматичне сортування від найменшого пінгу до більшого
+        // Оновлюємо статус активності в системі
+        DetectActiveDns();
+
+        // Автоматичне сортування від найменшого пінгу
         Catalog.Sort((a, b) => a.Ping.CompareTo(b.Ping));
     }
 
@@ -506,20 +620,17 @@ public static class DnsEngine
             {
                 if (string.IsNullOrWhiteSpace(primary) || primary.Equals("DHCP", StringComparison.OrdinalIgnoreCase))
                 {
-                    RunCmd($"netsh interface ipv4 set dnsservers name=\"{adapter.Name}\" source=dhcp");
-                    RunCmd($"netsh interface ipv6 set dnsservers name=\"{adapter.Name}\" source=dhcp");
+                    RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.Name}' -ResetServerAddresses\"");
                 }
                 else
                 {
-                    RunCmd($"netsh interface ipv4 set dnsservers name=\"{adapter.Name}\" static {primary.Trim()} primary");
-                    if (!string.IsNullOrWhiteSpace(secondary))
-                    {
-                        RunCmd($"netsh interface ipv4 add dnsservers name=\"{adapter.Name}\" {secondary.Trim()} index=2");
-                    }
+                    string dnsList = string.IsNullOrWhiteSpace(secondary) ? $"'{primary.Trim()}'" : $"'{primary.Trim()}','{secondary.Trim()}'";
+                    RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.Name}' -ServerAddresses {dnsList}\"");
                 }
             }
 
             FlushDnsCache();
+            DetectActiveDns();
             return true;
         }
         catch

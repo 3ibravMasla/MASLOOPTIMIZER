@@ -35,7 +35,7 @@
 
                         <TextBlock Text="PTIMIZER" FontSize="20" FontWeight="Black" Foreground="{DynamicResource AccentGreen}" VerticalAlignment="Center"/>
                         <Border Background="{DynamicResource BadgeBg}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" BorderBrush="{DynamicResource AccentGreen}" BorderThickness="1" VerticalAlignment="Center">
-                            <TextBlock Text="v0.3.1 C# Core" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentGreen}"/>
+                            <TextBlock Text="v0.3.2 C# Core" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentGreen}"/>
                         </Border>
                     </StackPanel>
 
@@ -277,7 +277,7 @@
                                                     <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5"/>
                                                     <TextBlock Text="{Binding Primary, StringFormat='IP: {0}'}" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="1" Content="⚡ Застосувати" Background="#0078D4" Foreground="White" Padding="12,6" FontWeight="Bold" Cursor="Hand" Click="ApplyDns_Click" Tag="{Binding}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Content="{Binding ButtonText}" Background="#0078D4" Foreground="White" Padding="12,6" FontWeight="Bold" Cursor="Hand" Click="ApplyDns_Click" Tag="{Binding}" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
@@ -351,7 +351,7 @@
                                                 <StackPanel Grid.Column="0">
                                                     <WrapPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
-                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Source}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
+                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
                                                         <Border CornerRadius="3" Padding="6,1" Margin="6,0,0,0" Background="{Binding StatusColor}"><TextBlock Text="{Binding StatusText}" FontSize="9.5" FontWeight="Bold" Foreground="White"/></Border>
                                                     </WrapPanel>
                                                     <TextBlock Text="{Binding Command}" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0" FontSize="11" TextWrapping="Wrap"/>

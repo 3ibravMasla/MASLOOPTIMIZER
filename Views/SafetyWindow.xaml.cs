@@ -3,16 +3,13 @@ using System.IO;
 using System.Media;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 using Application = System.Windows.Application;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
-using Cursors = System.Windows.Input.Cursors;
-using Color = System.Windows.Media.Color;
-using ColorConverter = System.Windows.Media.ColorConverter;
 using SolidColorBrush = System.Windows.Media.SolidColorBrush;
-using Brushes = System.Windows.Media.Brushes;
 
 namespace MASLOOPTIMIZER;
 
@@ -51,6 +48,14 @@ public partial class SafetyWindow : Window
             {
                 BgLogoImage.Source = new BitmapImage(new Uri(logoPath, UriKind.Absolute));
             }
+        }
+    }
+
+    private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ButtonState == MouseButtonState.Pressed)
+        {
+            try { DragMove(); } catch { }
         }
     }
 
@@ -169,9 +174,6 @@ public partial class SafetyWindow : Window
         if (_restoreDone && _registryDone)
         {
             BtnProceed.IsEnabled = true;
-            BtnProceed.Background = HexBrush("#107C41");
-            BtnProceed.Foreground = Brushes.White;
-            BtnProceed.Cursor = Cursors.Hand;
             TxtLog.Text = "✓ Усі захисні заходи виконано. Доступ до оптимізатора розблоковано.";
             TxtLog.Foreground = HexBrush("#4ADE80");
         }
@@ -190,6 +192,12 @@ public partial class SafetyWindow : Window
 
         try
         {
+            string dir = Path.GetDirectoryName(ConsentFile) ?? string.Empty;
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
             File.WriteAllText(ConsentFile, JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch { }

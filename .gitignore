@@ -4,6 +4,7 @@ _build_release/
 backups/
 logs/
 presets/
+test_reports/
 .vs/
 .vscode/
 *.exe

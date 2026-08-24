@@ -10,26 +10,31 @@ using Microsoft.Win32;
 
 namespace MASLOOPTIMIZER;
 
-/// <summary>
-/// Модель метаданих резервної копії для відображення в UI та вікні відкату
-/// </summary>
+public enum BackupSortMode
+{
+    DateDescending,
+    DateAscending,
+    SizeDescending,
+    KeyCountDescending,
+    NameAscending
+}
+
 public class BackupEntry
 {
     public string FolderPath { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public int KeyCount { get; set; }
+    public long TotalBytes { get; set; }
     public string MachineName { get; set; } = string.Empty;
     public string User { get; set; } = string.Empty;
     public string FormattedDate => CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
     public string SizeFormatted { get; set; } = "0 КБ";
+    public bool IsValid { get; set; } = true;
 }
 
 public static class BackupEngine
 {
-    /// <summary>
-    /// Головне захищене системне сховище (ProgramData — не видаляється при чищенні робочого столу)
-    /// </summary>
     public static string BackupsDirectory
     {
         get
@@ -41,9 +46,6 @@ public static class BackupEngine
         }
     }
 
-    /// <summary>
-    /// Локальна портативна папка бекапів поруч із .exe файлом
-    /// </summary>
     public static string LocalBackupsDirectory
     {
         get
@@ -54,9 +56,6 @@ public static class BackupEngine
         }
     }
 
-    /// <summary>
-    /// Автоматичний пошук резервних сховищ на всіх інших підключених дисках (D:\, E:\ тощо)
-    /// </summary>
     public static List<string> GetSecondaryDriveBackupDirs()
     {
         var secondaryDirs = new List<string>();
@@ -76,12 +75,8 @@ public static class BackupEngine
         return secondaryDirs;
     }
 
-    /// <summary>
-    /// Повний каталог системних гілок реєстру, які зачіпаються оптимізатором
-    /// </summary>
     public static readonly IReadOnlyList<string> AllRegistryKeys = new List<string>
     {
-        // --- Системні політики та безпека (HKLM) ---
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows",
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows Defender",
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows Defender\Spynet",
@@ -92,8 +87,6 @@ public static class BackupEngine
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows\EdgeUI",
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows\System",
         @"HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate",
-
-        // --- Ядро, Планувальник, Пам'ять та Драйвери ---
         @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager",
         @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
         @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\kernel",
@@ -108,14 +101,10 @@ public static class BackupEngine
         @"HKLM\SYSTEM\CurrentControlSet\Control\Power",
         @"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters",
         @"HKLM\SYSTEM\CurrentControlSet\Services\disk\Parameters",
-
-        // --- Системні параметри Windows (HKLM) ---
         @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons",
         @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System",
         @"HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting",
         @"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile",
-
-        // --- Налаштування профілю користувача (HKCU) ---
         @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced",
         @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel",
         @"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\NamingTemplates",
@@ -140,16 +129,12 @@ public static class BackupEngine
 
     #region Створення контрольної точки відновлення VSS
 
-    /// <summary>
-    /// Створює точку відновлення VSS, знімаючи системне обмеження частоти створення
-    /// </summary>
     public static async Task<(bool Success, string Message)> CreateVssRestorePointAsync(string description = "MASLOOPTIMIZER_RestorePoint")
     {
         return await Task.Run(() =>
         {
             try
             {
-                // 1. Зняття ліміту частоти створення точок відновлення
                 try
                 {
                     using var srKey = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore");
@@ -157,12 +142,11 @@ public static class BackupEngine
                 }
                 catch { }
 
-                // 2. Створення точки через WMI SystemRestore
                 using var searcher = new ManagementClass(@"\\localhost\root\default:SystemRestore");
                 var inParams = searcher.GetMethodParameters("CreateRestorePoint");
                 inParams["Description"] = description;
-                inParams["RestorePointType"] = 0; // APPLICATION_INSTALL / MODIFY_SETTINGS
-                inParams["EventType"] = 100;      // BEGIN_SYSTEM_CHANGE
+                inParams["RestorePointType"] = 0;
+                inParams["EventType"] = 100;
 
                 var outParams = searcher.InvokeMethod("CreateRestorePoint", inParams, null);
                 uint returnCode = (uint)(outParams["ReturnValue"] ?? 1);
@@ -173,12 +157,11 @@ public static class BackupEngine
                 }
                 else
                 {
-                    return (false, $"Помилка VSS (Код повернення: {returnCode}). Перевірте, чи увімкнено захист системи.");
+                    return (false, $"Помилка VSS (Код: {returnCode}). Перевірте, чи увімкнено захист системи у властивостях Windows.");
                 }
             }
             catch (Exception ex)
             {
-                // Fallback через PowerShell CLI
                 try
                 {
                     using var proc = Process.Start(new ProcessStartInfo
@@ -207,9 +190,6 @@ public static class BackupEngine
 
     #region Експорт, Дзеркалювання та Відновлення Реєстру
 
-    /// <summary>
-    /// Експорт гілок реєстру в головну системну папку та дзеркальне дублювання на інші диски
-    /// </summary>
     public static async Task<(bool Success, string Message, string BackupPath)> ExportRegistryBackupAsync(
         string tweakName = "Full_Tweak_Backup",
         IEnumerable<string>? customKeys = null)
@@ -220,13 +200,13 @@ public static class BackupEngine
             {
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
                 string folderName = $"{tweakName}_{timestamp}";
-                
-                // 1. Створення бекапу в ProgramData
+
                 string targetFolder = Path.Combine(BackupsDirectory, folderName);
                 Directory.CreateDirectory(targetFolder);
 
                 var keysToExport = customKeys ?? AllRegistryKeys;
                 int successCount = 0;
+                long totalBytes = 0;
 
                 foreach (var key in keysToExport)
                 {
@@ -243,9 +223,14 @@ public static class BackupEngine
                     });
                     proc?.WaitForExit(3000);
 
-                    if (File.Exists(outFile) && new FileInfo(outFile).Length > 0)
+                    if (File.Exists(outFile))
                     {
-                        successCount++;
+                        long len = new FileInfo(outFile).Length;
+                        if (len > 0)
+                        {
+                            successCount++;
+                            totalBytes += len;
+                        }
                     }
                 }
 
@@ -255,19 +240,21 @@ public static class BackupEngine
                     Name = folderName,
                     CreatedAt = DateTime.Now,
                     KeyCount = successCount,
+                    TotalBytes = totalBytes,
+                    SizeFormatted = FormatBytes(totalBytes),
                     MachineName = Environment.MachineName,
-                    User = Environment.UserName
+                    User = Environment.UserName,
+                    IsValid = successCount > 0
                 };
 
                 string metaJson = JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(Path.Combine(targetFolder, "meta.json"), metaJson);
 
-                // 2. Дзеркалювання на локальну папку програми та додаткові диски (D:, E:)
                 MirrorBackupToStorageLocations(targetFolder, folderName);
 
                 return successCount > 0
-                    ? (true, $"Бекап реєстру ({successCount} гілок) збережено у: {folderName}", targetFolder)
-                    : (false, "Не вдалося виконати експорт гілок реєстру.", string.Empty);
+                    ? (true, $"Бекап реєстру ({successCount} гілок, {FormatBytes(totalBytes)}) збережено!", targetFolder)
+                    : (false, "Не вдалося експортувати гілки реєстру.", string.Empty);
             }
             catch (Exception ex)
             {
@@ -280,11 +267,9 @@ public static class BackupEngine
     {
         try
         {
-            // Дзеркало в локальну папку .\backups\
             string localTarget = Path.Combine(LocalBackupsDirectory, folderName);
             CopyDirectory(sourceFolder, localTarget);
 
-            // Дзеркало на зовнішні диски D:\MASLOOPTIMIZER_Backups\
             foreach (var secDir in GetSecondaryDriveBackupDirs())
             {
                 if (!Directory.Exists(secDir)) Directory.CreateDirectory(secDir);
@@ -308,9 +293,6 @@ public static class BackupEngine
         }
     }
 
-    /// <summary>
-    /// Відновлення всіх .reg файлів із вибраної папки бекапу
-    /// </summary>
     public static async Task<(bool Success, string Message)> RestoreRegistryFromFolderAsync(string folderPath)
     {
         return await Task.Run(() =>
@@ -346,26 +328,7 @@ public static class BackupEngine
         });
     }
 
-    /// <summary>
-    /// Швидке відновлення найновішого бекапу
-    /// </summary>
-    public static async Task<(bool Success, string Message)> RestoreLatestRegistryBackupAsync()
-    {
-        var backups = await GetAvailableBackupsAsync();
-        var latest = backups.OrderByDescending(b => b.CreatedAt).FirstOrDefault();
-
-        if (latest == null)
-        {
-            return (false, "У системних та додаткових сховищах немає доступних копій реєстру.");
-        }
-
-        return await RestoreRegistryFromFolderAsync(latest.FolderPath);
-    }
-
-    /// <summary>
-    /// Отримання об'єднаного списку бекапів з усіх локацій (ProgramData, локальної папки та додаткових дисків) без дублікатів
-    /// </summary>
-    public static async Task<List<BackupEntry>> GetAvailableBackupsAsync()
+    public static async Task<List<BackupEntry>> GetAvailableBackupsAsync(BackupSortMode sortMode = BackupSortMode.DateDescending)
     {
         return await Task.Run(() =>
         {
@@ -383,7 +346,7 @@ public static class BackupEngine
                 foreach (var dir in directories)
                 {
                     string dirName = Path.GetFileName(dir);
-                    if (scannedFolders.Contains(dirName)) continue; // Уникаємо дублювання в списку RestoreWindow
+                    if (scannedFolders.Contains(dirName)) continue;
 
                     var regFiles = Directory.GetFiles(dir, "*.reg");
                     if (regFiles.Length == 0) continue;
@@ -401,6 +364,8 @@ public static class BackupEngine
                         catch { }
                     }
 
+                    long totalBytes = regFiles.Sum(f => new FileInfo(f).Length);
+
                     if (entry == null)
                     {
                         var dirInfo = new DirectoryInfo(dir);
@@ -410,6 +375,7 @@ public static class BackupEngine
                             Name = dirInfo.Name,
                             CreatedAt = dirInfo.CreationTime,
                             KeyCount = regFiles.Length,
+                            TotalBytes = totalBytes,
                             MachineName = Environment.MachineName,
                             User = Environment.UserName
                         };
@@ -417,23 +383,29 @@ public static class BackupEngine
                     else
                     {
                         entry.FolderPath = dir;
+                        entry.TotalBytes = totalBytes;
                     }
 
-                    long totalBytes = regFiles.Sum(f => new FileInfo(f).Length);
                     entry.SizeFormatted = FormatBytes(totalBytes);
+                    entry.IsValid = regFiles.Length > 0;
 
                     list.Add(entry);
                     scannedFolders.Add(dirName);
                 }
             }
 
-            return list.OrderByDescending(x => x.CreatedAt).ToList();
+            return sortMode switch
+            {
+                BackupSortMode.DateDescending => list.OrderByDescending(x => x.CreatedAt).ToList(),
+                BackupSortMode.DateAscending => list.OrderBy(x => x.CreatedAt).ToList(),
+                BackupSortMode.SizeDescending => list.OrderByDescending(x => x.TotalBytes).ToList(),
+                BackupSortMode.KeyCountDescending => list.OrderByDescending(x => x.KeyCount).ToList(),
+                BackupSortMode.NameAscending => list.OrderBy(x => x.Name).ToList(),
+                _ => list.OrderByDescending(x => x.CreatedAt).ToList()
+            };
         });
     }
 
-    /// <summary>
-    /// Видалення копії бекапу з усіх дзеркальних сховищ
-    /// </summary>
     public static async Task<bool> DeleteBackupAsync(string folderPath)
     {
         return await Task.Run(() =>
@@ -442,13 +414,11 @@ public static class BackupEngine
             {
                 string folderName = Path.GetFileName(folderPath);
 
-                // Видаляємо з поточної папки
                 if (Directory.Exists(folderPath))
                 {
                     Directory.Delete(folderPath, true);
                 }
 
-                // Видаляємо дзеркала за назвою
                 var mirrorRoots = new List<string> { BackupsDirectory, LocalBackupsDirectory };
                 mirrorRoots.AddRange(GetSecondaryDriveBackupDirs());
 

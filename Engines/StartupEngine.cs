@@ -10,17 +10,42 @@ using Microsoft.Win32;
 
 namespace MASLOOPTIMIZER;
 
+public enum StartupSortMode
+{
+    Default,
+    EnabledFirst,
+    DisabledFirst,
+    NameAscending,
+    NameDescending,
+    Category,
+    Source
+}
+
+public class StartupStats
+{
+    public int Total { get; set; }
+    public int Enabled { get; set; }
+    public int Disabled => Total - Enabled;
+    public int UserAppsCount { get; set; }
+    public int HardwareDriversCount { get; set; }
+    public int UpdatersCount { get; set; }
+    public int TasksCount { get; set; }
+    public double OptimizationPercentage => Total > 0 ? Math.Round((Disabled / (double)Total) * 100, 1) : 0;
+}
+
 public class StartupEntry : INotifyPropertyChanged
 {
     public string Name { get; set; } = string.Empty;
     public string Command { get; set; } = string.Empty;
+    public string Publisher { get; set; } = "Невідомий видавець";
     public string Source { get; set; } = "Реєстр (Run)";
-    public string Category { get; set; } = "Реєстр (Run)";
+    public string Category { get; set; } = "Програми користувача";
     public string KeyPath { get; set; } = string.Empty;
     public string DisabledKeyPath { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
     public string TaskPath { get; set; } = string.Empty;
     public string EntryType { get; set; } = "Reg"; // Reg, File, Task
+    public bool IsCritical { get; set; } = false;
 
     private bool _isEnabled = true;
     public bool IsEnabled
@@ -28,19 +53,48 @@ public class StartupEntry : INotifyPropertyChanged
         get => _isEnabled;
         set
         {
-            _isEnabled = value;
-            OnPropertyChanged();
-            OnPropertyChanged(nameof(StatusText));
-            OnPropertyChanged(nameof(StatusColor));
-            OnPropertyChanged(nameof(ButtonText));
-            OnPropertyChanged(nameof(ButtonBg));
+            if (_isEnabled != value)
+            {
+                _isEnabled = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StatusText));
+                OnPropertyChanged(nameof(StatusColor));
+                OnPropertyChanged(nameof(ButtonText));
+                OnPropertyChanged(nameof(ButtonBg));
+            }
+        }
+    }
+
+    private bool _isBusy;
+    public bool IsBusy
+    {
+        get => _isBusy;
+        set
+        {
+            if (_isBusy != value)
+            {
+                _isBusy = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ButtonText));
+            }
         }
     }
 
     public string StatusText => IsEnabled ? "🟢 АКТИВНО" : "⚪ ПРИЗУПИНЕНО";
     public string StatusColor => IsEnabled ? "#107C41" : "#2A2D3D";
-    public string ButtonText => IsEnabled ? "⏸️ Призупинити" : "▶️ Увімкнути";
-    public string ButtonBg => IsEnabled ? "#C42B1C" : "#107C41";
+    public string SafetyBadge => IsCritical ? "🛡️ СИСТЕМНИЙ" : "⚡ БЕЗПЕЧНО";
+
+    public string ButtonText
+    {
+        get
+        {
+            if (IsBusy) return "⏳...";
+            if (IsCritical) return "🔒 Захищено";
+            return IsEnabled ? "⏸️ Призупинити" : "▶️ Увімкнути";
+        }
+    }
+
+    public string ButtonBg => IsCritical ? "#334155" : (IsEnabled ? "#C42B1C" : "#107C41");
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -49,6 +103,27 @@ public class StartupEntry : INotifyPropertyChanged
 
 public static class StartupEngine
 {
+    private static readonly string[] CriticalSystemNames = new[]
+    {
+        "SecurityHealth", "WindowsDefender", "ctfmon", "SystemTray", "IgfxTray",
+        "RTHDVCPL", "Audiodg", "Explorer", "StartMenuExperienceHost"
+    };
+
+    private static readonly string[] HardwareKeywords = new[]
+    {
+        "nvidia", "nvvsvc", "nvcontainer", "amd", "radeon", "realtek", "intel",
+        "razer", "logitech", "lghub", "steelseries", "corsair", "icue", "asus",
+        "armoury", "msi", "dragoncenter", "nahimic", "soundblaster", "creative"
+    };
+
+    private static readonly string[] UpdaterKeywords = new[]
+    {
+        "update", "updater", "googleupdate", "edgeupdate", "adobeupdate",
+        "onedriveupdate", "autoupdate", "helper"
+    };
+
+    #region Отримання записів автозапуску
+
     public static async Task<List<StartupEntry>> GetStartupEntriesAsync()
     {
         return await Task.Run(() => GetStartupEntries());
@@ -70,7 +145,7 @@ public static class StartupEngine
         ReadRegistryRun(Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run_Disabled", "Реєстр (HKLM 32-bit)", true, list);
         ReadRegistryRun(Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run_Disabled", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "Реєстр (HKLM 32-bit)", false, list);
 
-        // 4. Папки автозапуску (Користувач та Загальносистемна)
+        // 4. Папки автозапуску (User та Common)
         ScanStartupFolder(Environment.GetFolderPath(Environment.SpecialFolder.Startup), "Папка Автозапуску (User)", list);
         ScanStartupFolder(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartup), "Папка Автозапуску (System)", list);
 
@@ -80,31 +155,98 @@ public static class StartupEngine
         return list.OrderBy(x => x.Name).ToList();
     }
 
+    #endregion
+
+    #region Контекстне сортування, фільтрація та статистика
+
+    public static IEnumerable<StartupEntry> GetFilteredAndSortedEntries(
+        IEnumerable<StartupEntry> sourceList,
+        string? category = null,
+        string? searchQuery = null,
+        StartupSortMode sortMode = StartupSortMode.Default)
+    {
+        var query = sourceList.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(category) && !category.Equals("Всі", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(e => string.Equals(e.Category, category, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            string q = searchQuery.Trim();
+            query = query.Where(e =>
+                e.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                e.Command.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                e.Publisher.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                e.Source.Contains(q, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return sortMode switch
+        {
+            StartupSortMode.EnabledFirst => query.OrderByDescending(e => e.IsEnabled).ThenBy(e => e.Name),
+            StartupSortMode.DisabledFirst => query.OrderBy(e => e.IsEnabled).ThenBy(e => e.Name),
+            StartupSortMode.NameAscending => query.OrderBy(e => e.Name),
+            StartupSortMode.NameDescending => query.OrderByDescending(e => e.Name),
+            StartupSortMode.Category => query.OrderBy(e => e.Category).ThenBy(e => e.Name),
+            StartupSortMode.Source => query.OrderBy(e => e.Source).ThenBy(e => e.Name),
+            _ => query.OrderBy(e => e.Name)
+        };
+    }
+
+    public static List<string> GetCategories(IEnumerable<StartupEntry> sourceList)
+    {
+        var categories = sourceList.Select(e => e.Category).Distinct().OrderBy(c => c).ToList();
+        categories.Insert(0, "Всі");
+        return categories;
+    }
+
+    public static StartupStats GetStatistics(IEnumerable<StartupEntry> sourceList)
+    {
+        var list = sourceList.ToList();
+        return new StartupStats
+        {
+            Total = list.Count,
+            Enabled = list.Count(e => e.IsEnabled),
+            UserAppsCount = list.Count(e => e.Category == "Програми користувача"),
+            HardwareDriversCount = list.Count(e => e.Category == "Драйвери & Залізо"),
+            UpdatersCount = list.Count(e => e.Category == "Фонові оновлювачі"),
+            TasksCount = list.Count(e => e.Category == "Планувальник завдань")
+        };
+    }
+
+    #endregion
+
+    #region Зчитування реєстру, папок та планувальника
+
     private static void ReadRegistryRun(RegistryKey root, string subKey, string targetAltKey, string source, bool isEnabled, List<StartupEntry> list)
     {
         try
         {
             using var key = root.OpenSubKey(subKey, false);
-            if (key != null)
-            {
-                foreach (var name in key.GetValueNames())
-                {
-                    if (string.IsNullOrWhiteSpace(name) || name.StartsWith("PS", StringComparison.OrdinalIgnoreCase)) 
-                        continue;
+            if (key == null) return;
 
-                    string cmd = key.GetValue(name)?.ToString() ?? string.Empty;
-                    list.Add(new StartupEntry
-                    {
-                        Name = name,
-                        Command = cmd,
-                        Source = source,
-                        Category = "Реєстр (Run)",
-                        KeyPath = subKey,
-                        DisabledKeyPath = targetAltKey,
-                        IsEnabled = isEnabled,
-                        EntryType = "Reg"
-                    });
-                }
+            foreach (var name in key.GetValueNames())
+            {
+                if (string.IsNullOrWhiteSpace(name) || name.StartsWith("PS", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string cmd = key.GetValue(name)?.ToString() ?? string.Empty;
+                var (cat, isCrit, pub) = ClassifyStartupItem(name, cmd);
+
+                list.Add(new StartupEntry
+                {
+                    Name = name,
+                    Command = cmd,
+                    Publisher = pub,
+                    Source = source,
+                    Category = cat,
+                    KeyPath = subKey,
+                    DisabledKeyPath = targetAltKey,
+                    IsEnabled = isEnabled,
+                    IsCritical = isCrit,
+                    EntryType = "Reg"
+                });
             }
         }
         catch { }
@@ -125,15 +267,18 @@ public static class StartupEngine
 
                 bool isDis = file.Extension.Equals(".disabled", StringComparison.OrdinalIgnoreCase);
                 string cleanName = isDis ? Path.GetFileNameWithoutExtension(file.Name) : file.Name;
+                var (cat, isCrit, pub) = ClassifyStartupItem(cleanName, file.FullName);
 
                 list.Add(new StartupEntry
                 {
                     Name = cleanName,
                     Command = file.FullName,
+                    Publisher = pub,
                     Source = source,
-                    Category = "Папки автозапуску",
+                    Category = cat,
                     FilePath = file.FullName,
                     IsEnabled = !isDis,
+                    IsCritical = isCrit,
                     EntryType = "File"
                 });
             }
@@ -166,7 +311,6 @@ public static class StartupEngine
             {
                 if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("\"")) continue;
 
-                // Парсимо CSV вивід schtasks
                 var parts = line.Split(new[] { "\",\"" }, StringSplitOptions.None)
                                 .Select(p => p.Trim('"')).ToArray();
 
@@ -176,7 +320,7 @@ public static class StartupEngine
                     string state = parts[3].Trim();
                     string taskToRun = parts[8].Trim();
 
-                    // Фільтруємо системні та порожні завдання Windows
+                    // Відсікаємо критичні системні завдання Windows
                     if (taskName.StartsWith(@"\Microsoft\Windows", StringComparison.OrdinalIgnoreCase) ||
                         taskName.StartsWith(@"\Microsoft\XblGameSave", StringComparison.OrdinalIgnoreCase) ||
                         string.IsNullOrWhiteSpace(taskToRun) ||
@@ -184,15 +328,19 @@ public static class StartupEngine
                         continue;
 
                     bool isEnabled = !state.Equals("Disabled", StringComparison.OrdinalIgnoreCase);
+                    string cleanName = Path.GetFileName(taskName);
+                    var (cat, isCrit, pub) = ClassifyStartupItem(cleanName, taskToRun);
 
                     list.Add(new StartupEntry
                     {
-                        Name = Path.GetFileName(taskName),
+                        Name = cleanName,
                         Command = taskToRun,
+                        Publisher = pub,
                         Source = "Планувальник завдань",
                         Category = "Планувальник завдань",
                         TaskPath = taskName,
                         IsEnabled = isEnabled,
+                        IsCritical = isCrit,
                         EntryType = "Task"
                     });
                 }
@@ -201,8 +349,47 @@ public static class StartupEngine
         catch { }
     }
 
+    private static (string Category, bool IsCritical, string Publisher) ClassifyStartupItem(string name, string command)
+    {
+        string lowerName = name.ToLowerInvariant();
+        string lowerCmd = command.ToLowerInvariant();
+
+        // 1. Критичні системні
+        if (CriticalSystemNames.Any(c => lowerName.Contains(c.ToLowerInvariant()) || lowerCmd.Contains(c.ToLowerInvariant())))
+        {
+            return ("Драйвери & Залізо", true, "Microsoft Windows / Security Core");
+        }
+
+        // 2. Драйвери та софт для заліза
+        if (HardwareKeywords.Any(h => lowerName.Contains(h) || lowerCmd.Contains(h)))
+        {
+            string pub = lowerCmd.Contains("nvidia") ? "NVIDIA Corporation" :
+                         lowerCmd.Contains("amd") || lowerCmd.Contains("radeon") ? "Advanced Micro Devices" :
+                         lowerCmd.Contains("realtek") ? "Realtek Semiconductor" :
+                         lowerCmd.Contains("intel") ? "Intel Corporation" : "Виробник обладнання";
+
+            return ("Драйвери & Залізо", false, pub);
+        }
+
+        // 3. Фонові апдейтери
+        if (UpdaterKeywords.Any(u => lowerName.Contains(u) || lowerCmd.Contains(u)))
+        {
+            return ("Фонові оновлювачі", false, "Служба оновлення");
+        }
+
+        // 4. Звичайні користувацькі програми
+        return ("Програми користувача", false, "Сторонній додаток");
+    }
+
+    #endregion
+
+    #region Керування станом (Вимкнення / Увімкнення)
+
     public static bool ToggleStartupState(StartupEntry item)
     {
+        if (item.IsCritical) return false;
+        item.IsBusy = true;
+
         try
         {
             if (item.EntryType == "Reg")
@@ -211,7 +398,6 @@ public static class StartupEngine
 
                 if (item.IsEnabled)
                 {
-                    // Переносимо з Run у Run_Disabled
                     using (var dKey = root.CreateSubKey(item.DisabledKeyPath))
                     {
                         dKey.SetValue(item.Name, item.Command);
@@ -224,17 +410,17 @@ public static class StartupEngine
                 }
                 else
                 {
-                    // Повертаємо з Run_Disabled у Run
-                    using (var aKey = root.CreateSubKey(item.DisabledKeyPath))
+                    using (var aKey = root.CreateSubKey(item.KeyPath))
                     {
                         aKey.SetValue(item.Name, item.Command);
                     }
-                    using (var dKey = root.OpenSubKey(item.KeyPath, true))
+                    using (var dKey = root.OpenSubKey(item.DisabledKeyPath, true))
                     {
                         dKey?.DeleteValue(item.Name, false);
                     }
                     item.IsEnabled = true;
                 }
+                item.IsBusy = false;
                 return true;
             }
             else if (item.EntryType == "File")
@@ -247,6 +433,7 @@ public static class StartupEngine
                         File.Move(item.FilePath, target, true);
                         item.FilePath = target;
                         item.IsEnabled = false;
+                        item.IsBusy = false;
                         return true;
                     }
                 }
@@ -261,6 +448,7 @@ public static class StartupEngine
                         File.Move(item.FilePath, target, true);
                         item.FilePath = target;
                         item.IsEnabled = true;
+                        item.IsBusy = false;
                         return true;
                     }
                 }
@@ -283,12 +471,16 @@ public static class StartupEngine
                 if (proc?.ExitCode == 0)
                 {
                     item.IsEnabled = !item.IsEnabled;
+                    item.IsBusy = false;
                     return true;
                 }
             }
         }
         catch { }
 
+        item.IsBusy = false;
         return false;
     }
+
+    #endregion
 }
