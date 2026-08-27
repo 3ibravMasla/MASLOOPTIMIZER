@@ -12,7 +12,7 @@ namespace MASLOOPTIMIZER;
 
 public static class UpdateManager
 {
-    public const string CurrentVersion = "0.3.2";
+    public const string CurrentVersion = "0.3.3";
     private const string RepoOwner = "3ibravMasla";
     private const string RepoName = "MASLOOPTIMIZER";
 

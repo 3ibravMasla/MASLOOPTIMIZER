@@ -15,3 +15,6 @@ test_reports/
 *.suo
 *.tmp
 *.log
+*.bak
+.clineignore
+.clinerules

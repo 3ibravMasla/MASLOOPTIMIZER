@@ -1,0 +1,31 @@
+# UNIVERSAL AI AGENT & TOKEN-SHIELD DIRECTIVES
+
+## 1. TOKEN ECONOMY & CONTEXT HYGIENE (P0)
+- NO VERBOSE CHATTER: Never write conversational setup sentences, filler, or post-action summaries. Jump directly into tool calls, diffs, or code execution.
+- NO FULL-FILE DUMPS: Never call `read_file` on entire files longer than 50 lines. Always specify a precise `line_range` to inspect only the required method or block.
+- GREP BEFORE READ: Always locate line numbers first using silent PowerShell commands (`Select-String -Path ... -Pattern "..."`). Never scan directories by opening files sequentially.
+- OFF-CHAT SCRIPT DELEGATION: For batch JSON edits, bulk regex replacements, or multi-file inspections, write a silent script to `Tools/_task.ps1`, execute it via CLI, and report only the exit code. Never perform heavy data parsing directly inside the chat.
+- SILENT CLI OUTPUT: Always run terminal commands with quiet flags (e.g., `dotnet build --nologo -v q`, `powershell -NoProfile ...`). Never let hundreds of log lines flood the chat context.
+
+## 2. WORKSPACE & ENVIRONMENT INTEGRITY
+- WORKSPACE BOUNDARY: Strictly stay inside the current project root directory. NEVER traverse, inspect, or search parent folders (`..`).
+- CLI SYNTAX: On Windows, use pure PowerShell 5.1/7 cmdlets (`Get-ChildItem`, `Select-String`, `Test-Path`, `Move-Item`). NEVER use legacy CMD operators (`&`, `2>nul`, `dir /s /b`).
+
+## 3. ATOMIC FILE SAFETY (ZERO-BYTE & CORRUPTION GUARD)
+- ATOMIC SAFE-SWAP: When modifying critical JSON bundles, translation files, or project configs:
+  1. Write the payload into a temporary `.tmp` file first.
+  2. Verify the `.tmp` file is non-empty and syntactically valid (`ConvertFrom-Json` or compiler check).
+  3. Overwrite the destination file atomically using `Move-Item -Force`.
+- ENCODING: All JSON and translation files must strictly use UTF-8 without BOM. C#, Python, and XAML files must be UTF-8.
+- NO CITATION RESIDUE: Never inject markdown citation artifacts, footnote tags, or web scraping residue (e.g., ``) into source code, comments, or data strings.
+
+## 4. ARCHITECTURE & MULTITHREADING STANDARDS
+- DESKTOP UI THREAD SAFETY: All heavy operations (Registry, Win32 API, Services, Network, CLI processes, WMI) MUST execute asynchronously on background threads via `Task.Run()`.
+- DISPATCHER CONFINEMENT: Any update to UI-bound models, `ObservableCollection`, or control properties from background threads MUST use `Dispatcher.Invoke()` or `Dispatcher.BeginInvoke()`.
+- EVENT SUBSCRIPTION HYGIENE: Always implement `IDisposable` or unsubscribe (`-=`) when binding models or views to static singleton events to prevent memory leaks.
+- PROCESS EXIT CODES: Always inspect and validate `process.ExitCode == 0` when invoking external system utilities (`schtasks`, `powercfg`, `netsh`, `reg`). Never assume execution succeeded without verifying the return code.
+
+## 5. POST-ACTION VERIFICATION
+- After any C# or XAML modification, immediately verify the build using `dotnet build --nologo -v q`.
+- In case of compilation errors, query ONLY the specific error lines (`: error CS...`). Do not re-read the entire source file.
+- Clean up any generated temporary scripts in `Tools/` upon task completion.

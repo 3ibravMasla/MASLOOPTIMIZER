@@ -30,6 +30,19 @@ public class DebloatStats
 
 public class DebloatItem : INotifyPropertyChanged
 {
+    public DebloatItem()
+    {
+        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ActionButtonText));
+        OnPropertyChanged(nameof(UninstallButtonText));
+        OnPropertyChanged(nameof(RestoreButtonText));
+    }
+
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = "ШІ & Телеметрія";
@@ -70,17 +83,28 @@ public class DebloatItem : INotifyPropertyChanged
         }
     }
 
-    public string StatusText => IsInstalled ? "🟢 ВСТАНОВЛЕНО" : "⚪ НЕМАЄ В СИСТЕМІ";
+    public string StatusText => IsInstalled
+        ? LocalizationManager.Instance["Debloat.StatusInstalled"]
+        : LocalizationManager.Instance["Debloat.StatusNotInstalled"];
     public string StatusColor => IsInstalled ? "#107C41" : "#2A2D3D";
 
     public string ActionButtonText
     {
         get
         {
-            if (IsBusy) return "⏳ Обробка...";
-            return IsInstalled ? "🗑️ Видалити" : "↩️ Відновити";
+            var loc = LocalizationManager.Instance;
+            if (IsBusy) return loc["Common.Busy"];
+            return IsInstalled ? loc["Debloat.BtnUninstall"] : loc["Debloat.BtnRestore"];
         }
     }
+
+    public string UninstallButtonText => IsBusy
+        ? LocalizationManager.Instance["Common.Busy"]
+        : LocalizationManager.Instance["Debloat.BtnUninstall"];
+
+    public string RestoreButtonText => IsBusy
+        ? LocalizationManager.Instance["Common.Busy"]
+        : LocalizationManager.Instance["Debloat.BtnRestore"];
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -436,6 +460,8 @@ public static class DebloatEngine
 
     public static async Task ScanInstalledPackagesAsync()
     {
+        var status = new Dictionary<DebloatItem, bool>();
+
         await Task.Run(() =>
         {
             var installedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -459,7 +485,7 @@ public static class DebloatEngine
             {
                 if (item.IsSpecialService)
                 {
-                    item.IsInstalled = CheckOneDriveInstalled();
+                    status[item] = CheckOneDriveInstalled();
                     continue;
                 }
 
@@ -476,8 +502,15 @@ public static class DebloatEngine
                     }
                 }
 
-                item.IsInstalled = found;
+                status[item] = found;
             }
+        });
+
+        // Оновлення UI-залежних властивостей — лише на UI-потоці (D-11)
+        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        {
+            foreach (var kv in status)
+                kv.Key.IsInstalled = kv.Value;
         });
     }
 
@@ -520,14 +553,21 @@ public static class DebloatEngine
                     RunPowerShellQuiet($"Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -like '*{pat}*' -and $_.DisplayName -notlike '*ExperienceHost*' }} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue");
                 }
 
-                item.IsInstalled = false;
+                AppLogger.Log($"Видалено UWP додаток: {item.Name}", "SUCCESS");
                 return true;
             }
             catch
             {
+                AppLogger.Log($"Помилка видалення UWP {item.Name}", "ERROR");
                 return false;
             }
         });
+
+        if (result)
+        {
+            // Оновлення UI-залежної властивості — лише на UI-потоці (D-11)
+            System.Windows.Application.Current?.Dispatcher.Invoke(() => { item.IsInstalled = false; });
+        }
 
         item.IsBusy = false;
         return result;
@@ -580,6 +620,10 @@ public static class DebloatEngine
             }
 
             item.IsInstalled = restoredLocally;
+            AppLogger.Log(restoredLocally
+                ? $"Відновлено UWP додаток: {item.Name}"
+                : $"Відкрито сторінку встановлення у Store: {item.Name}",
+                restoredLocally ? "SUCCESS" : "INFO");
             return restoredLocally;
         });
 

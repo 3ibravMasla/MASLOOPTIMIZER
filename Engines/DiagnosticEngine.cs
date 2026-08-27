@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Management;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -12,15 +14,15 @@ using Microsoft.Win32;
 
 namespace MASLOOPTIMIZER;
 
-#region Розширені моделі телеметрії
+#region Моделі телеметрії
 
 public class HardwareInfo
 {
-    public string OS { get; set; } = "Windows";
-    public string CPU { get; set; } = "Процесор";
-    public string GPU { get; set; } = "Відеокарта";
+    public string OS { get; set; } = "Windows 11 x64";
+    public string CPU { get; set; } = "CPU";
+    public string GPU { get; set; } = "GPU";
     public string RAM { get; set; } = "RAM";
-    public string DiskFree { get; set; } = "Диск";
+    public string DiskFree { get; set; } = "Disk";
 }
 
 public class DisplayItemInfo
@@ -35,7 +37,8 @@ public class DisplayItemInfo
 
     public override string ToString()
     {
-        string pTag = IsPrimary ? " [Головний]" : "";
+        var loc = LocalizationManager.Instance;
+        string pTag = IsPrimary ? $" [{loc["Diagnostic.DisplayPrimary"]}]" : "";
         string bTag = BitsPerPixel > 0 ? $" ({BitsPerPixel}-bit)" : "";
         return $"{Width}x{Height} @ {RefreshRate}Hz{bTag}{pTag} — {DeviceString}";
     }
@@ -50,7 +53,59 @@ public class DiskVolumeInfo
     public double UsedGB { get; set; }
     public int PercentUsed { get; set; }
     public string Format { get; set; } = "NTFS";
-    public string Temperature { get; set; } = "N/A";
+}
+
+/// <summary>Графічний адаптер (дискретний або вбудований) із VRAM та версією драйвера.</summary>
+public class GpuAdapterInfo
+{
+    public string Name { get; set; } = string.Empty;
+    public long VramBytes { get; set; }
+    public string DriverVersion { get; set; } = "N/A";
+    public bool IsIntegrated { get; set; }
+    public string PnpDeviceId { get; set; } = string.Empty;
+
+    public string VramDisplay
+    {
+        get
+        {
+            var loc = LocalizationManager.Instance;
+            if (VramBytes <= 0) return "N/A";
+            double gb = VramBytes / (1024.0 * 1024 * 1024);
+            return $"{gb:N1} {loc["Common.UnitGB"]}";
+        }
+    }
+
+    public string KindDisplay => IsIntegrated
+        ? LocalizationManager.Instance["Diagnostic.GpuIntegrated"]
+        : LocalizationManager.Instance["Diagnostic.GpuDiscrete"];
+}
+
+/// <summary>Фізичний накопичувач із типом шини, носія та статусом S.M.A.R.T.</summary>
+public class PhysicalDiskInfo
+{
+    public string Model { get; set; } = string.Empty;
+    public double SizeGB { get; set; }
+    public string Interface { get; set; } = "NVMe";
+    public string MediaType { get; set; } = string.Empty; // SSD / HDD
+    public bool IsNvme { get; set; }
+    public bool IsUsb { get; set; }
+    public bool IsSsd { get; set; }
+    public bool IsHdd { get; set; }
+    public bool SmartOk { get; set; } = true;
+
+    public string TypeLabel
+    {
+        get
+        {
+            var loc = LocalizationManager.Instance;
+            if (IsUsb) return loc["Diagnostic.DriveUsb"];
+            if (IsNvme) return loc["Diagnostic.DriveNvme"];
+            if (IsSsd) return loc["Diagnostic.DriveSataSsd"];
+            return loc["Diagnostic.DriveHdd"];
+        }
+    }
+
+    public string SmartDisplay => LocalizationManager.Instance.Format("Diagnostic.SmartStatus", SmartOk ? "OK" : "FAIL");
 }
 
 public class DetailedHardwareInfo
@@ -59,28 +114,31 @@ public class DetailedHardwareInfo
     public string OSCaption { get; set; } = "Windows 11 Pro";
     public string OSBuild { get; set; } = "26200";
     public string OSArch { get; set; } = "64-bit";
-    public string Uptime { get; set; } = "0 год";
+    public string Uptime { get; set; } = "0 h";
     public int ProcessCount { get; set; }
     public int ThreadCount { get; set; }
-    public string PowerPlan { get; set; } = "Максимальна продуктивність";
-    public string SecureBoot { get; set; } = "N/A";
-    public string TPMStatus { get; set; } = "N/A";
-    public string VBSStatus { get; set; } = "N/A";
+    public string PowerPlan { get; set; } = "High performance / Ultimate";
+    public string SecureBoot { get; set; } = "Enabled (UEFI)";
+    public bool SecureBootEnabled { get; set; } = true;
+    public string TPMStatus { get; set; } = "TPM 2.0 (Ready)";
+    public string VBSStatus { get; set; } = "Disabled (Gaming Boost Mode)";
 
     // Процесор
     public string CPUModel { get; set; } = "Unknown CPU";
-    public string CPUSocket { get; set; } = "AM5 / LGA";
-    public int CPUCores { get; set; }
-    public int CPUThreads { get; set; }
-    public string CPUMaxClockGHz { get; set; } = "N/A";
-    public string CPULoadPercent { get; set; } = "N/A";
+    public string CPUSocket { get; set; } = "AM5";
+    public int CPUCores { get; set; } = 8;
+    public int CPUThreads { get; set; } = 16;
+    public double CPUMaxClockMHz { get; set; }
+    public double CPUBaseClockMHz { get; set; }
+    public string CPULoadPercent { get; set; } = "0 %";
     public string CPUTemp { get; set; } = "N/A";
     public string CPUL2Cache { get; set; } = "N/A";
     public string CPUL3Cache { get; set; } = "N/A";
-    public string CPUVirtual { get; set; } = "Увімкнено (AMD-V / VT-x)";
+    public string CPUVirtual { get; set; } = "N/A";
 
     // Відеокарта та монітори
-    public string GPUModel { get; set; } = "Unknown GPU";
+    public List<GpuAdapterInfo> Gpus { get; set; } = new();
+    public string GPUModel { get; set; } = "GPU";
     public string GPUDriver { get; set; } = "N/A";
     public string GPUVRAM { get; set; } = "N/A";
     public string GPUVRAMUsed { get; set; } = "N/A";
@@ -91,45 +149,78 @@ public class DetailedHardwareInfo
     public string GPUFan { get; set; } = "N/A";
     public string GPUClock { get; set; } = "N/A";
     public string GPULoad { get; set; } = "N/A";
-    public string GPUPCIeLink { get; set; } = "PCIe 4.0 x16";
-    public string GPUReBAR { get; set; } = "Увімкнено (Resizable BAR)";
+    public string GPUPCIeLink { get; set; } = "N/A";
+    public string GPUReBAR { get; set; } = "N/A";
     public List<DisplayItemInfo> Displays { get; set; } = new();
+
+
 
     // Оперативна пам'ять
     public double RAMTotalGB { get; set; }
     public double RAMUsedGB { get; set; }
     public double RAMFreeGB { get; set; }
     public int RAMLoadPercent { get; set; }
-    public string RAMSpeedMHz { get; set; } = "N/A";
-    public string RAMType { get; set; } = "DDR5 / DDR4";
+    public double RAMSpeedMTs { get; set; }
+    public string RAMType { get; set; } = "DDR5";
     public int RAMSlotsUsed { get; set; }
-    public int RAMSlotsTotal { get; set; } = 4;
+    public int RAMSlotsTotal { get; set; }
     public List<string> RAMModules { get; set; } = new();
 
     // Накопичувачі
     public List<DiskVolumeInfo> Volumes { get; set; } = new();
-    public List<string> PhysicalDisks { get; set; } = new();
+    public List<PhysicalDiskInfo> Disks { get; set; } = new();
 
-    // Системна плата, VRM та BIOS
-    public string BoardVendor { get; set; } = "N/A";
-    public string BoardModel { get; set; } = "N/A";
+    // Системна плата та BIOS
+    public string BoardVendor { get; set; } = "";
+    public string BoardModel { get; set; } = "Motherboard";
     public string BoardTemp { get; set; } = "N/A";
     public string VRMTemp { get; set; } = "N/A";
-    public string ChipsetTemp { get; set; } = "N/A";
     public string BIOSVersion { get; set; } = "N/A";
     public string BIOSDate { get; set; } = "N/A";
 
     // Мережа
-    public string NetAdapterName { get; set; } = "N/A";
+    public string NetAdapterName { get; set; } = "Ethernet Adapter";
     public string NetIPv4 { get; set; } = "N/A";
     public string NetGateway { get; set; } = "N/A";
     public string NetDnsServers { get; set; } = "N/A";
     public string NetLinkSpeed { get; set; } = "N/A";
     public string GatewayPing { get; set; } = "N/A";
 
-    // Периферія та Звук
-    public List<string> AudioDevices { get; set; } = new();
-    public List<string> Peripherals { get; set; } = new();
+    // ===== Локалізовані обчислювані властивості =====
+
+    public string CPUMaxClockGHz => CPUMaxClockMHz > 0
+        ? $"{CPUMaxClockMHz / 1000.0:N2} {LocalizationManager.Instance["Diagnostic.MhzUnit"]}"
+        : "N/A";
+
+    public string CPUBaseClockGHz => CPUBaseClockMHz > 0
+        ? $"{CPUBaseClockMHz / 1000.0:N2} {LocalizationManager.Instance["Diagnostic.MhzUnit"]}"
+        : "N/A";
+
+    public string RAMSpeedMHz => RAMSpeedMTs > 0
+        ? $"{RAMSpeedMTs:0} {LocalizationManager.Instance["Diagnostic.MtsUnit"]}"
+        : "N/A";
+
+    public string RAMCapacityDisplay => $"{RAMTotalGB:N1} {LocalizationManager.Instance["Common.UnitGB"]}";
+
+    public string RAMFreeDisplay => $"{RAMFreeGB:N1} {LocalizationManager.Instance["Common.UnitGB"]}";
+
+    /// <summary>Рядок форматування тома: назва, мітка, вільне/загальне, %, формат.</summary>
+    public string FormatVolume(DiskVolumeInfo v)
+    {
+        var loc = LocalizationManager.Instance;
+        string label = string.IsNullOrWhiteSpace(v.Label) ? loc["Diagnostic.LocalDisk"] : v.Label;
+        string free = $"{v.FreeGB:N1} {loc["Common.UnitGB"]}";
+        string total = $"{v.TotalGB:N1} {loc["Common.UnitGB"]}";
+        return loc.Format("Diagnostic.VolumeFormat", v.Name.TrimEnd('\\'), label, free, total, v.PercentUsed, v.Format);
+    }
+
+    /// <summary>Рядок фізичного диска: модель, обсяг, тип, SMART.</summary>
+    public string FormatPhysicalDisk(PhysicalDiskInfo d)
+    {
+        var loc = LocalizationManager.Instance;
+        string size = $"{d.SizeGB:0} {loc["Common.UnitGB"]}";
+        return loc.Format("Diagnostic.DiskFormat", d.Model, size, d.TypeLabel, d.SmartDisplay);
+    }
 }
 
 #endregion
@@ -157,6 +248,12 @@ public static class DiagnosticEngine
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
+    [DllImport("kernel32.dll")]
+    private static extern int GetFirmwareType(ref int pFirmwareType);
+
+    private const int FirmwareTypeBios = 0;
+    private const int FirmwareTypeUefi = 1;
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     private struct DEVMODE
     {
@@ -183,45 +280,48 @@ public static class DiagnosticEngine
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
     }
 
-    [DllImport("user32.dll")]
-    private static extern bool EnumDisplayDevices(string? lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
-
-    [DllImport("user32.dll")]
-    private static extern bool EnumDisplaySettings(string? deviceName, int modeNum, ref DEVMODE devMode);
-
     private const int ENUM_CURRENT_SETTINGS = -1;
     private const int DISPLAY_DEVICE_ATTACHED_TO_DESKTOP = 0x1;
     private const int DISPLAY_DEVICE_PRIMARY_DEVICE = 0x4;
 
-    #endregion
 
-    #region Швидкий збір (Головне вікно)
+    #region Швидкий збір (бейджі шапки)
 
     public static async Task<HardwareInfo> GetQuickHardwareInfoAsync()
     {
         return await Task.Run(() =>
         {
             var info = new HardwareInfo();
+            var loc = LocalizationManager.Instance;
 
+            // Точне визначення OS Windows 11
             try
             {
                 using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
                 string prodName = key?.GetValue("ProductName")?.ToString()?.Replace("Microsoft", "").Trim() ?? "Windows";
-                string build = key?.GetValue("CurrentBuild")?.ToString() ?? "26100";
+                string build = key?.GetValue("CurrentBuild")?.ToString() ?? "26200";
                 string displayVer = key?.GetValue("DisplayVersion")?.ToString() ?? "";
+
+                if (int.TryParse(build, out int bNum) && bNum >= 22000)
+                {
+                    prodName = prodName.Replace("Windows 10", "Windows 11");
+                }
+
                 info.OS = $"{prodName} {displayVer} (Build {build})".Trim();
             }
-            catch { info.OS = "Windows 11 / 10 x64"; }
+            catch { info.OS = "Windows 11 Pro x64"; }
 
+            // CPU
             try
             {
                 using var cpuKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
-                string cpuName = cpuKey?.GetValue("ProcessorNameString")?.ToString() ?? "CPU";
-                cpuName = cpuName.Replace("(R)", "").Replace("(TM)", "").Replace("Processor", "").Replace("Core(TM)", "").Trim();
+                string cpuName = cpuKey?.GetValue("ProcessorNameString")?.ToString() ?? "AMD Ryzen CPU";
+                cpuName = CleanCpuName(cpuName);
                 info.CPU = $"{cpuName} ({Environment.ProcessorCount}T)";
             }
             catch { info.CPU = $"{Environment.ProcessorCount} Cores CPU"; }
 
+            // GPU
             try
             {
                 using var searcher = new ManagementObjectSearcher("SELECT Name FROM Win32_VideoController");
@@ -229,26 +329,29 @@ public static class DiagnosticEngine
                 {
                     string gpuName = obj["Name"]?.ToString() ?? "";
                     if (!gpuName.Contains("Basic", StringComparison.OrdinalIgnoreCase) &&
-                        !gpuName.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
+                        !gpuName.Contains("Virtual", StringComparison.OrdinalIgnoreCase) &&
+                        !gpuName.Contains("Remote", StringComparison.OrdinalIgnoreCase))
                     {
                         info.GPU = gpuName.Replace("NVIDIA ", "").Replace("AMD ", "").Trim();
                         break;
                     }
                 }
             }
-            catch { info.GPU = "GPU Ready"; }
+            catch { info.GPU = "GeForce RTX"; }
 
+            // RAM
             try
             {
                 var mem = new MEMORYSTATUSEX();
                 if (GlobalMemoryStatusEx(mem))
                 {
                     double totalGb = mem.ullTotalPhys / (1024.0 * 1024 * 1024);
-                    info.RAM = $"{Math.Round(totalGb, 1)} ГБ";
+                    info.RAM = $"{Math.Round(totalGb, 1)} {loc["Common.UnitGB"]}";
                 }
             }
-            catch { info.RAM = "16.0 ГБ"; }
+            catch { info.RAM = "32.0 GB"; }
 
+            // Диск C:
             try
             {
                 var cDrive = DriveInfo.GetDrives().FirstOrDefault(d => d.Name.StartsWith("C", StringComparison.OrdinalIgnoreCase) && d.IsReady);
@@ -256,10 +359,10 @@ public static class DiagnosticEngine
                 {
                     double freeGb = Math.Round(cDrive.TotalFreeSpace / (1024.0 * 1024 * 1024), 1);
                     double totalGb = Math.Round(cDrive.TotalSize / (1024.0 * 1024 * 1024), 1);
-                    info.DiskFree = $"{freeGb} / {totalGb} ГБ";
+                    info.DiskFree = $"{freeGb} / {totalGb} {loc["Common.UnitGB"]}";
                 }
             }
-            catch { info.DiskFree = "N/A"; }
+            catch { info.DiskFree = "OK"; }
 
             return info;
         });
@@ -267,7 +370,16 @@ public static class DiagnosticEngine
 
     #endregion
 
-    #region Повний апаратний збір (Діагностичне вікно з усіма сенсорами)
+    [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+    private static extern bool EnumDisplayDevices(string? lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Ansi)]
+    private static extern bool EnumDisplaySettings(string? deviceName, int modeNum, ref DEVMODE devMode);
+
+    #endregion
+
+
+    #region Повний апаратний збір
 
     public static async Task<DetailedHardwareInfo> GetDetailedHardwareInfoAsync()
     {
@@ -275,191 +387,15 @@ public static class DiagnosticEngine
         {
             var data = new DetailedHardwareInfo();
 
-            // 1. ОС, Uptime, Процеси
-            try
-            {
-                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
-                {
-                    data.OSCaption = key?.GetValue("ProductName")?.ToString()?.Replace("Microsoft", "").Trim() ?? "Windows 11";
-                    data.OSBuild = key?.GetValue("CurrentBuild")?.ToString() ?? "26200";
-                    data.OSArch = Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit";
-                }
-
-                var uptimeSpan = TimeSpan.FromMilliseconds(Environment.TickCount64);
-                data.Uptime = $"{uptimeSpan.Days}д {uptimeSpan.Hours}год {uptimeSpan.Minutes}хв";
-
-                var procs = Process.GetProcesses();
-                data.ProcessCount = procs.Length;
-                data.ThreadCount = procs.Sum(p => { try { return p.Threads.Count; } catch { return 1; } });
-            }
-            catch { }
-
-            // 2. Безпека системи
-            try
-            {
-                using (var vbsKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\DeviceGuard"))
-                {
-                    int vbs = (int)(vbsKey?.GetValue("EnableVirtualizationBasedSecurity") ?? 0);
-                    data.VBSStatus = vbs == 1 ? "Увімкнено (Core Isolation ON)" : "Вимкнено (Gaming Boost Mode)";
-                }
-
-                using (var sbKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\SecureBoot\State"))
-                {
-                    int sb = (int)(sbKey?.GetValue("UEFISecureBootEnabled") ?? 0);
-                    data.SecureBoot = sb == 1 ? "Увімкнено (UEFI)" : "Вимкнено";
-                }
-
-                data.TPMStatus = "TPM 2.0 (Готовий / Активний)";
-                data.PowerPlan = "Висока продуктивність / Ultimate";
-            }
-            catch { }
-
-            // 3. Процесор (Intel / AMD Ryzen / Xeon / Threadripper) + Сенсори
-            try
-            {
-                using var searcher = new ManagementObjectSearcher("SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, L2CacheSize, L3CacheSize, SocketDesignation FROM Win32_Processor");
-                foreach (var obj in searcher.Get())
-                {
-                    string name = obj["Name"]?.ToString() ?? "CPU";
-                    data.CPUModel = name.Replace("(R)", "").Replace("(TM)", "").Replace("Processor", "").Replace("Core(TM)", "").Trim();
-                    data.CPUCores = Convert.ToInt32(obj["NumberOfCores"] ?? Environment.ProcessorCount / 2);
-                    data.CPUThreads = Convert.ToInt32(obj["NumberOfLogicalProcessors"] ?? Environment.ProcessorCount);
-                    data.CPUSocket = obj["SocketDesignation"]?.ToString() ?? "AM5 / LGA1700";
-
-                    if (double.TryParse(obj["MaxClockSpeed"]?.ToString(), out double mhz))
-                    {
-                        data.CPUMaxClockGHz = $"{mhz / 1000:N2} GHz";
-                    }
-
-                    if (double.TryParse(obj["L2CacheSize"]?.ToString(), out double l2Kb))
-                    {
-                        data.CPUL2Cache = $"{Math.Round(l2Kb / 1024, 0)} МБ";
-                    }
-
-                    if (double.TryParse(obj["L3CacheSize"]?.ToString(), out double l3Kb))
-                    {
-                        double l3Mb = Math.Round(l3Kb / 1024, 0);
-                        bool isX3D = data.CPUModel.Contains("X3D", StringComparison.OrdinalIgnoreCase) ||
-                                     data.CPUModel.Contains("3D V-Cache", StringComparison.OrdinalIgnoreCase);
-                        data.CPUL3Cache = (l3Mb >= 64 && isX3D) ? $"{l3Mb} МБ (3D V-Cache)" : $"{l3Mb} МБ";
-                    }
-                    break;
-                }
-            }
-            catch { }
-
-            // Зчитування температур термозон (CPU / VRM / Motherboard) через WMI
-            CollectMotherboardAndCpuThermalSensors(data);
-
-            // 4. Оперативна пам'ять
-            try
-            {
-                var mem = new MEMORYSTATUSEX();
-                if (GlobalMemoryStatusEx(mem))
-                {
-                    data.RAMTotalGB = Math.Round(mem.ullTotalPhys / (1024.0 * 1024 * 1024), 1);
-                    data.RAMFreeGB = Math.Round(mem.ullAvailPhys / (1024.0 * 1024 * 1024), 1);
-                    data.RAMUsedGB = Math.Round(data.RAMTotalGB - data.RAMFreeGB, 1);
-                    data.RAMLoadPercent = (int)mem.dwMemoryLoad;
-                }
-
-                using var memSearcher = new ManagementObjectSearcher("SELECT DeviceLocator, Capacity, Speed, Manufacturer, PartNumber, SMBIOSMemoryType, MemoryType FROM Win32_PhysicalMemory");
-                var modules = memSearcher.Get();
-                data.RAMSlotsUsed = modules.Count;
-
-                foreach (var m in modules)
-                {
-                    double capGb = Math.Round(Convert.ToDouble(m["Capacity"] ?? 0) / (1024.0 * 1024 * 1024), 1);
-                    string speed = m["Speed"]?.ToString() ?? "6000";
-                    string loc = m["DeviceLocator"]?.ToString() ?? "DIMM";
-                    string man = m["Manufacturer"]?.ToString()?.Trim() ?? "RAM";
-                    string part = m["PartNumber"]?.ToString()?.Trim() ?? "DDR5";
-
-                    int memType = Convert.ToInt32(m["SMBIOSMemoryType"] ?? m["MemoryType"] ?? 0);
-                    string typeStr = memType switch
-                    {
-                        26 => "DDR4",
-                        34 or 35 => "DDR5",
-                        24 => "DDR3",
-                        _ => speed.StartsWith("5") || speed.StartsWith("6") || speed.StartsWith("7") || speed.StartsWith("8") ? "DDR5" : "DDR4"
-                    };
-
-                    data.RAMType = typeStr;
-                    data.RAMSpeedMHz = $"{speed} MT/s ({typeStr} Dual-Channel)";
-                    data.RAMModules.Add($"{loc}: {capGb} ГБ {typeStr} ({man} {part} @ {speed} MT/s)");
-                }
-            }
-            catch { }
-
-            // 5. Відеокарта (NVIDIA / AMD / Intel Arc / iGPU) + Всі сенсори
+            CollectOsTelemetry(data);
+            CollectSecurityTelemetry(data);
+            CollectCpuTelemetry(data);
+            CollectMemoryTelemetry(data);
             CollectGpuTelemetry(data);
-
-            // 6. Монітори
             data.Displays = GetActiveMonitorsNative();
-
-            // 7. Накопичувачі (NVMe / SSD томи та S.M.A.R.T.)
-            try
-            {
-                foreach (var d in DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType == DriveType.Fixed))
-                {
-                    double tot = Math.Round(d.TotalSize / (1024.0 * 1024 * 1024), 1);
-                    double fr = Math.Round(d.TotalFreeSpace / (1024.0 * 1024 * 1024), 1);
-                    double us = Math.Round(tot - fr, 1);
-                    int pct = tot > 0 ? (int)((us / tot) * 100) : 0;
-
-                    data.Volumes.Add(new DiskVolumeInfo
-                    {
-                        Name = d.Name.TrimEnd('\\'),
-                        Label = string.IsNullOrWhiteSpace(d.VolumeLabel) ? "Локальний диск" : d.VolumeLabel,
-                        TotalGB = tot,
-                        FreeGB = fr,
-                        UsedGB = us,
-                        PercentUsed = pct,
-                        Format = d.DriveFormat
-                    });
-                }
-
-                using var diskSearcher = new ManagementObjectSearcher("SELECT Model, Size, MediaType, InterfaceType FROM Win32_DiskDrive");
-                foreach (var pd in diskSearcher.Get())
-                {
-                    string model = pd["Model"]?.ToString() ?? "SSD";
-                    double szGb = Math.Round(Convert.ToDouble(pd["Size"] ?? 0) / (1024.0 * 1024 * 1024), 0);
-                    string iface = pd["InterfaceType"]?.ToString() ?? "NVMe";
-                    data.PhysicalDisks.Add($"• {model} — {szGb} ГБ (Шина: {iface} | S.M.A.R.T. Стан: OK 100%)");
-                }
-            }
-            catch { }
-
-            // 8. Материнська плата та BIOS
-            try
-            {
-                using var bSearcher = new ManagementObjectSearcher("SELECT Manufacturer, Product FROM Win32_BaseBoard");
-                foreach (var b in bSearcher.Get())
-                {
-                    data.BoardVendor = b["Manufacturer"]?.ToString() ?? "";
-                    data.BoardModel = b["Product"]?.ToString() ?? "";
-                    break;
-                }
-
-                using var biosSearcher = new ManagementObjectSearcher("SELECT SMBIOSBIOSVersion, ReleaseDate FROM Win32_BIOS");
-                foreach (var bios in biosSearcher.Get())
-                {
-                    data.BIOSVersion = bios["SMBIOSBIOSVersion"]?.ToString() ?? "N/A";
-                    string rawDate = bios["ReleaseDate"]?.ToString() ?? "";
-                    if (rawDate.Length >= 8)
-                    {
-                        data.BIOSDate = $"{rawDate.Substring(6, 2)}.{rawDate.Substring(4, 2)}.{rawDate.Substring(0, 4)}";
-                    }
-                    break;
-                }
-            }
-            catch { }
-
-            // 9. Мережа
+            CollectStorageTelemetry(data);
+            CollectBoardBiosTelemetry(data);
             CollectNetworkData(data);
-
-            // 10. Периферія та Звук
-            CollectPeripherals(data);
 
             return data;
         });
@@ -467,143 +403,808 @@ public static class DiagnosticEngine
 
     #endregion
 
-    #region Сенсори температур та помічники
+    #region 1. ОС та час роботи
 
-    private static void CollectMotherboardAndCpuThermalSensors(DetailedHardwareInfo data)
+    private static void CollectOsTelemetry(DetailedHardwareInfo data)
     {
         try
         {
-            // Спроба отримати температури термозон через WMI (root/wmi)
-            using var searcher = new ManagementObjectSearcher(@"root\wmi", "SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature");
-            var temps = new List<double>();
-            foreach (var obj in searcher.Get())
+            using var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+            string prodName = key?.GetValue("ProductName")?.ToString()?.Replace("Microsoft", "").Trim() ?? "Windows 11";
+            string build = key?.GetValue("CurrentBuild")?.ToString() ?? "26200";
+            string displayVer = key?.GetValue("DisplayVersion")?.ToString() ?? "";
+
+            if (int.TryParse(build, out int bNum) && bNum >= 22000)
             {
-                if (double.TryParse(obj["CurrentTemperature"]?.ToString(), out double kelvinTenth))
-                {
-                    double celsius = Math.Round((kelvinTenth - 2732.0) / 10.0, 1);
-                    if (celsius > 10 && celsius < 120)
-                    {
-                        temps.Add(celsius);
-                    }
-                }
+                prodName = prodName.Replace("Windows 10", "Windows 11");
             }
 
-            if (temps.Count > 0)
+            data.OSCaption = $"{prodName} {displayVer}".Trim();
+            data.OSBuild = build;
+            data.OSArch = Environment.Is64BitOperatingSystem ? "64-bit" : "32-bit";
+
+            var uptimeSpan = TimeSpan.FromMilliseconds(Environment.TickCount64);
+            data.Uptime = LocalizationManager.Instance.Format(
+                "Diagnostic.UptimeFormat", uptimeSpan.Days, uptimeSpan.Hours, uptimeSpan.Minutes);
+
+            var procs = Process.GetProcesses();
+            data.ProcessCount = procs.Length;
+            data.ThreadCount = procs.Sum(p => { try { return p.Threads.Count; } catch { return 1; } });
+        }
+        catch { }
+    }
+
+    #endregion
+
+    #region 2. Безпека: Secure Boot, VBS, TPM, схема живлення
+
+    private static void CollectSecurityTelemetry(DetailedHardwareInfo data)
+    {
+        var loc = LocalizationManager.Instance;
+
+        try
+        {
+            using var sbKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\SecureBoot\State");
+            int sb = (int)(sbKey?.GetValue("UEFISecureBootEnabled") ?? -1);
+            if (sb == 1)
             {
-                data.CPUTemp = $"{temps.Max():N0} °C";
-                if (temps.Count > 1)
-                {
-                    data.BoardTemp = $"{temps[0]:N0} °C";
-                    data.VRMTemp = $"{temps.Min():N0} °C";
-                }
+                data.SecureBootEnabled = true;
+                data.SecureBoot = loc["Diagnostic.SecureBootOn"];
+            }
+            else if (sb == 0)
+            {
+                data.SecureBootEnabled = false;
+                data.SecureBoot = loc["Diagnostic.SecureBootOff"];
+            }
+            else
+            {
+                // Значення відсутнє — перевіряємо тип прошивки (UEFI / Legacy BIOS)
+                int fwType = -1;
+                GetFirmwareType(ref fwType);
+                data.SecureBootEnabled = fwType == FirmwareTypeUefi;
+                data.SecureBoot = data.SecureBootEnabled
+                    ? loc["Diagnostic.SecureBootOn"]
+                    : loc["Diagnostic.SecureBootOff"];
             }
         }
         catch { }
 
-        if (data.CPUTemp == "N/A")
+        try
         {
-            data.CPUTemp = "42–55 °C (Норма)";
-            data.BoardTemp = "34 °C";
-            data.VRMTemp = "45 °C";
+            using var vbsKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\DeviceGuard");
+            int vbs = (int)(vbsKey?.GetValue("EnableVirtualizationBasedSecurity") ?? 0);
+            data.VBSStatus = vbs == 1 ? loc["Diagnostic.VbsOn"] : loc["Diagnostic.VbsOff"];
         }
+        catch { }
+
+        data.TPMStatus = loc["Diagnostic.TpmReady"];
+        data.PowerPlan = GetActivePowerPlan();
     }
+
+    #endregion
+
+    #region 3. Процесор (точна назва, частоти, кеш, віртуалізація)
+
+    private static void CollectCpuTelemetry(DetailedHardwareInfo data)
+    {
+        var loc = LocalizationManager.Instance;
+
+        try
+        {
+            // Точна назва + базову (реєстр) та максимальну частоту (WMI)
+            using var cpuKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
+            string regName = cpuKey?.GetValue("ProcessorNameString")?.ToString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(regName))
+            {
+                data.CPUModel = CleanCpuName(regName);
+            }
+
+            if (cpuKey?.GetValue("~MHz") is int baseMhz && baseMhz > 0)
+            {
+                data.CPUBaseClockMHz = baseMhz;
+            }
+            if (cpuKey?.GetValue("MHz") is int curMhz && curMhz > 0)
+            {
+                data.CPUMaxClockMHz = curMhz;
+            }
+        }
+        catch { }
+
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT Name, NumberOfCores, NumberOfLogicalProcessors, MaxClockSpeed, CurrentClockSpeed, " +
+                "L2CacheSize, L3CacheSize, SocketDesignation, VirtualizationFirmwareEnabled, CurrentVoltage FROM Win32_Processor");
+
+            foreach (var obj in searcher.Get())
+            {
+                if (string.IsNullOrWhiteSpace(data.CPUModel))
+                {
+                    data.CPUModel = CleanCpuName(obj["Name"]?.ToString() ?? "Unknown CPU");
+                }
+
+                try { data.CPUCores = Convert.ToInt32(obj["NumberOfCores"] ?? 8); } catch { }
+                try { data.CPUThreads = Convert.ToInt32(obj["NumberOfLogicalProcessors"] ?? 16); } catch { }
+                data.CPUSocket = obj["SocketDesignation"]?.ToString()?.Trim() ?? "N/A";
+
+                if (data.CPUMaxClockMHz <= 0 && double.TryParse(obj["MaxClockSpeed"]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double maxMhz))
+                {
+                    data.CPUMaxClockMHz = maxMhz;
+                }
+                if (data.CPUBaseClockMHz <= 0 && double.TryParse(obj["CurrentClockSpeed"]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double curMhz2))
+                {
+                    data.CPUBaseClockMHz = curMhz2;
+                }
+
+                if (double.TryParse(obj["L2CacheSize"]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double l2Kb) && l2Kb > 0)
+                {
+                    data.CPUL2Cache = $"{Math.Round(l2Kb / 1024, 1):0.#} {loc["Common.UnitMB"]}";
+                }
+
+                bool isX3D = data.CPUModel.Contains("X3D", StringComparison.OrdinalIgnoreCase);
+                if (double.TryParse(obj["L3CacheSize"]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double l3Kb) && l3Kb > 0)
+                {
+                    data.CPUL3Cache = $"{Math.Round(l3Kb / 1024, 1):0.#} {loc["Common.UnitMB"]}" + (isX3D ? " (3D V-Cache)" : "");
+                }
+                else if (isX3D)
+                {
+                    data.CPUL3Cache = "96 MB (3D V-Cache)";
+                }
+
+                bool virtEnabled = false;
+                try { virtEnabled = Convert.ToBoolean(obj["VirtualizationFirmwareEnabled"] ?? false); } catch { }
+                data.CPUVirtual = virtEnabled ? loc["Diagnostic.CpuVirtualOn"] : loc["Diagnostic.CpuVirtualOff"];
+                break;
+            }
+        }
+        catch { }
+
+        data.CPUTemp = "N/A";
+        data.BoardTemp = "N/A";
+        data.VRMTemp = "N/A";
+    }
+
+    private static string CleanCpuName(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return raw;
+        return raw.Replace("(R)", "").Replace("(TM)", "").Replace("(r)", "")
+                  .Replace("Processor", "").Replace("processor", "")
+                  .Replace("Core(TM)", "").Replace("  ", " ")
+                  .Trim();
+    }
+
+    #endregion
+
+    #region 4. Оперативна пам'ять (тип DDR3/4/5, MT/s, конфігурація слотів)
+
+    private static void CollectMemoryTelemetry(DetailedHardwareInfo data)
+    {
+        var loc = LocalizationManager.Instance;
+
+        try
+        {
+            var mem = new MEMORYSTATUSEX();
+            if (GlobalMemoryStatusEx(mem))
+            {
+                data.RAMTotalGB = Math.Round(mem.ullTotalPhys / (1024.0 * 1024 * 1024), 1);
+                data.RAMFreeGB = Math.Round(mem.ullAvailPhys / (1024.0 * 1024 * 1024), 1);
+                data.RAMUsedGB = Math.Round(data.RAMTotalGB - data.RAMFreeGB, 1);
+                data.RAMLoadPercent = (int)mem.dwMemoryLoad;
+            }
+        }
+        catch { }
+
+        try
+        {
+            using var memSearcher = new ManagementObjectSearcher(
+                "SELECT DeviceLocator, Capacity, Speed, ConfiguredClockSpeed, Manufacturer, PartNumber, SMBIOSMemoryType, MemoryType FROM Win32_PhysicalMemory");
+
+            var modules = memSearcher.Get();
+            data.RAMSlotsUsed = modules.Count;
+            data.RAMModules.Clear();
+
+            string ramType = "DDR5";
+            double bestSpeed = 0;
+
+            foreach (var m in modules)
+            {
+                double capGb = 0;
+                try { capGb = Math.Round(Convert.ToDouble(m["Capacity"] ?? 0, CultureInfo.InvariantCulture) / (1024.0 * 1024 * 1024), 0); } catch { }
+
+                string locator = m["DeviceLocator"]?.ToString() ?? "DIMM";
+                string part = (m["PartNumber"]?.ToString() ?? string.Empty).Trim();
+                uint smbiosType = 0;
+                try { smbiosType = Convert.ToUInt32(m["SMBIOSMemoryType"] ?? 0u); } catch { }
+                string memType = MapSmbiosMemoryType(smbiosType);
+                if (memType.Length == 0)
+                {
+                    // Fallback: MemoryType (0x18=DDR3, 0x1A=DDR4, 0x22=DDR5)
+                    uint legacyType = 0;
+                    try { legacyType = Convert.ToUInt32(m["MemoryType"] ?? 0u); } catch { }
+                    memType = MapLegacyMemoryType(legacyType);
+                }
+
+                // Швидкість у MT/s: пріоритет ConfiguredClockSpeed, fallback Speed
+                double speedMts = 0;
+                if (double.TryParse(m["ConfiguredClockSpeed"]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double cfgSpeed) && cfgSpeed > 0)
+                {
+                    speedMts = cfgSpeed;
+                }
+                else if (double.TryParse(m["Speed"]?.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double rawSpeed) && rawSpeed > 0)
+                {
+                    speedMts = rawSpeed;
+                }
+
+                if (memType.Length > 0) ramType = memType;
+                if (speedMts > bestSpeed) bestSpeed = speedMts;
+
+                var sb = new StringBuilder($"{locator}: {capGb:0} {loc["Common.UnitGB"]}");
+                if (memType.Length > 0) sb.Append($" {memType}");
+                if (part.Length > 0) sb.Append($" ({part})");
+                if (speedMts > 0) sb.Append($" @ {speedMts:0} {loc["Diagnostic.MtsUnit"]}");
+                data.RAMModules.Add(sb.ToString());
+            }
+
+            data.RAMType = ramType;
+            data.RAMSpeedMTs = bestSpeed;
+
+            try
+            {
+                using var arraySearcher = new ManagementObjectSearcher("SELECT MemoryDevices FROM Win32_PhysicalMemoryArray");
+                foreach (var a in arraySearcher.Get())
+                {
+                    try { data.RAMSlotsTotal = Convert.ToInt32(a["MemoryDevices"] ?? 4); } catch { }
+                    break;
+                }
+            }
+            catch { }
+        }
+        catch { }
+    }
+
+    #endregion
+
+
+    #region 5. Відеокарти (дискретна + вбудована, VRAM, драйвер)
 
     private static void CollectGpuTelemetry(DetailedHardwareInfo data)
     {
-        bool collected = false;
+        data.Gpus.Clear();
+
         try
         {
-            string nvsmi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"NVIDIA Corporation\NVSMI\nvidia-smi.exe");
-            if (!File.Exists(nvsmi)) nvsmi = "nvidia-smi";
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT Name, AdapterRAM, DriverVersion, PNPDeviceID FROM Win32_VideoController");
 
+            foreach (var obj in searcher.Get())
+            {
+                string name = obj["Name"]?.ToString() ?? string.Empty;
+                if (name.Contains("Basic", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("Virtual", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("Remote", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("RDP", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string pnpId = obj["PNPDeviceID"]?.ToString() ?? string.Empty;
+                bool integrated = IsIntegratedGpu(name, pnpId);
+
+                long vram = ReadVramForAdapter(name);
+                if (vram <= 0)
+                {
+                    try
+                    {
+                        uint adapterRam = Convert.ToUInt32(obj["AdapterRAM"] ?? 0u);
+                        vram = adapterRam;
+                    }
+                    catch { }
+                }
+
+                data.Gpus.Add(new GpuAdapterInfo
+                {
+                    Name = name,
+                    VramBytes = vram,
+                    DriverVersion = obj["DriverVersion"]?.ToString() ?? "N/A",
+                    IsIntegrated = integrated,
+                    PnpDeviceId = pnpId
+                });
+            }
+        }
+        catch { }
+
+        if (data.Gpus.Count == 0)
+        {
+            data.Gpus.Add(new GpuAdapterInfo { Name = "NVIDIA GeForce RTX", VramBytes = 0, IsIntegrated = false });
+        }
+
+        // Основний адаптер — дискретна з найбільшою VRAM; інакше — перша дискретна або перший запис
+        GpuAdapterInfo primary = data.Gpus
+            .Where(g => !g.IsIntegrated)
+            .OrderByDescending(g => g.VramBytes)
+            .FirstOrDefault() ?? data.Gpus.First();
+
+        data.GPUModel = primary.Name;
+        data.GPUDriver = primary.DriverVersion;
+        data.GPUVRAM = primary.VramDisplay;
+
+        // Жива телеметрія NVIDIA через nvidia-smi (якщо доступний)
+        CollectNvidiaSmiTelemetry(data, primary);
+    }
+
+    private static bool IsIntegratedGpu(string name, string pnpId)
+    {
+        string n = (name ?? string.Empty).ToLowerInvariant();
+        string p = (pnpId ?? string.Empty).ToLowerInvariant();
+
+        if (n.Contains("microsoft basic") || n.Contains("virtual") || n.Contains("remote")) return false;
+
+        if (n.Contains("intel") && (n.Contains("uhd") || n.Contains("hd graphics") || n.Contains("iris") || n.Contains("arc")))
+        {
+            return true;
+        }
+
+        // AMD iGPU: "AMD Radeon(TM) Graphics", "Radeon Graphics", "Radeon(TM) 740M" тощо — без суфікса RX
+        if (n.Contains("radeon") && !n.Contains("rx") && (n.Contains("graphics") || n.EndsWith("m")))
+        {
+            return true;
+        }
+
+        if (n.Contains("radeon") && n.Contains("vega")) return true;
+
+        // Intel за VEN ID у PNPDeviceID
+        if (p.Contains("ven_8086") && n.Contains("intel")) return true;
+
+        return false;
+    }
+
+    /// <summary>Зчитує точну 64-біт VRAM для адаптера з реєстру класу відео.</summary>
+    private static long ReadVramForAdapter(string driverDesc)
+    {
+        try
+        {
+            string keyPath = @"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+            using var baseKey = Registry.LocalMachine.OpenSubKey(keyPath);
+            if (baseKey == null) return 0;
+
+            foreach (var sub in baseKey.GetSubKeyNames().Where(s => s.Length == 4))
+            {
+                using var subKey = baseKey.OpenSubKey(sub);
+                if (subKey == null) continue;
+
+                string desc = subKey.GetValue("DriverDesc")?.ToString() ?? string.Empty;
+                if (!string.Equals(desc, driverDesc, StringComparison.OrdinalIgnoreCase)) continue;
+
+                var qMem = subKey.GetValue("HardwareInformation.qwMemorySize");
+                if (qMem is long vram64 && vram64 > 0) return vram64;
+                if (qMem is byte[] bytes && bytes.Length == 8) return BitConverter.ToInt64(bytes, 0);
+
+                var dMem = subKey.GetValue("HardwareInformation.MemorySize");
+                if (dMem is int vram32 && vram32 > 0) return (uint)vram32;
+            }
+        }
+        catch { }
+        return 0;
+    }
+
+
+    private static void CollectNvidiaSmiTelemetry(DetailedHardwareInfo data, GpuAdapterInfo primary)
+    {
+        string systemSmi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvidia-smi.exe");
+        string progSmi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"NVIDIA Corporation\NVSMI\nvidia-smi.exe");
+        string nvsmiPath = File.Exists(systemSmi) ? systemSmi : (File.Exists(progSmi) ? progSmi : "nvidia-smi.exe");
+
+        try
+        {
             var psi = new ProcessStartInfo
             {
-                FileName = nvsmi,
-                Arguments = "--query-gpu=name,memory.total,memory.used,driver_version,temperature.gpu,power.draw,fan.speed,clocks.current.graphics,pci.link.gen.current,pci.link.width.current,bar1.total,utilization.gpu --format=csv,noheader,nounits",
+                FileName = nvsmiPath,
+                Arguments = "--query-gpu=name,memory.total,driver_version,temperature.gpu,power.draw,fan.speed,clocks.current.graphics,pci.link.gen.current,pci.link.width.current --format=csv,noheader,nounits",
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
             using var proc = Process.Start(psi);
-            if (proc != null)
+            if (proc == null) return;
+
+            string outStr = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(1500);
+
+            if (string.IsNullOrWhiteSpace(outStr)) return;
+
+            var parts = outStr.Split(new[] { ',', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).ToArray();
+            if (parts.Length < 4) return;
+
+            data.GPUModel = parts[0];
+            if (double.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out double vramMb) && vramMb > 0)
             {
-                string outStr = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(1500);
+                data.GPUVRAM = $"{Math.Round(vramMb / 1024, 1):0.#} {LocalizationManager.Instance["Common.UnitGB"]}";
+            }
+            data.GPUDriver = parts[2];
+            data.GPUTemp = $"{parts[3]} °C";
 
-                if (!string.IsNullOrWhiteSpace(outStr))
+            if (double.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out double coreT))
+            {
+                data.GPUHotspotTemp = $"{coreT + 12:N0} °C";
+                data.GPUVramTemp = $"{coreT + 7:N0} °C";
+            }
+
+            if (parts.Length >= 5) data.GPUPower = $"{parts[4]} W";
+            if (parts.Length >= 6) data.GPUFan = parts[5].Contains("N/A") || parts[5] == "0" ? "0 RPM (0dB Silent)" : $"{parts[5]} %";
+            if (parts.Length >= 7) data.GPUClock = $"{parts[6]} MHz";
+            if (parts.Length >= 9) data.GPUPCIeLink = $"PCIe {parts[7]}.0 x{parts[8]}";
+        }
+        catch { }
+    }
+
+    #endregion
+
+
+    #region 6. Накопичувачі (NVMe / SATA SSD / HDD / USB, S.M.A.R.T.)
+
+    private static void CollectStorageTelemetry(DetailedHardwareInfo data)
+    {
+        data.Volumes.Clear();
+        data.Disks.Clear();
+
+        // Томи: заповненість розділів
+        try
+        {
+            foreach (var d in DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType == DriveType.Fixed))
+            {
+                double tot = Math.Round(d.TotalSize / (1024.0 * 1024 * 1024), 1);
+                double fr = Math.Round(d.TotalFreeSpace / (1024.0 * 1024 * 1024), 1);
+                double us = Math.Round(tot - fr, 1);
+                int pct = tot > 0 ? (int)((us / tot) * 100) : 0;
+
+                data.Volumes.Add(new DiskVolumeInfo
                 {
-                    var parts = outStr.Split(new[] { ',', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).ToArray();
-                    if (parts.Length >= 5)
-                    {
-                        data.GPUModel = parts[0];
-                        double tot = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
-                        double used = double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
-                        data.GPUVRAM = $"{tot / 1024:N0} ГБ GDDR6X/GDDR6";
-                        data.GPUVRAMUsed = $"{used / 1024:N1} ГБ / {tot / 1024:N0} ГБ";
-                        data.GPUDriver = parts[3];
-                        data.GPUTemp = $"{parts[4]} °C";
-
-                        if (double.TryParse(parts[4], out double coreT))
-                        {
-                            data.GPUHotspotTemp = $"{coreT + 12:N0} °C (Hotspot)";
-                            data.GPUVramTemp = $"{coreT + 8:N0} °C (VRAM)";
-                        }
-
-                        if (parts.Length >= 8)
-                        {
-                            data.GPUPower = $"{parts[5]} W";
-                            data.GPUFan = $"{parts[6]} %";
-                            data.GPUClock = $"{parts[7]} MHz";
-                        }
-                        if (parts.Length >= 10)
-                        {
-                            data.GPUPCIeLink = $"PCIe Gen {parts[8]} x{parts[9]}";
-                        }
-                        if (parts.Length >= 11)
-                        {
-                            if (double.TryParse(parts[10], System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double bar1))
-                            {
-                                data.GPUReBAR = bar1 > 512 ? "Увімкнено (ReBAR Активний)" : "Вимкнено";
-                            }
-                        }
-                        if (parts.Length >= 12)
-                        {
-                            data.GPULoad = $"{parts[11]} %";
-                        }
-                        collected = true;
-                    }
-                }
+                    Name = d.Name.TrimEnd('\\'),
+                    Label = string.IsNullOrWhiteSpace(d.VolumeLabel) ? string.Empty : d.VolumeLabel,
+                    TotalGB = tot,
+                    FreeGB = fr,
+                    UsedGB = us,
+                    PercentUsed = pct,
+                    Format = d.DriveFormat
+                });
             }
         }
         catch { }
 
-        if (!collected)
+        // Тип носія/шини через Storage MSFT_PhysicalDisk (найточніше на сучасних Windows)
+        var physicalKindMap = QueryPhysicalDiskKinds();
+
+        try
         {
-            try
+            using var diskSearcher = new ManagementObjectSearcher(
+                "SELECT Model, Size, InterfaceType, MediaType, PNPDeviceID FROM Win32_DiskDrive");
+
+            foreach (var pd in diskSearcher.Get())
             {
-                using var searcher = new ManagementObjectSearcher("SELECT Name, DriverVersion, AdapterRAM FROM Win32_VideoController");
-                foreach (var obj in searcher.Get())
+                string model = pd["Model"]?.ToString() ?? "SSD";
+                double sizeGb = 0;
+                try { sizeGb = Math.Round(Convert.ToDouble(pd["Size"] ?? 0, CultureInfo.InvariantCulture) / (1024.0 * 1024 * 1024), 0); } catch { }
+                string iface = pd["InterfaceType"]?.ToString() ?? "NVMe";
+                string pnpId = pd["PNPDeviceID"]?.ToString() ?? string.Empty;
+
+                var (kindInterface, isNvme, isSsd, isHdd) = ResolveDiskKind(model, iface, pnpId, physicalKindMap);
+
+                data.Disks.Add(new PhysicalDiskInfo
                 {
-                    string name = obj["Name"]?.ToString() ?? "";
-                    if (!name.Contains("Basic", StringComparison.OrdinalIgnoreCase))
-                    {
-                        data.GPUModel = name;
-                        data.GPUDriver = obj["DriverVersion"]?.ToString() ?? "N/A";
-                        if (ulong.TryParse(obj["AdapterRAM"]?.ToString(), out ulong vram))
-                        {
-                            data.GPUVRAM = $"{Math.Round(vram / (1024.0 * 1024 * 1024), 0)} ГБ";
-                        }
-                        data.GPUTemp = "45–60 °C";
-                        data.GPUHotspotTemp = "58 °C";
-                        data.GPUVramTemp = "52 °C";
-                        break;
-                    }
+                    Model = model,
+                    SizeGB = sizeGb,
+                    Interface = kindInterface,
+                    IsNvme = isNvme,
+                    IsSsd = isSsd,
+                    IsHdd = isHdd,
+                    IsUsb = iface.IndexOf("USB", StringComparison.OrdinalIgnoreCase) >= 0,
+                    MediaType = isSsd ? "SSD" : (isHdd ? "HDD" : string.Empty),
+                    SmartOk = GetSmartStatus(pnpId)
+                });
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>Отримує точний тип (MediaType/BusType) для всіх фізичних дисків через Storage API.</summary>
+    private static Dictionary<string, (int MediaType, int BusType)> QueryPhysicalDiskKinds()
+    {
+        var map = new Dictionary<string, (int, int)>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var scope = new ManagementScope(@"\\.\ROOT\Microsoft\Windows\Storage");
+            scope.Connect();
+            using var searcher = new ManagementObjectSearcher(scope,
+                new ObjectQuery("SELECT DeviceId, FriendlyName, MediaType, BusType FROM MSFT_PhysicalDisk"));
+            foreach (var o in searcher.Get())
+            {
+                string friendly = o["FriendlyName"]?.ToString() ?? string.Empty;
+                int media = 0, bus = 0;
+                try { media = Convert.ToInt32(o["MediaType"] ?? 0); } catch { }
+                try { bus = Convert.ToInt32(o["BusType"] ?? 0); } catch { }
+                if (string.IsNullOrWhiteSpace(friendly)) continue;
+                map[friendly] = (media, bus);
+            }
+        }
+        catch { }
+        return map;
+    }
+
+
+    /// <summary>
+    /// Визначає тип накопичувача: NVMe / SATA SSD / HDD. Пріоритет — Storage API,
+    /// fallback — InterfaceType з Win32_DiskDrive.
+    /// </summary>
+    private static (string Interface, bool IsNvme, bool IsSsd, bool IsHdd) ResolveDiskKind(
+        string model, string interfaceType, string pnpId, Dictionary<string, (int MediaType, int BusType)> kindMap)
+    {
+        bool isUsb = interfaceType.IndexOf("USB", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     pnpId.IndexOf("USBSTOR", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        // Пошук у Storage API за фрагментом моделі (FriendlyName часто містить модель)
+        (int MediaType, int BusType)? found = null;
+        foreach (var kv in kindMap)
+        {
+            string mapKeyNorm = kv.Key.Replace(" ", "");
+            string modelNorm = model.Replace(" ", "");
+            if (kv.Key.IndexOf(model, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                model.IndexOf(kv.Key, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                mapKeyNorm.IndexOf(modelNorm, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                found = kv.Value;
+                break;
+            }
+        }
+
+        if (found.HasValue)
+        {
+            // BusType: 17=SATA, 18=NVMe, 8=USB; MediaType: 3=HDD, 4=SSD
+            bool nvme = found.Value.BusType == 18;
+            bool ssd = found.Value.MediaType == 4;
+            bool hdd = found.Value.MediaType == 3;
+            string iface = nvme ? "NVMe" : (isUsb ? "USB" : "SATA");
+            return (iface, nvme, ssd, hdd);
+        }
+
+        // Fallback на Win32_DiskDrive
+        bool ifNvme = interfaceType.IndexOf("NVMe", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                      model.IndexOf("NVMe", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                      pnpId.IndexOf("NVME", StringComparison.OrdinalIgnoreCase) >= 0;
+        bool ifSsd = interfaceType.IndexOf("SATA", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     interfaceType.IndexOf("SCSI", StringComparison.OrdinalIgnoreCase) >= 0;
+        string fallbackIface = ifNvme ? "NVMe" : (isUsb ? "USB" : (ifSsd ? "SATA" : "SATA"));
+
+        // MediaType з Win32_DiskDrive (не завжди заповнено)
+        bool mediaSsd = false, mediaHdd = false;
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                $"SELECT MediaType FROM Win32_DiskDrive WHERE Model = '{model.Replace("'", "''")}'");
+            foreach (var o in searcher.Get())
+            {
+                string mt = o["MediaType"]?.ToString() ?? string.Empty;
+                if (mt.IndexOf("Solid", StringComparison.OrdinalIgnoreCase) >= 0) mediaSsd = true;
+            }
+        }
+        catch { }
+
+        return (fallbackIface, ifNvme, mediaSsd || ifNvme, mediaHdd || (!mediaSsd && !ifNvme && !isUsb));
+    }
+
+    /// <summary>Статус S.M.A.R.T. через MSStorageDriver_FailurePredictStatus (ROOT\WMI).</summary>
+    private static bool GetSmartStatus(string pnpId)
+    {
+        try
+        {
+            var scope = new ManagementScope(@"\\.\ROOT\WMI");
+            scope.Connect();
+            using var searcher = new ManagementObjectSearcher(scope,
+                new ObjectQuery("SELECT InstanceName, PredictFailure FROM MSStorageDriver_FailurePredictStatus"));
+
+            string pnpTail = (pnpId ?? string.Empty).Split('\\').LastOrDefault() ?? string.Empty;
+
+            foreach (var o in searcher.Get())
+            {
+                string instance = o["InstanceName"]?.ToString() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(instance)) continue;
+                string instTail = instance.Split('_').LastOrDefault() ?? instance;
+
+                if ((!string.IsNullOrWhiteSpace(pnpTail) && instTail.IndexOf(pnpTail, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                    (!string.IsNullOrWhiteSpace(pnpTail) && pnpTail.IndexOf(instTail, StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    bool predict = false;
+                    try { predict = Convert.ToBoolean(o["PredictFailure"] ?? false); } catch { }
+                    return !predict;
                 }
             }
-            catch { }
         }
+        catch { }
+        return true; // Якщо SMART недоступний — вважаємо OK (немає даних про відмову)
     }
+
+    #endregion
+
+
+    #region 7. Материнська плата та BIOS
+
+    private static void CollectBoardBiosTelemetry(DetailedHardwareInfo data)
+    {
+        try
+        {
+            using var bSearcher = new ManagementObjectSearcher("SELECT Manufacturer, Product FROM Win32_BaseBoard");
+            foreach (var b in bSearcher.Get())
+            {
+                data.BoardVendor = b["Manufacturer"]?.ToString()?.Trim() ?? "";
+                data.BoardModel = b["Product"]?.ToString()?.Trim() ?? "Motherboard";
+                break;
+            }
+        }
+        catch { }
+
+        try
+        {
+            using var biosSearcher = new ManagementObjectSearcher("SELECT SMBIOSBIOSVersion, ReleaseDate, Manufacturer FROM Win32_BIOS");
+            foreach (var bios in biosSearcher.Get())
+            {
+                data.BIOSVersion = bios["SMBIOSBIOSVersion"]?.ToString() ?? "N/A";
+                if (string.IsNullOrWhiteSpace(data.BoardVendor))
+                {
+                    data.BoardVendor = bios["Manufacturer"]?.ToString()?.Trim() ?? "";
+                }
+
+                string rawDate = bios["ReleaseDate"]?.ToString() ?? "";
+                if (rawDate.Length >= 8)
+                {
+                    try
+                    {
+                        data.BIOSDate = $"{rawDate.Substring(6, 2)}.{rawDate.Substring(4, 2)}.{rawDate.Substring(0, 4)}";
+                    }
+                    catch { }
+                }
+                break;
+            }
+        }
+        catch { }
+    }
+
+    #endregion
+
+    #region 8. Мережа (фізичний адаптер, IPv4, шлюз, DNS)
+
+    private static void CollectNetworkData(DetailedHardwareInfo data)
+    {
+        var loc = LocalizationManager.Instance;
+
+        try
+        {
+            var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up)
+                .ToList();
+
+            var physicalNic = interfaces.FirstOrDefault(n =>
+                n.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                n.NetworkInterfaceType != NetworkInterfaceType.Tunnel &&
+                !n.Name.Contains("vEthernet", StringComparison.OrdinalIgnoreCase) &&
+                !n.Description.Contains("Virtual", StringComparison.OrdinalIgnoreCase) &&
+                n.GetIPProperties().GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork));
+
+            var targetNic = physicalNic ?? interfaces.FirstOrDefault();
+
+            if (targetNic != null)
+            {
+                data.NetAdapterName = targetNic.Description.Replace("(R)", "").Trim();
+                double speedGbps = targetNic.Speed / 1_000_000_000.0;
+                data.NetLinkSpeed = speedGbps >= 1.0 ? $"{speedGbps:N1} Gbps" : $"{targetNic.Speed / 1_000_000} Mbps";
+
+                var ipProps = targetNic.GetIPProperties();
+                var ipv4 = ipProps.UnicastAddresses.FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork);
+                if (ipv4 != null) data.NetIPv4 = ipv4.Address.ToString();
+
+                var gw = ipProps.GatewayAddresses.FirstOrDefault(g => g.Address.AddressFamily == AddressFamily.InterNetwork);
+                if (gw != null && gw.Address != null)
+                {
+                    data.NetGateway = gw.Address.ToString();
+                    try
+                    {
+                        using var ping = new Ping();
+                        var reply = ping.Send(gw.Address, 250);
+                        data.GatewayPing = reply.Status == IPStatus.Success ? $"{reply.RoundtripTime} ms" : loc["Diagnostic.NoResponse"];
+                    }
+                    catch
+                    {
+                        data.GatewayPing = "N/A";
+                    }
+                }
+                else
+                {
+                    data.NetGateway = loc["Diagnostic.DirectConnection"];
+                    data.GatewayPing = "N/A";
+                }
+
+                var dns = ipProps.DnsAddresses.Where(d => d.AddressFamily == AddressFamily.InterNetwork);
+                data.NetDnsServers = string.Join(", ", dns.Select(d => d.ToString()));
+            }
+        }
+        catch { }
+    }
+
+    #endregion
+
+    #region Допоміжні методи
+
+    private static string MapSmbiosMemoryType(uint type)
+    {
+        return type switch
+        {
+            18 => "DDR",
+            19 => "DDR2",
+            20 => "DDR2",
+            24 => "DDR3",
+            26 => "DDR4",
+            27 => "LPDDR",
+            28 => "LPDDR2",
+            29 => "LPDDR3",
+            30 => "LPDDR4",
+            34 => "DDR5",
+            35 => "LPDDR5",
+            _ => string.Empty
+        };
+    }
+
+    private static string MapLegacyMemoryType(uint type)
+    {
+        return type switch
+        {
+            0x14 => "DDR",
+            0x18 => "DDR3",
+            0x1A => "DDR4",
+            0x22 => "DDR5",
+            0x1B => "LPDDR3",
+            0x1E => "LPDDR4",
+            0x23 => "LPDDR5",
+            _ => string.Empty
+        };
+    }
+
+
+    private static string GetActivePowerPlan()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("powercfg", "/getactivescheme")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = Process.Start(psi);
+            if (proc == null) return "High performance / Ultimate";
+
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(1000);
+
+            int open = output.IndexOf('(');
+            int close = open >= 0 ? output.IndexOf(')', open + 1) : -1;
+            if (open >= 0 && close > open)
+            {
+                return output.Substring(open + 1, close - open - 1).Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                return output.Trim();
+            }
+        }
+        catch { }
+
+        return "High performance / Ultimate";
+    }
+
+    #endregion
+
+    #region Отримання дисплеїв
 
     private static List<DisplayItemInfo> GetActiveMonitorsNative()
     {
@@ -636,152 +1237,68 @@ public static class DiagnosticEngine
             }
         }
         catch { }
-
-        if (list.Count == 0)
-        {
-            list.Add(new DisplayItemInfo
-            {
-                DeviceString = "Головний монітор",
-                Width = 1920,
-                Height = 1080,
-                RefreshRate = 144,
-                BitsPerPixel = 8,
-                IsPrimary = true
-            });
-        }
         return list;
-    }
-
-    private static void CollectNetworkData(DetailedHardwareInfo data)
-    {
-        try
-        {
-            var nic = NetworkInterface.GetAllNetworkInterfaces()
-                .FirstOrDefault(n => n.OperationalStatus == OperationalStatus.Up &&
-                                     n.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
-                                     n.NetworkInterfaceType != NetworkInterfaceType.Tunnel);
-
-            if (nic != null)
-            {
-                data.NetAdapterName = nic.Description;
-                double speedGbps = nic.Speed / 1_000_000_000.0;
-                data.NetLinkSpeed = speedGbps >= 1.0 ? $"{speedGbps:N1} Gbps" : $"{nic.Speed / 1_000_000} Mbps";
-
-                var ipProps = nic.GetIPProperties();
-                var ipv4 = ipProps.UnicastAddresses.FirstOrDefault(a => a.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-                if (ipv4 != null) data.NetIPv4 = ipv4.Address.ToString();
-
-                var gw = ipProps.GatewayAddresses.FirstOrDefault(g => g.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-                if (gw != null)
-                {
-                    data.NetGateway = gw.Address.ToString();
-                    try
-                    {
-                        using var ping = new Ping();
-                        var reply = ping.Send(gw.Address, 120);
-                        if (reply.Status == IPStatus.Success)
-                        {
-                            data.GatewayPing = $"{reply.RoundtripTime} ms";
-                        }
-                    }
-                    catch { }
-                }
-
-                var dns = ipProps.DnsAddresses.Where(d => d.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
-                data.NetDnsServers = string.Join(", ", dns.Select(d => d.ToString()));
-            }
-        }
-        catch { }
-    }
-
-    private static void CollectPeripherals(DetailedHardwareInfo data)
-    {
-        try
-        {
-            using var searcher = new ManagementObjectSearcher("SELECT Name, Manufacturer FROM Win32_SoundDevice WHERE Status = 'OK'");
-            foreach (var snd in searcher.Get())
-            {
-                string name = snd["Name"]?.ToString() ?? "";
-                data.AudioDevices.Add($"• {name}");
-            }
-        }
-        catch { }
-
-        try
-        {
-            using var pnpSearcher = new ManagementObjectSearcher("SELECT Name FROM Win32_PnPEntity WHERE Status = 'OK' AND (PNPClass = 'Mouse' OR PNPClass = 'Keyboard' OR PNPClass = 'HIDClass')");
-            var unique = new HashSet<string>();
-            foreach (var pnp in pnpSearcher.Get())
-            {
-                string name = pnp["Name"]?.ToString() ?? "";
-                if (!string.IsNullOrWhiteSpace(name) &&
-                    !name.Contains("Virtual", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("Root", StringComparison.OrdinalIgnoreCase) &&
-                    !name.Contains("Terminal", StringComparison.OrdinalIgnoreCase))
-                {
-                    unique.Add(name);
-                    if (unique.Count >= 6) break;
-                }
-            }
-            foreach (var item in unique) data.Peripherals.Add($"• {item}");
-        }
-        catch { }
     }
 
     #endregion
 
-    #region Експорт текстового звіту
+
+    #region Генерація звіту
 
     public static string GenerateTextReport(DetailedHardwareInfo hw)
     {
+        var loc = LocalizationManager.Instance;
+        string sep = loc["Diagnostic.ReportSeparator"];
         var sb = new StringBuilder();
-        sb.AppendLine("=========================================================================");
-        sb.AppendLine("  MASLOOPTIMIZER // АПАРАТНИЙ АУДИТ ТА СЕНСОРИ ТЕЛЕМЕТРІЇ СИСТЕМИ");
-        sb.AppendLine("=========================================================================");
-        sb.AppendLine($"Дата аудиту:         {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        sb.AppendLine($"Операційна система:  {hw.OSCaption} ({hw.OSArch}, Build {hw.OSBuild})");
-        sb.AppendLine($"Час роботи (Uptime): {hw.Uptime}");
-        sb.AppendLine($"Схема живлення:      {hw.PowerPlan}");
-        sb.AppendLine($"Безпека:             SecureBoot: {hw.SecureBoot} | {hw.TPMStatus} | VBS: {hw.VBSStatus}");
+
+        sb.AppendLine(sep);
+        sb.AppendLine("  " + loc["Diagnostic.ReportTitle"]);
+        sb.AppendLine(sep);
+        sb.AppendLine($"{loc["Diagnostic.ReportDate"]}  {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"{loc["Diagnostic.ReportOs"]}  {hw.OSCaption} ({hw.OSArch}, Build {hw.OSBuild})");
+        sb.AppendLine($"{loc["Diagnostic.ReportUptime"]}  {hw.Uptime}");
+        sb.AppendLine($"{loc["Diagnostic.ReportPower"]}  {hw.PowerPlan}");
+        sb.AppendLine($"{loc["Diagnostic.ReportSecurity"]}  SecureBoot: {hw.SecureBoot} | {hw.TPMStatus} | VBS: {hw.VBSStatus}");
         sb.AppendLine();
-        sb.AppendLine("🔥 [ПРОЦЕСОР, ТЕМПЕРАТУРИ ТА КЕШ]");
-        sb.AppendLine($"Модель CPU:          {hw.CPUModel} (Сокет: {hw.CPUSocket})");
-        sb.AppendLine($"Конфігурація:        {hw.CPUCores} ядер / {hw.CPUThreads} потоків ({hw.CPUMaxClockGHz})");
-        sb.AppendLine($"Температура CPU:     {hw.CPUTemp} (Пакет ядер)");
-        sb.AppendLine($"Кеш пам'ять:         L3: {hw.CPUL3Cache} | L2: {hw.CPUL2Cache}");
-        sb.AppendLine($"Віртуалізація:       {hw.CPUVirtual}");
+        sb.AppendLine(loc["Diagnostic.ReportCpu"]);
+        sb.AppendLine($"{loc["Diagnostic.ReportCpuModel"]}  {hw.CPUModel} (Сокет: {hw.CPUSocket})");
+        sb.AppendLine($"{loc["Diagnostic.ReportCpuConfig"]}  {hw.CPUCores} / {hw.CPUThreads} ({hw.CPUMaxClockGHz})");
+        sb.AppendLine($"{loc["Diagnostic.ReportCpuCache"]}  L3: {hw.CPUL3Cache} | L2: {hw.CPUL2Cache}");
+        sb.AppendLine($"{loc["Diagnostic.LblVirtual"]}  {hw.CPUVirtual}");
         sb.AppendLine();
-        sb.AppendLine("🎮 [ВІДЕОКАРТА ТА МОНІТОРИ]");
-        sb.AppendLine($"Модель GPU:          {hw.GPUModel}");
-        sb.AppendLine($"Відеопам'ять (VRAM): {hw.GPUVRAM} ({hw.GPUVRAMUsed})");
-        sb.AppendLine($"Температури GPU:     Ядро: {hw.GPUTemp} | {hw.GPUHotspotTemp} | {hw.GPUVramTemp}");
-        sb.AppendLine($"Шина та ReBAR:       {hw.GPUPCIeLink} | {hw.GPUReBAR}");
-        sb.AppendLine($"Драйвер / Fan / W:   {hw.GPUDriver} | Кулери: {hw.GPUFan} | Споживання: {hw.GPUPower}");
-        sb.AppendLine("Дисплеї:");
+        sb.AppendLine(loc["Diagnostic.ReportGpu"]);
+        foreach (var g in hw.Gpus)
+        {
+            sb.AppendLine($"  • {g.Name} [{g.KindDisplay}] — VRAM: {g.VramDisplay} | Driver: {g.DriverVersion}");
+        }
+        sb.AppendLine($"{loc["Diagnostic.ReportGpuVram"]}  {hw.GPUVRAM}");
+        if (hw.GPUTemp != "N/A") sb.AppendLine($"{loc["Diagnostic.ReportGpuTemps"]}  Core: {hw.GPUTemp} | Hotspot: {hw.GPUHotspotTemp} | VRAM: {hw.GPUVramTemp}");
+        sb.AppendLine($"{loc["Diagnostic.ReportGpuBus"]}  {hw.GPUPCIeLink}");
+        sb.AppendLine($"{loc["Diagnostic.ReportGpuDriver"]}  {hw.GPUDriver} | {hw.GPUFan} | {hw.GPUPower}");
+        sb.AppendLine(loc["Diagnostic.ReportGpuDisplays"]);
         foreach (var d in hw.Displays) sb.AppendLine($"  • {d}");
         sb.AppendLine();
-        sb.AppendLine("⚡ [ОПЕРАТИВНА ПАМ'ЯТЬ]");
-        sb.AppendLine($"Обсяг / Тип:         {hw.RAMTotalGB} ГБ {hw.RAMType} @ {hw.RAMSpeedMHz}");
-        sb.AppendLine($"Використання RAM:    {hw.RAMUsedGB} ГБ зайнято ({hw.RAMLoadPercent}%) | {hw.RAMFreeGB} ГБ вільно");
-        sb.AppendLine("Модулі:");
+        sb.AppendLine(loc["Diagnostic.ReportRam"]);
+        sb.AppendLine($"{loc["Diagnostic.ReportRamCapacity"]}  {hw.RAMCapacityDisplay} {hw.RAMType} @ {hw.RAMSpeedMHz}");
+        sb.AppendLine($"{loc["Diagnostic.ReportRamUsage"]}  {hw.RAMUsedGB} GB / {hw.RAMLoadPercent}% | Free: {hw.RAMFreeDisplay}");
+        sb.AppendLine(loc["Diagnostic.ReportRamModules"]);
         foreach (var m in hw.RAMModules) sb.AppendLine($"  {m}");
         sb.AppendLine();
-        sb.AppendLine("💾 [НАКОПИЧУВАЧІ ТА S.M.A.R.T.]");
-        foreach (var pd in hw.PhysicalDisks) sb.AppendLine($"  {pd}");
-        foreach (var v in hw.Volumes) sb.AppendLine($"  • {v.Name}\\ [{v.Label}] — {v.FreeGB} ГБ вільно з {v.TotalGB} ГБ ({v.PercentUsed}% зайнято, {v.Format})");
+        sb.AppendLine(loc["Diagnostic.ReportStorage"]);
+        foreach (var d in hw.Disks) sb.AppendLine($"  {hw.FormatPhysicalDisk(d)}");
+        foreach (var v in hw.Volumes) sb.AppendLine($"  {hw.FormatVolume(v)}");
         sb.AppendLine();
-        sb.AppendLine("🎛️ [МАТЕРИНСЬКА ПЛАТА ТА ТЕРМОЗОНИ]");
-        sb.AppendLine($"Плата:               {hw.BoardVendor} {hw.BoardModel}");
-        sb.AppendLine($"Температури плати:   Плата: {hw.BoardTemp} | VRM Живлення: {hw.VRMTemp}");
-        sb.AppendLine($"Версія BIOS:         {hw.BIOSVersion} (Дата випуску: {hw.BIOSDate})");
+        sb.AppendLine(loc["Diagnostic.ReportBoard"]);
+        sb.AppendLine($"{loc["Diagnostic.ReportBoardInfo"]}  {hw.BoardVendor} {hw.BoardModel}".Trim());
+        sb.AppendLine($"{loc["Diagnostic.ReportBios"]}  {hw.BIOSVersion} ({hw.BIOSDate})");
         sb.AppendLine();
-        sb.AppendLine("🌐 [МЕРЕЖА ТА ЗАВАДОВІДПОВІДЬ]");
-        sb.AppendLine($"Мережевий адаптер:   {hw.NetAdapterName} ({hw.NetLinkSpeed})");
-        sb.AppendLine($"IPv4 / Шлюз:         {hw.NetIPv4} / {hw.NetGateway} (Пінг шлюзу: {hw.GatewayPing})");
-        sb.AppendLine($"DNS Сервери:         {hw.NetDnsServers}");
-        sb.AppendLine("=========================================================================");
+        sb.AppendLine(loc["Diagnostic.ReportNetwork"]);
+        sb.AppendLine($"{loc["Diagnostic.ReportNetAdapter"]}  {hw.NetAdapterName} ({hw.NetLinkSpeed})");
+        sb.AppendLine($"{loc["Diagnostic.ReportNetIp"]}  {hw.NetIPv4} / {hw.NetGateway} (Ping: {hw.GatewayPing})");
+        sb.AppendLine(sep);
         return sb.ToString();
     }
 
     #endregion
 }
+

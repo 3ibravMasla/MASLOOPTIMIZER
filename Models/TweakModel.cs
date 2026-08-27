@@ -104,6 +104,51 @@ public class TweakModel : INotifyPropertyChanged
     [JsonPropertyName("CommandAction")]
     public CommandAction? CommandAction { get; set; }
 
+    // Локалізовані відображувані поля: переклад з Languages/{lang}.json,
+    // fallback — оригінальний текст з tweaks.bundle.json
+    [JsonIgnore]
+    public string LocalizedName => LocalizationManager.Instance.GetTweakText(Id, "Name", Name);
+
+    [JsonIgnore]
+    public string LocalizedDescription => LocalizationManager.Instance.GetTweakText(Id, "Description", Description);
+
+    [JsonIgnore]
+    public string LocalizedBenefits => LocalizationManager.Instance.GetTweakText(Id, "Benefits", Benefits);
+
+    [JsonIgnore]
+    public string LocalizedSideEffects => LocalizationManager.Instance.GetTweakText(Id, "SideEffects", SideEffects);
+
+    [JsonIgnore]
+    public string LocalizedCategory => LocalizationManager.Instance.TryGet($"Categories.{Category}", out var cat) ? cat : Category;
+
+    [JsonIgnore]
+    public string LocalizedRisk => LocalizationManager.Instance.TryGet($"Risk.{Risk}", out var risk) ? risk : Risk;
+
+    /// <summary>Підтягує ключ категорії з мовних файлів (Tweaks.{Id}.Category).</summary>
+    public void ResolveCategoryFromLocalization()
+    {
+        Category = LocalizationManager.Instance.GetTweakText(Id, "Category", Category);
+    }
+
+    public TweakModel()
+    {
+        // При зміні мови інтерфейсу оновлюємо локалізовані поля в UI
+        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(LocalizedName));
+        OnPropertyChanged(nameof(LocalizedDescription));
+        OnPropertyChanged(nameof(LocalizedBenefits));
+        OnPropertyChanged(nameof(LocalizedSideEffects));
+        OnPropertyChanged(nameof(LocalizedCategory));
+        OnPropertyChanged(nameof(LocalizedRisk));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ActionButtonText));
+        OnPropertyChanged(nameof(RestoreButtonText));
+    }
+
     // Резервні поля для зворотної сумісності зі старими JSON
     [JsonPropertyName("CheckScript")]
     public string? CheckScript { get; set; }
@@ -146,17 +191,22 @@ public class TweakModel : INotifyPropertyChanged
         }
     }
 
-    public string StatusText => IsApplied ? "🟢 ОПТИМІЗОВАНО" : "⚪ СТАНДАРТ";
+    public string StatusText => IsApplied
+        ? LocalizationManager.Instance["Common.StatusOptimized"]
+        : LocalizationManager.Instance["Common.StatusStandard"];
     public string StatusColor => IsApplied ? "#107C41" : "#2A2D3D";
 
     public string ActionButtonText
     {
         get
         {
-            if (IsBusy) return "⏳ Обробка...";
-            return IsApplied ? "↩️ Відновити" : "⚡ Застосувати";
+            var loc = LocalizationManager.Instance;
+            if (IsBusy) return loc["Common.Busy"];
+            return IsApplied ? loc["Common.Restore"] : loc["Common.Apply"];
         }
     }
+
+    public string RestoreButtonText => LocalizationManager.Instance["Common.Restore"];
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)

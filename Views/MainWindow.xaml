@@ -1,12 +1,15 @@
-﻿<Window x:Class="MASLOOPTIMIZER.MainWindow"
+<Window x:Class="MASLOOPTIMIZER.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:MASLOOPTIMIZER"
-        Title="MASLOOPTIMIZER .NET 8 Enterprise" Height="900" Width="1380"
+        Title="MASLOOPTIMIZER v0.3.3" Height="900" Width="1380"
         WindowStartupLocation="CenterScreen" Background="{DynamicResource WindowBg}"
         MinWidth="1100" MinHeight="700">
 
     <Grid x:Name="RootGrid" Margin="16">
+        <Grid.LayoutTransform>
+            <ScaleTransform ScaleX="{Binding UiScale}" ScaleY="{Binding UiScale}"/>
+        </Grid.LayoutTransform>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -23,7 +26,7 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="MASL" FontSize="20" FontWeight="Black" Foreground="{DynamicResource AccentGreen}" VerticalAlignment="Center"/>
+                        <TextBlock Text="MASL" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                         
                         <Border Width="38" Height="38" CornerRadius="19" BorderBrush="{DynamicResource AccentGreen}" BorderThickness="1.5" Margin="6,0,6,0" VerticalAlignment="Center">
                             <Image x:Name="AppLogoImage" Width="38" Height="38" Stretch="UniformToFill">
@@ -33,21 +36,33 @@
                             </Image>
                         </Border>
 
-                        <TextBlock Text="PTIMIZER" FontSize="20" FontWeight="Black" Foreground="{DynamicResource AccentGreen}" VerticalAlignment="Center"/>
+                        <TextBlock Text="PTIMIZER" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                         <Border Background="{DynamicResource BadgeBg}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" BorderBrush="{DynamicResource AccentGreen}" BorderThickness="1" VerticalAlignment="Center">
-                            <TextBlock Text="v0.3.2 C# Core" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource AccentGreen}"/>
+                            <TextBlock x:Name="LblCoreVersion" Text="v0.3.3 C# Core" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}"/>
                         </Border>
+                        <Button x:Name="BtnHealthScore" Style="{StaticResource HeaderActionBtn}" Padding="8,3" Margin="10,0,0,0" Background="{DynamicResource BadgeBg}" BorderBrush="{DynamicResource AccentGreen}" Content="🏆 Health Score: --%" Click="BtnHealthScore_Click" FontSize="11"/>
                     </StackPanel>
 
                     <!-- Кнопки шапки -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button x:Name="BtnSpecDialog" Style="{StaticResource HeaderActionBtn}" Content="🔍 Специфікації ПК" Click="BtnSpecDialog_Click"/>
-                        <Button x:Name="BtnVssPoint" Style="{StaticResource HeaderActionBtn}" Content="🛡️ Точка VSS" Click="BtnVssPoint_Click"/>
-                        <Button x:Name="BtnRegBackup" Style="{StaticResource HeaderActionBtn}" Content="💾 Бекап реєстру" Click="BtnRegBackup_Click"/>
-                        <Button x:Name="BtnRestoreRollback" Style="{StaticResource HeaderActionBtn}" Content="🔄 Відкат" Click="BtnRestoreRollback_Click"/>
-                        <Button x:Name="BtnCheckUpdates" Style="{StaticResource HeaderActionBtn}" Content="🚀 Оновлення" Click="BtnCheckUpdates_Click"/>
+                        <Button x:Name="BtnBackupMenu" Style="{StaticResource HeaderActionBtn}" Content="🛡️ Бекап &amp; VSS" Click="BtnBackupMenu_Click">
+                            <Button.ContextMenu>
+                                <ContextMenu x:Name="BackupMenu" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}">
+                                    <MenuItem x:Name="MiVss" Header="🛡️ Створити точку VSS" Click="BtnVssPoint_Click"/>
+                                    <MenuItem x:Name="MiRegBackup" Header="💾 Бекап реєстру" Click="BtnRegBackup_Click"/>
+                                    <MenuItem x:Name="MiRollback" Header="🔄 Відкат" Click="BtnRestoreRollback_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
                         <Button x:Name="BtnToggleWidget" Style="{StaticResource HeaderActionBtn}" Content="📌 Віджет" Click="BtnToggleWidget_Click"/>
-                        <Button x:Name="BtnThemeToggle" Style="{StaticResource HeaderActionBtn}" Content="🌙 Темна тема" Click="BtnThemeToggle_Click"/>
+                        <Button x:Name="BtnSpecDialog" Style="{StaticResource HeaderActionBtn}" Content="🔍 Специфікації" Click="BtnSpecDialog_Click"/>
+                        <Button x:Name="BtnSettings" Style="{StaticResource HeaderActionBtn}" Content="⚙️ Налаштування" Click="BtnSettings_Click"/>
+                        <Button x:Name="BtnVssPoint" Style="{StaticResource HeaderActionBtn}" Content="🛡️ Точка VSS" Click="BtnVssPoint_Click" Visibility="Collapsed"/>
+                        <Button x:Name="BtnRegBackup" Style="{StaticResource HeaderActionBtn}" Content="💾 Бекап реєстру" Click="BtnRegBackup_Click" Visibility="Collapsed"/>
+                        <Button x:Name="BtnRestoreRollback" Style="{StaticResource HeaderActionBtn}" Content="🔄 Відкат" Click="BtnRestoreRollback_Click" Visibility="Collapsed"/>
+                        <Button x:Name="BtnCheckUpdates" Style="{StaticResource HeaderActionBtn}" Content="🚀 Оновлення" Click="BtnCheckUpdates_Click" Visibility="Collapsed"/>
+                        <Button x:Name="BtnLangToggle" Style="{StaticResource HeaderActionBtn}" Content="🌐 Мова (UA/EN)" Click="BtnLangToggle_Click" Visibility="Collapsed"/>
+                        <Button x:Name="BtnThemeToggle" Style="{StaticResource HeaderActionBtn}" Content="🎨 Тема" Click="BtnThemeToggle_Click" Visibility="Collapsed"/>
                     </StackPanel>
                 </Grid>
 
@@ -55,38 +70,38 @@
                     <WrapPanel VerticalAlignment="Center">
                         <Border Style="{StaticResource HwBadge}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="OS: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
+                                <TextBlock x:Name="LblHwOs" Text="OS: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
                                 <TextBlock x:Name="HwBadgeOS" Text="Завантаження..." FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" FontSize="11"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource HwBadge}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="CPU: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
+                                <TextBlock x:Name="LblHwCpu" Text="CPU: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
                                 <TextBlock x:Name="HwBadgeCPU" Text="Завантаження..." FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" FontSize="11"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource HwBadge}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="GPU: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
+                                <TextBlock x:Name="LblHwGpu" Text="GPU: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
                                 <TextBlock x:Name="HwBadgeGPU" Text="Завантаження..." FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" FontSize="11"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource HwBadge}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="RAM: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
+                                <TextBlock x:Name="LblHwRam" Text="RAM: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
                                 <TextBlock x:Name="HwBadgeRAM" Text="Завантаження..." FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" FontSize="11"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource HwBadge}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="C: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
+                                <TextBlock x:Name="LblHwDisk" Text="C: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
                                 <TextBlock x:Name="HwBadgeDisk" Text="Завантаження..." FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" FontSize="11"/>
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource HwBadge}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Database: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
-                                <TextBlock x:Name="HwBadgeTweaksCount" Text="155 твіків" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" FontSize="11"/>
+                                <TextBlock x:Name="LblHwDb" Text="Database: " FontWeight="Bold" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
+                                <TextBlock x:Name="HwBadgeTweaksCount" Text="0 твіків" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" FontSize="11"/>
                             </StackPanel>
                         </Border>
                     </WrapPanel>
@@ -119,28 +134,28 @@
                             <Button x:Name="NavBtnUI" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="UI">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#8A2BE2" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="QoL" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Твіки системи/Корисне"/>
+                                    <TextBlock x:Name="LblNavUi" Text="Твіки системи/Корисне"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="NavBtnSafe" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="Safe">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#107C41" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="SAFE" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Безпечні твіки"/>
+                                    <TextBlock x:Name="LblNavSafe" Text="Безпечні твіки"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="NavBtnMed" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="Medium">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#D87A00" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="MED" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Помірні твіки"/>
+                                    <TextBlock x:Name="LblNavMed" Text="Помірні твіки"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="NavBtnHigh" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="High">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#C42B1C" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="HIGH" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Небезпечні твіки"/>
+                                    <TextBlock x:Name="LblNavHigh" Text="Небезпечні твіки"/>
                                 </StackPanel>
                             </Button>
 
@@ -149,35 +164,49 @@
                             <Button x:Name="NavBtnDns" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="DNS">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#3949AB" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="DNS" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="DNS Оптимізатор"/>
+                                    <TextBlock x:Name="LblNavDns" Text="DNS Оптимізатор"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="NavBtnDebloat" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="DEBLOAT">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#E65100" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="UWP" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Деблоат UWP програм"/>
+                                    <TextBlock x:Name="LblNavDebloat" Text="Деблоат UWP програм"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="NavBtnStartup" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="STARTUP">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#00897B" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="RUN" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Менеджер автозапуску"/>
+                                    <TextBlock x:Name="LblNavStartup" Text="Менеджер автозапуску"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="NavBtnTools" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="TOOLS">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#0078D4" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="SOFT" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Інструменти та Софт"/>
+                                    <TextBlock x:Name="LblNavTools" Text="Інструменти та Софт"/>
                                 </StackPanel>
                             </Button>
 
                             <Button x:Name="NavBtnClean" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="CLEAN">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#D32F2F" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="CLEAN" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
-                                    <TextBlock Text="Очищення дисків"/>
+                                    <TextBlock x:Name="LblNavClean" Text="Очищення дисків"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="NavBtnGameMode" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="GAMEMSI">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Background="#8E44AD" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="GAME" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
+                                    <TextBlock x:Name="LblNavGameMode" Text="🎮 Game Mode &amp; MSI"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="NavBtnNetwork" Style="{StaticResource SidebarNavBtn}" Click="NavBtn_Click" Tag="NETWORK">
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Background="#0E7490" CornerRadius="3" Padding="5,1" Margin="0,0,8,0"><TextBlock Text="NET" FontSize="9" FontWeight="Black" Foreground="White"/></Border>
+                                    <TextBlock x:Name="LblNavNetwork" Text="⚡ Мережа &amp; TCP"/>
                                 </StackPanel>
                             </Button>
                         </StackPanel>
@@ -185,10 +214,31 @@
 
                     <!-- Нижні кнопки автоматизації -->
                     <StackPanel Grid.Row="2" Margin="0,8,0,0">
-                        <TextBlock Text="АВТОМАТИЗАЦІЯ" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,5"/>
-                        <Button x:Name="BtnBatchApply" Content="⚡ 1-Click Safe Pack" Background="#107C41" Foreground="White" FontWeight="Bold" FontSize="11" Padding="10,6" Margin="0,0,0,4" Cursor="Hand" Click="BtnBatchApply_Click"/>
-                        <Button x:Name="BtnSafeMasloPack" Content="⚡ 1-Click Safe Maslo Pack" Background="#D87A00" Foreground="White" FontWeight="Bold" FontSize="11" Padding="10,6" Margin="0,0,0,4" Cursor="Hand" Click="BtnSafeMasloPack_Click"/>
-                        <Button x:Name="BtnPresetMenu" Content="📦 Пресети (JSON)" Style="{StaticResource HeaderActionBtn}" Padding="10,6" Margin="0" Click="BtnPresetMenu_Click"/>
+                        <TextBlock x:Name="LblAutoTitle" Text="АВТОМАТИЗАЦІЯ" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,5"/>
+
+                        <!-- Пак-кнопки перенесені у контекстне меню «Пресети» (ПКМ) -->
+                        <Button x:Name="BtnBatchApply" Content="⚡ 1-Click Safe Pack" Visibility="Collapsed" Click="BtnBatchApply_Click"/>
+                        <Button x:Name="BtnSafeMasloPack" Content="⚡ 1-Click Safe Maslo Pack" Visibility="Collapsed" Click="BtnSafeMasloPack_Click"/>
+
+                        <Button x:Name="BtnGameBoost" Content="🚀 1-Click Game Boost" Background="#8E44AD" Foreground="White" FontWeight="Bold" FontSize="11" Padding="10,6" Margin="0,0,0,4" Cursor="Hand" Click="BtnGameBoost_Click" ToolTipService.ShowDuration="12000">
+                            <Button.ToolTip>
+                                <TextBlock x:Name="TtipGameBoost" Text="Миттєвий буст FPS..." TextWrapping="Wrap" MaxWidth="320" FontSize="11"/>
+                            </Button.ToolTip>
+                        </Button>
+                        <Button x:Name="BtnPresetMenu" Content="📦 Пресети (JSON)" Style="{StaticResource HeaderActionBtn}" Padding="10,6" Margin="0" Click="BtnPresetMenu_Click" ToolTipService.ShowDuration="12000">
+                            <Button.ToolTip>
+                                <TextBlock x:Name="TtipPresets" Text="Менеджер пресетів..." TextWrapping="Wrap" MaxWidth="320" FontSize="11"/>
+                            </Button.ToolTip>
+                            <Button.ContextMenu>
+                                <ContextMenu x:Name="PresetMenu" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}">
+                                    <MenuItem x:Name="MiSaveProfile" Header="💾 Зберегти конфіг" Click="BtnPresetMenu_Click" Tag="Save"/>
+                                    <MenuItem x:Name="MiLoadProfile" Header="📂 Завантажити пресет" Click="BtnPresetMenu_Click" Tag="Load"/>
+                                    <Separator/>
+                                    <MenuItem x:Name="MiSafePack" Header="⚡ 1-Click Safe Pack" Click="BtnBatchApply_Click"/>
+                                    <MenuItem x:Name="MiMasloPack" Header="⚡ 1-Click Safe Maslo Pack" Click="BtnSafeMasloPack_Click"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -203,8 +253,32 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <Border Grid.Row="0" Background="{DynamicResource HeaderBg}" BorderBrush="{DynamicResource HeaderBorder}" BorderThickness="1" CornerRadius="8" Padding="10,8,10,6" Margin="0,0,0,10">
-                            <WrapPanel x:Name="CategoryChipsPanel"/>
+                        <!-- Панель фільтрації: Чіпси + Сортування -->
+                        <Border Grid.Row="0" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Чіпси категорій -->
+                                <WrapPanel Grid.Column="0" x:Name="CategoryChipsPanel" VerticalAlignment="Center"/>
+
+                                <!-- Випадаючий список сортування -->
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                    <TextBlock x:Name="LblSortTweaks" Text="Сортування:" Foreground="{DynamicResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <ComboBox x:Name="SortComboBox" SelectionChanged="SortComboBox_SelectionChanged" 
+                                              Width="170" Height="28" VerticalContentAlignment="Center" 
+                                              Background="{DynamicResource HeaderBg}" Foreground="{DynamicResource TextPrimary}" 
+                                              BorderBrush="{DynamicResource ActionBtnBorder}">
+                                        <ComboBoxItem Content="За замовчуванням" IsSelected="True" Tag="Default"/>
+                                        <ComboBoxItem Content="🟢 Застосовані спочатку" Tag="AppliedFirst"/>
+                                        <ComboBoxItem Content="⚪ Стандартні спочатку" Tag="UnappliedFirst"/>
+                                        <ComboBoxItem Content="⚠️ За рівнем ризику" Tag="Risk"/>
+                                        <ComboBoxItem Content="🔤 За назвою (А-Я)" Tag="Name"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
                         </Border>
 
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
@@ -220,21 +294,21 @@
 
                                                 <StackPanel Grid.Column="0">
                                                     <WrapPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
+                                                        <TextBlock Text="{Binding LocalizedName}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
                                                         <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0">
-                                                            <TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/>
+                                                            <TextBlock Text="{Binding LocalizedCategory}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/>
                                                         </Border>
                                                         <Border CornerRadius="3" Padding="6,1" Margin="6,0,0,0" Background="{Binding StatusColor}">
                                                             <TextBlock Text="{Binding StatusText}" FontSize="9.5" FontWeight="Bold" Foreground="White"/>
                                                         </Border>
                                                     </WrapPanel>
-                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,4" FontSize="11.5" TextWrapping="Wrap"/>
-                                                    <TextBlock Text="{Binding Benefits, StringFormat='✓ {0}'}" Foreground="#059669" FontSize="11" Margin="0,1,0,1"/>
+                                                    <TextBlock Text="{Binding LocalizedDescription}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,4" FontSize="11.5" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="{Binding LocalizedBenefits, StringFormat='✓ {0}'}" Foreground="#059669" FontSize="11" Margin="0,1,0,1"/>
                                                 </StackPanel>
 
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                     <Button Content="{Binding ActionButtonText}" Background="#0078D4" Foreground="White" Padding="10,5" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="ApplyTweak_Click" Tag="{Binding}"/>
-                                                    <Button Content="Відновити" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="10,5" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="RestoreTweak_Click" Tag="{Binding}"/>
+                                                    <Button Content="{Binding RestoreButtonText}" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="10,5" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="RestoreTweak_Click" Tag="{Binding}"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -246,22 +320,42 @@
 
                     <!-- 2. Панель DNS -->
                     <Grid x:Name="DnsView" Visibility="Collapsed">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                         <Border Grid.Row="0" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="🌐 ОПТИМІЗАТОР МЕРЕЖЕВИХ ЗАТРИМОК DNS" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
-                                    <TextBlock Text="Паралельний вимір пінгу та 1-Click активація найшвидших DNS-серверів" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="DnsTitleText" Text="🌐 ОПТИМІЗАТОР МЕРЕЖЕВИХ ЗАТРИМОК DNS" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                    <TextBlock x:Name="DnsDescText" Text="Паралельний вимір пінгу та 1-Click активація найшвидших DNS-серверів" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button Content="⚡ Найшвидший DNS" Background="#107C41" Foreground="White" FontWeight="Bold" Padding="12,6" Margin="0,0,6,0" Cursor="Hand" Click="BtnFastestDns_Click"/>
-                                    <Button Content="🔄 Скинути до DHCP" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnResetDns_Click"/>
+                                    <Button x:Name="BtnFastestDns" Content="⚡ Найшвидший DNS" Background="#107C41" Foreground="White" FontWeight="Bold" Padding="12,6" Margin="0,0,6,0" Cursor="Hand" Click="BtnFastestDns_Click"/>
+                                    <Button x:Name="BtnResetDns" Content="🔄 Скинути до DHCP" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnResetDns_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
 
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <!-- Чіпси категорій DNS та сортування -->
+                        <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <WrapPanel Grid.Column="0" x:Name="DnsCategoryChipsPanel" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                    <TextBlock x:Name="LblSortDns" Text="Сортування:" Foreground="{DynamicResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <ComboBox x:Name="DnsSortComboBox" SelectionChanged="DnsSortComboBox_SelectionChanged"
+                                              Width="185" Height="28" VerticalContentAlignment="Center"
+                                              Background="{DynamicResource InputBg}" Foreground="{DynamicResource TextPrimary}" BorderBrush="{DynamicResource ActionBtnBorder}">
+                                        <ComboBoxItem Content="⚡ Найменший пінг спочатку" IsSelected="True" Tag="FastestFirst"/>
+                                        <ComboBoxItem Content="🔤 За алфавітом" Tag="NameAscending"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="DnsItemsControl">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:DnsPreset}">
@@ -270,11 +364,11 @@
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0">
                                                     <WrapPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
-                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
+                                                        <TextBlock Text="{Binding NameLocalized}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
+                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding CategoryLocalized}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
                                                         <Border CornerRadius="3" Padding="6,1" Margin="6,0,0,0" Background="{Binding PingColor}"><TextBlock Text="{Binding PingText}" FontSize="9.5" FontWeight="Bold" Foreground="White"/></Border>
                                                     </WrapPanel>
-                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5"/>
+                                                    <TextBlock Text="{Binding DescriptionLocalized}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5"/>
                                                     <TextBlock Text="{Binding Primary, StringFormat='IP: {0}'}" Foreground="{DynamicResource TextMuted}" FontSize="11"/>
                                                 </StackPanel>
                                                 <Button Grid.Column="1" Content="{Binding ButtonText}" Background="#0078D4" Foreground="White" Padding="12,6" FontWeight="Bold" Cursor="Hand" Click="ApplyDns_Click" Tag="{Binding}" VerticalAlignment="Center"/>
@@ -288,19 +382,52 @@
 
                     <!-- 3. Панель ДЕБЛОАТУ -->
                     <Grid x:Name="DebloatView" Visibility="Collapsed">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Шапка деблоату -->
                         <Border Grid.Row="0" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="📦 МЕНЕДЖЕР ДЕБЛОАТУ UWP ПРОГРАМ WINDOWS" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
-                                    <TextBlock Text="Видалення вбудованого мотлоху, телеметрії та реклами" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="DebloatTitleText" Text="📦 МЕНЕДЖЕР ДЕБЛОАТУ UWP ПРОГРАМ WINDOWS" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                    <TextBlock x:Name="DebloatStatsText" Text="Видалення вбудованого мотлоху, телеметрії та реклами" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" Content="🔄 Пересканувати" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnRescanDebloat_Click"/>
+                                <Button x:Name="BtnRescanDebloat" Grid.Column="1" Content="🔄 Пересканувати" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnRescanDebloat_Click"/>
                             </Grid>
                         </Border>
 
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <!-- Чіпси та сортування Деблоату -->
+                        <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <WrapPanel Grid.Column="0" x:Name="DebloatCategoryChipsPanel" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                    <TextBlock x:Name="LblSortDebloat" Text="Сортування:" Foreground="{DynamicResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <ComboBox x:Name="DebloatSortComboBox" SelectionChanged="DebloatSortComboBox_SelectionChanged" 
+                                              Width="175" Height="28" VerticalContentAlignment="Center" 
+                                              Background="{DynamicResource HeaderBg}" Foreground="{DynamicResource TextPrimary}" 
+                                              BorderBrush="{DynamicResource ActionBtnBorder}">
+                                        <ComboBoxItem Content="За замовчуванням" IsSelected="True" Tag="Default"/>
+                                        <ComboBoxItem Content="🟢 Встановлені спочатку" Tag="InstalledFirst"/>
+                                        <ComboBoxItem Content="⚪ Видалені спочатку" Tag="UninstalledFirst"/>
+                                        <ComboBoxItem Content="🔤 За назвою (А-Я)" Tag="Name"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Список UWP -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="DebloatItemsControl">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:DebloatItem}">
@@ -313,11 +440,11 @@
                                                         <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
                                                         <Border CornerRadius="3" Padding="6,1" Margin="6,0,0,0" Background="{Binding StatusColor}"><TextBlock Text="{Binding StatusText}" FontSize="9.5" FontWeight="Bold" Foreground="White"/></Border>
                                                     </WrapPanel>
-                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5"/>
+                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5" TextWrapping="Wrap"/>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Content="🗑️ Видалити" Background="#C42B1C" Foreground="White" Padding="10,5" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="UninstallDebloat_Click" Tag="{Binding}"/>
-                                                    <Button Content="↩️ Відновити" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="10,5" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="RestoreDebloat_Click" Tag="{Binding}"/>
+                                                    <Button Content="{Binding UninstallButtonText}" Background="#C42B1C" Foreground="White" Padding="10,5" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="UninstallDebloat_Click" Tag="{Binding}"/>
+                                                    <Button Content="{Binding RestoreButtonText}" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="10,5" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="RestoreDebloat_Click" Tag="{Binding}"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -329,19 +456,24 @@
 
                     <!-- 4. Панель АВТОЗАПУСКУ -->
                     <Grid x:Name="StartupView" Visibility="Collapsed">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                         <Border Grid.Row="0" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="🚀 МЕНЕДЖЕР АВТОЗАПУСКУ WINDOWS" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
-                                    <TextBlock Text="Керування автозавантаженням та фоновими завданнями" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                                    <TextBlock x:Name="StartupTitleText" Text="🚀 МЕНЕДЖЕР АВТОЗАПУСКУ WINDOWS" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                    <TextBlock x:Name="StartupDescText" Text="Керування автозавантаженням та фоновими завданнями" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" Content="🔄 Оновити" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnRescanStartup_Click"/>
+                                <Button x:Name="BtnRescanStartup" Grid.Column="1" Content="🔄 Оновити" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnRescanStartup_Click"/>
                             </Grid>
                         </Border>
 
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <!-- Чіпси джерел автозапуску -->
+                        <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                            <WrapPanel x:Name="StartupSourceChipsPanel" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="StartupItemsControl">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:StartupEntry}">
@@ -351,8 +483,10 @@
                                                 <StackPanel Grid.Column="0">
                                                     <WrapPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
-                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
+                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding SourceLocalized}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
+                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="6,0,0,0"><TextBlock Text="{Binding CategoryLocalized}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
                                                         <Border CornerRadius="3" Padding="6,1" Margin="6,0,0,0" Background="{Binding StatusColor}"><TextBlock Text="{Binding StatusText}" FontSize="9.5" FontWeight="Bold" Foreground="White"/></Border>
+                                                        <Border Background="#1E293B" CornerRadius="3" Padding="6,1" Margin="6,0,0,0" Visibility="{Binding IsCritical, Converter={StaticResource BoolToVis}}"><TextBlock Text="{Binding SafetyBadge}" FontSize="9.5" FontWeight="Bold" Foreground="#F59E0B"/></Border>
                                                     </WrapPanel>
                                                     <TextBlock Text="{Binding Command}" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0" FontSize="11" TextWrapping="Wrap"/>
                                                 </StackPanel>
@@ -367,15 +501,52 @@
 
                     <!-- 5. Панель ІНСТРУМЕНТІВ ТА СОФТУ -->
                     <Grid x:Name="ToolsView" Visibility="Collapsed">
-                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Шапка софту -->
                         <Border Grid.Row="0" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Text="🛠️ БІБЛІОТЕКА НЕОБХІДНОГО СОФТУ ТА ДІАГНОСТИКИ" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
-                                <TextBlock Text="Тихе встановлення офіційних інструментів через Winget та прямі лінки" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
-                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="ToolsTitleText" Text="🛠️ БІБЛІОТЕКА НЕОБХІДНОГО СОФТУ ТА ДІАГНОСТИКИ" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                    <TextBlock x:Name="ToolsStatsText" Text="Тихе встановлення офіційних інструментів через Winget та прямі лінки" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <Button x:Name="BtnRescanTools" Grid.Column="1" Content="🔄 Оновити статус" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnRescanTools_Click"/>
+                            </Grid>
                         </Border>
 
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <!-- Чіпси та сортування Софту -->
+                        <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <WrapPanel Grid.Column="0" x:Name="ToolsCategoryChipsPanel" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                    <TextBlock x:Name="LblSortTools" Text="Сортування:" Foreground="{DynamicResource TextMuted}" FontSize="11.5" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                    <ComboBox x:Name="ToolsSortComboBox" SelectionChanged="ToolsSortComboBox_SelectionChanged" 
+                                              Width="175" Height="28" VerticalContentAlignment="Center" 
+                                              Background="{DynamicResource HeaderBg}" Foreground="{DynamicResource TextPrimary}" 
+                                              BorderBrush="{DynamicResource ActionBtnBorder}">
+                                        <ComboBoxItem Content="За замовчуванням" IsSelected="True" Tag="Default"/>
+                                        <ComboBoxItem Content="🟢 Встановлені спочатку" Tag="InstalledFirst"/>
+                                        <ComboBoxItem Content="⚪ Не встановлені" Tag="NotInstalledFirst"/>
+                                        <ComboBoxItem Content="🔤 За назвою (А-Я)" Tag="Name"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Список софту -->
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
                             <ItemsControl x:Name="ToolsItemsControl">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:ToolItem}">
@@ -386,12 +557,13 @@
                                                     <WrapPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
                                                         <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
+                                                        <Border CornerRadius="3" Padding="6,1" Margin="6,0,0,0" Background="{Binding StatusColor}"><TextBlock Text="{Binding StatusText}" FontSize="9.5" FontWeight="Bold" Foreground="White"/></Border>
                                                     </WrapPanel>
                                                     <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5" TextWrapping="Wrap"/>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                     <Button Content="{Binding StatusText}" Background="#0078D4" Foreground="White" Padding="12,6" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="InstallTool_Click" Tag="{Binding}"/>
-                                                    <Button Content="🌐 Сайт" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="10,6" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="OpenToolSite_Click" Tag="{Binding}"/>
+                                                    <Button Content="{Binding SiteButtonText}" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="10,6" Margin="4" FontWeight="SemiBold" Cursor="Hand" Click="OpenToolSite_Click" Tag="{Binding}"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
@@ -408,12 +580,12 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <TextBlock Text="🧹 ГЛИБОКЕ ОЧИЩЕННЯ ТА ЗВІЛЬНЕННЯ SSD" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                    <TextBlock x:Name="CleanerTitleText" Text="🧹 ГЛИБОКЕ ОЧИЩЕННЯ ТА ЗВІЛЬНЕННЯ SSD" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
                                     <TextBlock x:Name="CleanerTotalText" Text="Підрахунок зайнятого простору..." FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <Button Content="⚡ 1-Click Очистити все" Background="#E65100" Foreground="White" FontWeight="Bold" Padding="12,6" Margin="0,0,6,0" Cursor="Hand" Click="BtnCleanAll_Click"/>
-                                    <Button Content="🔄 Пересканувати" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnRescanCleaner_Click"/>
+                                    <Button x:Name="BtnCleanAll" Content="⚡ 1-Click Очистити все" Background="#E65100" Foreground="White" FontWeight="Bold" Padding="12,6" Margin="0,0,6,0" Cursor="Hand" Click="BtnCleanAll_Click"/>
+                                    <Button x:Name="BtnRescanCleaner" Content="🔄 Пересканувати" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" FontWeight="SemiBold" Padding="10,6" Cursor="Hand" Click="BtnRescanCleaner_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -427,19 +599,134 @@
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0">
                                                     <WrapPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
-                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Category}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
+                                                        <TextBlock Text="{Binding NameLocalized}" FontWeight="Bold" FontSize="13.5" Foreground="{DynamicResource TextPrimary}"/>
+                                                        <Border Background="{DynamicResource BadgeBg}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding CategoryLocalized}" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource TextSecondary}"/></Border>
+                                                        <Border Background="#1E293B" CornerRadius="3" Padding="6,1" Margin="6,0,0,0"><TextBlock Text="{Binding SafetyBadgeLocalized}" FontSize="9.5" FontWeight="Bold" Foreground="#38BDF8"/></Border>
                                                         <Border Background="#1E293B" CornerRadius="3" Padding="6,1" Margin="6,0,0,0"><TextBlock Text="{Binding SizeFormatted}" FontSize="9.5" FontWeight="Bold" Foreground="#38BDF8"/></Border>
                                                     </WrapPanel>
-                                                    <TextBlock Text="{Binding Description}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5"/>
+                                                    <TextBlock Text="{Binding DescriptionLocalized}" Foreground="{DynamicResource TextSecondary}" Margin="0,5,0,2" FontSize="11.5"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="1" Content="🧹 Очистити" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" BorderBrush="{DynamicResource ActionBtnBorder}" BorderThickness="1" Padding="12,6" FontWeight="SemiBold" Cursor="Hand" Click="CleanItem_Click" Tag="{Binding}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="1" Content="{Binding ActionButtonText}" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" BorderBrush="{DynamicResource ActionBtnBorder}" BorderThickness="1" Padding="12,6" FontWeight="SemiBold" Cursor="Hand" Click="CleanItem_Click" Tag="{Binding}" VerticalAlignment="Center"/>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
+                    </Grid>
+                    <!-- 7. Панель GAME MODE & MSI -->
+                    <Grid x:Name="GameMsiView" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Верхній блок: Game Mode -->
+                        <Border Grid.Row="0" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0">
+                                        <TextBlock x:Name="GameMsiTitleText" Text="🎮 ІГРОВИЙ РЕЖИМ" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                        <TextBlock x:Name="GameMsiDescText" Text="Пріоритет GPU/CPU, зупинка фонових служб та звільнення пам'яті" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                                        <TextBlock x:Name="GameModeStatusText" Text="⚪ Неактивний" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,6,0,0"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ToggleButton x:Name="TglGameMode" Content="🎮 Game Mode" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" BorderBrush="{DynamicResource ActionBtnBorder}" Padding="12,6" Margin="0,0,6,0" Checked="TglGameMode_Checked" Unchecked="TglGameMode_Unchecked"/>
+                                        <Button x:Name="BtnPurgeStandby" Content="🧹 Очистити Standby RAM" Background="#8E44AD" Foreground="White" FontWeight="Bold" Padding="12,6" Margin="0,0,6,0" Cursor="Hand" Click="BtnPurgeStandby_Click"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Принцип роботи Game Mode -->
+                                <StackPanel Grid.Row="1" Margin="0,10,0,0">
+                                    <TextBlock x:Name="LblGameModeHow" Text="📖 ЯК ЦЕ ПРАЦЮЄ" FontSize="10.5" FontWeight="Black" Foreground="{DynamicResource TextSecondary}"/>
+                                    <TextBlock x:Name="TxtGameModeHow" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"
+                                               Text="Game Mode зупиняє некритичні фонові служби, піднімає пріоритет процесора та перемикає схему живлення на Ultimate Performance."/>
+                                </StackPanel>
+
+                                <!-- Standby RAM Purge -->
+                                <StackPanel Grid.Row="2" Margin="0,8,0,0">
+                                    <TextBlock x:Name="LblStandbyPurge" Text="🧹 STAND BY RAM PURGE" FontSize="10.5" FontWeight="Black" Foreground="{DynamicResource TextSecondary}"/>
+                                    <TextBlock x:Name="TxtStandbyPurge" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource TextMuted}" Margin="0,2,0,0"
+                                               Text="Скидає модифіковані та резервні сторінки пам'яті через нативний виклик NtSetSystemInformation (SystemMemoryListInformation) для усунення мікрофризів."/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- Блок MSI Mode -->
+                        <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock x:Name="MsiTitleText" Text="⚡ MSI MODE ДЛЯ PCI-ПРИСТРОЇВ" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                    <TextBlock x:Name="MsiStatsText" Text="Сканування PCI-пристроїв..." FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button x:Name="BtnScanMsi" Content="🔍 Сканувати PCI" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="12,6" Margin="0,0,6,0" Cursor="Hand" Click="BtnScanMsi_Click"/>
+                                    <Button x:Name="BtnMsiOptimize" Content="🚀 1-Click Gaming MSI" Background="#107C41" Foreground="White" FontWeight="Bold" Padding="12,6" Margin="0,0,6,0" Cursor="Hand" Click="BtnMsiOptimize_Click"/>
+                                    <Button x:Name="BtnMsiRestore" Content="↩️ Відновити" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" Padding="12,6" Cursor="Hand" Click="BtnMsiRestore_Click"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                            <ItemsControl x:Name="MsiItemsControl">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type local:PciMsiDevice}">
+                                        <Border Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="6" Margin="0,0,0,8" Padding="14"
+                                                ToolTip="{Binding ToolTipText}" ToolTipService.ShowDuration="20000">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <WrapPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding CategoryIcon}" FontSize="12" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextPrimary}" Margin="6,0,0,0"/>
+                                                        <Border Background="{Binding VendorBadge}" CornerRadius="3" Padding="6,1" Margin="10,0,0,0"><TextBlock Text="{Binding Vendor}" FontSize="10" FontWeight="Bold" Foreground="White"/></Border>
+                                                        <Border Background="{Binding StatusColor}" CornerRadius="3" Padding="6,1" Margin="6,0,0,0"><TextBlock Text="{Binding StatusText}" FontSize="9.5" FontWeight="Bold" Foreground="White"/></Border>
+                                                    </WrapPanel>
+                                                    <TextBlock Text="{Binding LocationInfo}" Foreground="{DynamicResource TextSecondary}" FontSize="11" Margin="0,4,0,2"/>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding PriorityLabelText}" Foreground="{DynamicResource TextMuted}" FontSize="10.5"/>
+                                                        <TextBlock Text="{Binding Priority}" Foreground="{Binding PriorityColor}" FontSize="10.5" FontWeight="Bold"/>
+                                                        <TextBlock Text="{Binding MessageLimit, StringFormat=' | IRQ: {0}'}" Foreground="{DynamicResource TextMuted}" FontSize="10.5" Margin="4,0,0,0"/>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                                <Button Grid.Column="1" Content="{Binding ActionButtonText}" Background="{Binding ActionButtonBg}" Foreground="White" Padding="12,6" FontWeight="SemiBold" Cursor="Hand" Click="MsiToggle_Click" Tag="{Binding}" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+                    <!-- 8. Панель МЕРЕЖА & TCP -->
+                    <Grid x:Name="NetworkView" Visibility="Collapsed">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock x:Name="NetworkTitleText" Text="⚡ МЕРЕЖА &amp; TCP ОПТИМІЗАЦІЯ" FontSize="12" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                                <TextBlock x:Name="NetworkDescText" Text="Зниження затримок, вимкнення енергозбереження адаптерів та розблокування 20% QoS" FontSize="11.5" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,8"/>
+                                <TextBlock x:Name="NetworkStatusText" Text="Статус: —" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,8"/>
+                                <WrapPanel Orientation="Horizontal">
+                                    <Button x:Name="BtnNagle" Content="🔌 1-Click Вимкнути Nagle (TCP NoDelay)" Background="#0078D4" Foreground="White" FontWeight="Bold" Padding="12,7" Margin="0,0,8,6" Cursor="Hand" Click="BtnNagle_Click"/>
+                                    <Button x:Name="BtnEee" Content="🌿 Вимкнути EEE/Green Ethernet" Background="#0E7490" Foreground="White" FontWeight="Bold" Padding="12,7" Margin="0,0,8,6" Cursor="Hand" Click="BtnEee_Click"/>
+                                    <Button x:Name="BtnQos" Content="📶 Розблокувати 20% QoS" Background="#6A1B9A" Foreground="White" FontWeight="Bold" Padding="12,7" Margin="0,0,8,6" Cursor="Hand" Click="BtnQos_Click"/>
+                                    <Button x:Name="BtnNetworkReset" Content="🛟 Аварійне відновлення мережі" Background="#C42B1C" Foreground="White" FontWeight="Bold" Padding="12,7" Margin="0,0,8,6" Cursor="Hand" Click="BtnNetworkReset_Click"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Grid.Row="1" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1" CornerRadius="8" Padding="14">
+                            <StackPanel>
+                                <TextBlock x:Name="NetworkDetailsText" Text="Натисніть кнопку для застосування оптимізації мережі." FontSize="11" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Grid>
             </Border>
@@ -463,10 +750,51 @@
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock x:Name="ProgressPercentText" Text="100%" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentGreen}" Margin="0,0,12,0"/>
                         <Button x:Name="BtnOpenLogs" Content="📊 Історія дій" Style="{StaticResource HeaderActionBtn}" Padding="8,3" FontSize="10.5" Click="BtnOpenLogs_Click"/>
-                        <TextBlock Text="by 3ibravMasla" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                        <TextBlock x:Name="LblAuthor" Text="by 3ibravMasla" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="6,0,0,0"/>
                     </StackPanel>
                 </Grid>
                 <ProgressBar x:Name="AppProgressBar" Grid.Row="1" Height="4" Minimum="0" Maximum="100" Value="100" Background="{DynamicResource ProgressTrack}" Foreground="{DynamicResource ProgressFill}" BorderThickness="0"/>
+            </Grid>
+        </Border>
+
+        <!-- Тост-банер оновлення (плавно з'являється при виявленні нової версії) -->
+        <Border x:Name="UpdateToast" Grid.RowSpan="3" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,64" Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.5"
+                CornerRadius="12" Padding="16,12" SnapsToDevicePixels="True" Panel.ZIndex="50" MaxWidth="560">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="26" ShadowDepth="3" Direction="270" Opacity="0.5" Color="#000000"/>
+            </Border.Effect>
+            <Border.RenderTransform>
+                <TranslateTransform Y="24"/>
+            </Border.RenderTransform>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Заголовок + кнопка закриття -->
+                <Grid Grid.Row="0">
+                    <StackPanel Margin="0,0,28,0">
+                        <TextBlock x:Name="UpdateToastText" Text="Знайдено нове оновлення MASLOOPTIMIZER!" FontSize="13" FontWeight="Black" Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="UpdateToastSub" Text="Натисніть «Оновити зараз»..." FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <Button x:Name="BtnUpdateDismiss" Content="✕" FontSize="13" FontWeight="Bold" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextMuted}" Cursor="Hand" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip="Закрити сповіщення" Click="BtnUpdateDismiss_Click"/>
+                </Grid>
+
+                <!-- Кнопка оновлення -->
+                <Button x:Name="BtnUpdateNow" Grid.Row="1" Content="🚀 Оновити зараз" Background="#8E44AD" Foreground="White" FontWeight="Bold" FontSize="11.5" Padding="14,7" Margin="0,10,0,0" HorizontalAlignment="Left" Cursor="Hand" Click="BtnUpdateNow_Click" BorderThickness="0"/>
+
+                <!-- Прогрес завантаження -->
+                <Grid Grid.Row="2" x:Name="UpdateProgressPanel" Visibility="Collapsed" Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ProgressBar x:Name="UpdateProgressBar" Grid.Column="0" Height="6" Minimum="0" Maximum="100" Value="0" Background="{DynamicResource ProgressTrack}" Foreground="{DynamicResource ProgressFill}" BorderThickness="0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="UpdateProgressText" Grid.Column="1" Text="0%" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource AccentGreen}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

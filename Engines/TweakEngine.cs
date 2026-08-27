@@ -69,10 +69,22 @@ public class TweakEngine
                 var bundle = JsonSerializer.Deserialize<TweakBundle>(jsonContent);
                 if (bundle?.Tweaks != null)
                 {
-                    AllTweaks = bundle.Tweaks.OrderBy(t => t.Name).ToList();
+                    AllTweaks = bundle.Tweaks.ToList();
+
+                    // Категорію прибрано з бандлу — підтягуємо її ключ з мовних файлів,
+                    // щоб фільтри/сортування по категоріях продовжували працювати.
+                    foreach (var t in AllTweaks)
+                    {
+                        t.ResolveCategoryFromLocalization();
+                    }
+
+                    AllTweaks = AllTweaks.OrderBy(t => t.LocalizedName).ToList();
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"Помилка десеріалізації бандлу твіків: {ex.Message}", "ERROR");
+            }
         }
     }
 
@@ -102,22 +114,24 @@ public class TweakEngine
         {
             string q = searchQuery.Trim();
             query = query.Where(t =>
-                t.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                t.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                t.Benefits.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                t.LocalizedName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                t.LocalizedDescription.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                t.LocalizedBenefits.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                t.LocalizedSideEffects.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                t.LocalizedCategory.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                 t.Id.Contains(q, StringComparison.OrdinalIgnoreCase));
         }
 
         return sortMode switch
         {
-            TweakSortMode.AppliedFirst => query.OrderByDescending(t => t.IsApplied).ThenBy(t => t.Name),
-            TweakSortMode.UnappliedFirst => query.OrderBy(t => t.IsApplied).ThenBy(t => t.Name),
-            TweakSortMode.RiskAscending => query.OrderBy(t => GetRiskWeight(t.Risk)).ThenBy(t => t.Name),
-            TweakSortMode.RiskDescending => query.OrderByDescending(t => GetRiskWeight(t.Risk)).ThenBy(t => t.Name),
-            TweakSortMode.NameAscending => query.OrderBy(t => t.Name),
-            TweakSortMode.NameDescending => query.OrderByDescending(t => t.Name),
-            TweakSortMode.Category => query.OrderBy(t => t.Category).ThenBy(t => t.Name),
-            _ => query.OrderBy(t => t.Name)
+            TweakSortMode.AppliedFirst => query.OrderByDescending(t => t.IsApplied).ThenBy(t => t.LocalizedName),
+            TweakSortMode.UnappliedFirst => query.OrderBy(t => t.IsApplied).ThenBy(t => t.LocalizedName),
+            TweakSortMode.RiskAscending => query.OrderBy(t => GetRiskWeight(t.Risk)).ThenBy(t => t.LocalizedName),
+            TweakSortMode.RiskDescending => query.OrderByDescending(t => GetRiskWeight(t.Risk)).ThenBy(t => t.LocalizedName),
+            TweakSortMode.NameAscending => query.OrderBy(t => t.LocalizedName),
+            TweakSortMode.NameDescending => query.OrderByDescending(t => t.LocalizedName),
+            TweakSortMode.Category => query.OrderBy(t => t.Category).ThenBy(t => t.LocalizedName),
+            _ => query.OrderBy(t => t.LocalizedName)
         };
     }
 
@@ -165,7 +179,7 @@ public class TweakEngine
 
                 int currentCount = System.Threading.Interlocked.Increment(ref completed);
                 int percent = (int)((currentCount / (double)total) * 100);
-                progressCallback?.Invoke(percent, tweak.Name);
+                progressCallback?.Invoke(percent, tweak.LocalizedName);
             });
         });
     }
@@ -317,16 +331,22 @@ public class TweakEngine
             }
             catch (Exception ex)
             {
-                AppLogger.Log($"Помилка у твіку {tweak.Name}: {ex.Message}", "ERROR");
+                AppLogger.Log($"Помилка у твіку {tweak.LocalizedName}: {ex.Message}", "ERROR");
                 return false;
             }
 
             return false;
         });
 
-        // Оновлюємо статус перевіркою
         tweak.IsApplied = CheckTweakStatusNative(tweak);
         tweak.IsBusy = false;
+
+        if (success)
+        {
+            AppLogger.Log(isApply
+                ? $"Застосовано системний твік: {tweak.LocalizedName}"
+                : $"Відновлено початковий стан твіка: {tweak.LocalizedName}", "SUCCESS");
+        }
         return success;
     }
 

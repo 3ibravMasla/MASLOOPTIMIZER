@@ -56,12 +56,12 @@
 
                 <StackPanel Grid.Column="0">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="🔍 АПАРАТНИЙ АУДИТ ТА СЕНСОРИ ТЕЛЕМЕТРІЇ" FontSize="14.5" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
+                        <TextBlock x:Name="TxtTitle" Text="🔍 АПАРАТНИЙ АУДИТ ТА СЕНСОРИ ТЕЛЕМЕТРІЇ" FontSize="14.5" FontWeight="Black" Foreground="{DynamicResource AccentGreen}"/>
                         <Border Background="{DynamicResource BadgeBg}" CornerRadius="4" Padding="6,2" Margin="10,0,0,0" BorderBrush="{DynamicResource AccentGreen}" BorderThickness="1" VerticalAlignment="Center">
-                            <TextBlock Text="Live Telemetry" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource AccentGreen}"/>
+                            <TextBlock x:Name="TxtLiveBadge" Text="Live Telemetry" FontSize="9.5" FontWeight="Bold" Foreground="{DynamicResource AccentGreen}"/>
                         </Border>
                     </StackPanel>
-                    <TextBlock Text="Детальна інформація про апаратні вузли, термозони, кеш, контролери та підсистеми ПК" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
+                    <TextBlock x:Name="TxtSubtitle" Text="Детальна інформація про апаратні вузли, термозони, кеш, контролери та підсистеми ПК" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,3,0,0"/>
                 </StackPanel>
 
                 <Button Grid.Column="1" Content="✕" Background="Transparent" Foreground="{DynamicResource TextMuted}" FontWeight="Bold" FontSize="14" BorderThickness="0" Cursor="Hand" Click="BtnClose_Click" IsCancel="True"/>
@@ -84,7 +84,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="🔥 ПРОЦЕСОР (CPU) &amp; ТЕРМОЗОНИ" FontSize="12.5" FontWeight="Black" Foreground="#F59E0B"/>
+                                    <TextBlock x:Name="LblCpuSection" Text="🔥 ПРОЦЕСОР (CPU) &amp; ТЕРМОЗОНИ" FontSize="12.5" FontWeight="Black" Foreground="#F59E0B"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Border Style="{StaticResource TempBadge}">
@@ -105,14 +105,15 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Модель:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuModel" Text="Завантаження..." Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Конфігурація:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuCores" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Сокет:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuSocket" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblModel" Text="Модель:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuModel" Text="Завантаження..." Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblConfig" Text="Конфігурація:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuCores" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblSocket" Text="Сокет:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuSocket" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Макс. частота:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuClock" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Кеш L3 / L2:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuCache" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Віртуалізація:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuVirtual" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblBaseFreq" Text="Базова частота:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuBaseClock" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblMaxFreq" Text="Макс. частота:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuClock" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblCache" Text="Кеш L3 / L2:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuCache" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblVirtual" Text="Віртуалізація:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtCpuVirtual" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
                                 </StackPanel>
                             </Grid>
                         </Grid>
@@ -131,7 +132,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="🎮 ВІДЕОКАРТА (GPU) &amp; МОНІТОРИ" FontSize="12.5" FontWeight="Black" Foreground="#38BDF8" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="LblGpuSection" Grid.Column="0" Text="🎮 ВІДЕОКАРТА (GPU) &amp; МОНІТОРИ" FontSize="12.5" FontWeight="Black" Foreground="#38BDF8" VerticalAlignment="Center"/>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                                     <Border Style="{StaticResource TempBadge}">
                                         <TextBlock x:Name="TxtGpuCoreTemp" Text="GPU: 42 °C" FontSize="10.5" FontWeight="Bold" Foreground="#38BDF8"/>
@@ -151,15 +152,15 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Модель GPU:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuModel" Text="Завантаження..." Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Відеопам'ять:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuVram" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Шина &amp; ReBAR:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuBus" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Драйвер:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuDriver" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblGpuModel" Text="Модель GPU:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuModel" Text="Завантаження..." Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblGpuVram" Text="Відеопам'ять:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuVram" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblGpuBus" Text="Шина &amp; ReBAR:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuBus" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblGpuDriver" Text="Драйвер:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuDriver" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Частота / Споживання:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuPowerClock" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Кулери (Fan):" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuFan" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <TextBlock Text="Підключені дисплеї:" Style="{StaticResource MetricLabel}"/>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblGpuClockPower" Text="Частота / Споживання:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuPowerClock" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblGpuFan" Text="Кулери (Fan):" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtGpuFan" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <TextBlock x:Name="LblGpuDisplays" Text="Підключені дисплеї:" Style="{StaticResource MetricLabel}"/>
                                     <TextBlock x:Name="TxtGpuDisplays" Text="Завантаження дисплеїв..." Style="{StaticResource MetricValue}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Grid>
@@ -179,7 +180,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="⚡ ОПЕРАТИВНА ПАМ'ЯТЬ (RAM)" FontSize="12.5" FontWeight="Black" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="LblRamSection" Grid.Column="0" Text="⚡ ОПЕРАТИВНА ПАМ'ЯТЬ (RAM)" FontSize="12.5" FontWeight="Black" Foreground="#A78BFA" VerticalAlignment="Center"/>
                                 <Border Grid.Column="1" Style="{StaticResource TempBadge}">
                                     <TextBlock x:Name="TxtRamSpeedBadge" Text="DDR5 @ 6000 MT/s" FontSize="10.5" FontWeight="Bold" Foreground="#A78BFA"/>
                                 </Border>
@@ -191,12 +192,12 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0">
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Обсяг пам'яті:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtRamCapacity" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Завантаження RAM:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtRamLoad" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                    <StackPanel Orientation="Horizontal"><TextBlock Text="Слоти DIMM:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtRamSlots" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblRamCapacity" Text="Обсяг пам'яті:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtRamCapacity" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblRamLoad" Text="Завантаження RAM:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtRamLoad" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                    <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblRamSlots" Text="Слоти DIMM:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtRamSlots" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Text="Встановлені модулі:" Style="{StaticResource MetricLabel}"/>
+                                    <TextBlock x:Name="LblRamModules" Text="Встановлені модулі:" Style="{StaticResource MetricLabel}"/>
                                     <TextBlock x:Name="TxtRamModulesList" Text="Завантаження планок..." Style="{StaticResource MetricValue}" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </Grid>
@@ -213,7 +214,7 @@
                         <!-- Накопичувачі -->
                         <Border Grid.Column="0" Style="{StaticResource SpecCard}" Margin="0,0,6,10">
                             <StackPanel>
-                                <TextBlock Text="💾 НАКОПИЧУВАЧІ ТА ТОМИ" FontSize="12.5" FontWeight="Black" Foreground="{DynamicResource AccentGreen}" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="LblStorageSection" Text="💾 НАКОПИЧУВАЧІ ТА ТОМИ" FontSize="12.5" FontWeight="Black" Foreground="{DynamicResource AccentGreen}" Margin="0,0,0,8"/>
                                 <TextBlock x:Name="TxtStorageVolumes" Text="Завантаження дисків..." Style="{StaticResource MetricValue}" TextWrapping="Wrap"/>
                             </StackPanel>
                         </Border>
@@ -221,12 +222,12 @@
                         <!-- Системна плата & Мережа -->
                         <Border Grid.Column="1" Style="{StaticResource SpecCard}" Margin="6,0,0,10">
                             <StackPanel>
-                                <TextBlock Text="🎛️ ПЛАТА, BIOS ТА МЕРЕЖА" FontSize="12.5" FontWeight="Black" Foreground="#F43F5E" Margin="0,0,0,8"/>
-                                <StackPanel Orientation="Horizontal"><TextBlock Text="Материнська плата:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtBoardModel" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Text="Версія BIOS:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtBiosVersion" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Text="Мережевий адаптер:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtNetAdapter" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Text="IPv4 / Пінг шлюзу:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtNetIpPing" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
-                                <StackPanel Orientation="Horizontal"><TextBlock Text="Безпека:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtSecurityStatus" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                <TextBlock x:Name="LblBoardSection" Text="🎛️ ПЛАТА, BIOS ТА МЕРЕЖА" FontSize="12.5" FontWeight="Black" Foreground="#F43F5E" Margin="0,0,0,8"/>
+                                <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblBoardModel" Text="Материнська плата:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtBoardModel" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblBios" Text="Версія BIOS:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtBiosVersion" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblNetAdapter" Text="Мережевий адаптер:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtNetAdapter" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblNetIp" Text="IPv4 / Пінг шлюзу:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtNetIpPing" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><TextBlock x:Name="LblSecurity" Text="Безпека:" Style="{StaticResource MetricLabel}"/><TextBlock x:Name="TxtSecurityStatus" Text="-" Style="{StaticResource MetricValue}"/></StackPanel>
                             </StackPanel>
                         </Border>
                     </Grid>
@@ -242,12 +243,12 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Button Content="📋 Скопіювати повний звіт" Style="{StaticResource HeaderActionBtn}" Click="BtnCopyReport_Click"/>
-                    <Button Content="💾 Зберегти звіт (.txt)" Style="{StaticResource HeaderActionBtn}" Click="BtnSaveReport_Click"/>
-                    <Button Content="🔄 Оновити сенсори" Style="{StaticResource HeaderActionBtn}" Click="BtnRefresh_Click"/>
+                    <Button x:Name="BtnCopyReport" Content="📋 Скопіювати повний звіт" Style="{StaticResource HeaderActionBtn}" Click="BtnCopyReport_Click"/>
+                    <Button x:Name="BtnSaveReport" Content="💾 Зберегти звіт (.txt)" Style="{StaticResource HeaderActionBtn}" Click="BtnSaveReport_Click"/>
+                    <Button x:Name="BtnRefresh" Content="🔄 Оновити сенсори" Style="{StaticResource HeaderActionBtn}" Click="BtnRefresh_Click"/>
                 </StackPanel>
 
-                <Button Grid.Column="2" Content="Закрити" Style="{StaticResource HeaderActionBtn}" Click="BtnClose_Click"/>
+                <Button x:Name="BtnCloseWindow" Grid.Column="2" Content="Закрити" Style="{StaticResource HeaderActionBtn}" Click="BtnClose_Click"/>
             </Grid>
         </Grid>
     </Border>

@@ -35,6 +35,21 @@ public class StartupStats
 
 public class StartupEntry : INotifyPropertyChanged
 {
+    public StartupEntry()
+    {
+        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ButtonText));
+        OnPropertyChanged(nameof(SafetyBadge));
+        OnPropertyChanged(nameof(ProtectedBadge));
+        OnPropertyChanged(nameof(CategoryLocalized));
+        OnPropertyChanged(nameof(SourceLocalized));
+    }
+
     public string Name { get; set; } = string.Empty;
     public string Command { get; set; } = string.Empty;
     public string Publisher { get; set; } = "Невідомий видавець";
@@ -46,6 +61,53 @@ public class StartupEntry : INotifyPropertyChanged
     public string TaskPath { get; set; } = string.Empty;
     public string EntryType { get; set; } = "Reg"; // Reg, File, Task
     public bool IsCritical { get; set; } = false;
+
+    /// <summary>Чіп-група джерела для фільтрації: user / system / task / folder.</summary>
+    public string SourceGroup
+    {
+        get
+        {
+            if (Source.Contains("Планувальник", StringComparison.OrdinalIgnoreCase) ||
+                Source.Contains("Task", StringComparison.OrdinalIgnoreCase) ||
+                EntryType == "Task")
+            {
+                return "task";
+            }
+            if (Source.Contains("Папка", StringComparison.OrdinalIgnoreCase) ||
+                Source.Contains("Startup Folder", StringComparison.OrdinalIgnoreCase) ||
+                EntryType == "File")
+            {
+                return "folder";
+            }
+            if (Source.Contains("HKCU", StringComparison.OrdinalIgnoreCase) ||
+                Source.Contains("CurrentUser", StringComparison.OrdinalIgnoreCase))
+            {
+                return "user";
+            }
+            return "system";
+        }
+    }
+
+    public string CategoryLocalized
+        => LocalizationManager.Instance.TryGet($"Categories.{Category}", out var cat) && !string.IsNullOrWhiteSpace(cat)
+            ? cat
+            : Category;
+
+    public string SourceLocalized
+    {
+        get
+        {
+            string key = SourceGroup switch
+            {
+                "user" => "Startup.SourceUserRun",
+                "system" => "Startup.SourceSystemRun",
+                "task" => "Startup.SourceTaskScheduler",
+                "folder" => "Startup.SourceStartupFolder",
+                _ => "Startup.SourceUserRun"
+            };
+            return LocalizationManager.Instance.TryGet(key, out var src) && !string.IsNullOrWhiteSpace(src) ? src : Source;
+        }
+    }
 
     private bool _isEnabled = true;
     public bool IsEnabled
@@ -80,17 +142,27 @@ public class StartupEntry : INotifyPropertyChanged
         }
     }
 
-    public string StatusText => IsEnabled ? "🟢 АКТИВНО" : "⚪ ПРИЗУПИНЕНО";
+    public string StatusText => IsEnabled
+        ? LocalizationManager.Instance["Startup.StatusActive"]
+        : LocalizationManager.Instance["Startup.StatusPaused"];
     public string StatusColor => IsEnabled ? "#107C41" : "#2A2D3D";
-    public string SafetyBadge => IsCritical ? "🛡️ СИСТЕМНИЙ" : "⚡ БЕЗПЕЧНО";
+    public string SafetyBadge => IsCritical
+        ? LocalizationManager.Instance["Startup.BadgeProtected"]
+        : LocalizationManager.Instance["Startup.BadgeSafe"];
+
+    /// <summary>Статус захищеного системного процесу (Protected).</summary>
+    public string ProtectedBadge => IsCritical
+        ? LocalizationManager.Instance["Startup.StatusProtected"]
+        : string.Empty;
 
     public string ButtonText
     {
         get
         {
-            if (IsBusy) return "⏳...";
-            if (IsCritical) return "🔒 Захищено";
-            return IsEnabled ? "⏸️ Призупинити" : "▶️ Увімкнути";
+            var loc = LocalizationManager.Instance;
+            if (IsBusy) return loc["Common.Busy"];
+            if (IsCritical) return loc["Startup.BtnProtected"];
+            return IsEnabled ? loc["Startup.BtnPause"] : loc["Startup.BtnEnable"];
         }
     }
 
@@ -163,13 +235,19 @@ public static class StartupEngine
         IEnumerable<StartupEntry> sourceList,
         string? category = null,
         string? searchQuery = null,
-        StartupSortMode sortMode = StartupSortMode.Default)
+        StartupSortMode sortMode = StartupSortMode.Default,
+        string? sourceGroup = null)
     {
         var query = sourceList.AsEnumerable();
 
         if (!string.IsNullOrWhiteSpace(category) && !category.Equals("Всі", StringComparison.OrdinalIgnoreCase))
         {
             query = query.Where(e => string.Equals(e.Category, category, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(sourceGroup) && !sourceGroup.Equals("Всі", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(e => string.Equals(e.SourceGroup, sourceGroup, StringComparison.OrdinalIgnoreCase));
         }
 
         if (!string.IsNullOrWhiteSpace(searchQuery))
@@ -193,6 +271,9 @@ public static class StartupEngine
             _ => query.OrderBy(e => e.Name)
         };
     }
+
+    /// <summary>Чіп-групи джерел автозапуску: user / system / task / folder (All перший).</summary>
+    public static IReadOnlyList<string> GetSourceGroups() => new[] { "Всі", "user", "system", "task", "folder" };
 
     public static List<string> GetCategories(IEnumerable<StartupEntry> sourceList)
     {
@@ -392,6 +473,9 @@ public static class StartupEngine
 
         try
         {
+            bool success = false;
+            string stateStr = item.IsEnabled ? "призупинено" : "увімкнено";
+
             if (item.EntryType == "Reg")
             {
                 var root = item.Source.Contains("HKCU") ? Registry.CurrentUser : Registry.LocalMachine;
@@ -407,6 +491,7 @@ public static class StartupEngine
                         aKey?.DeleteValue(item.Name, false);
                     }
                     item.IsEnabled = false;
+                    success = true;
                 }
                 else
                 {
@@ -419,9 +504,8 @@ public static class StartupEngine
                         dKey?.DeleteValue(item.Name, false);
                     }
                     item.IsEnabled = true;
+                    success = true;
                 }
-                item.IsBusy = false;
-                return true;
             }
             else if (item.EntryType == "File")
             {
@@ -433,8 +517,7 @@ public static class StartupEngine
                         File.Move(item.FilePath, target, true);
                         item.FilePath = target;
                         item.IsEnabled = false;
-                        item.IsBusy = false;
-                        return true;
+                        success = true;
                     }
                 }
                 else
@@ -448,8 +531,7 @@ public static class StartupEngine
                         File.Move(item.FilePath, target, true);
                         item.FilePath = target;
                         item.IsEnabled = true;
-                        item.IsBusy = false;
-                        return true;
+                        success = true;
                     }
                 }
             }
@@ -471,12 +553,22 @@ public static class StartupEngine
                 if (proc?.ExitCode == 0)
                 {
                     item.IsEnabled = !item.IsEnabled;
-                    item.IsBusy = false;
-                    return true;
+                    success = true;
                 }
             }
+
+            if (success)
+            {
+                AppLogger.Log($"Автозапуск: [{item.Name}] успішно {stateStr}", "SUCCESS");
+            }
+
+            item.IsBusy = false;
+            return success;
         }
-        catch { }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка зміни автозапуску для {item.Name}: {ex.Message}", "ERROR");
+        }
 
         item.IsBusy = false;
         return false;

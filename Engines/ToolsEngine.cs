@@ -32,6 +32,17 @@ public class ToolStats
 
 public class ToolItem : INotifyPropertyChanged
 {
+    public ToolItem()
+    {
+        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(SiteButtonText));
+    }
+
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = "Залізо & Сенсори";
@@ -72,23 +83,24 @@ public class ToolItem : INotifyPropertyChanged
         }
     }
 
-    private string _statusText = "⬇️ Встановити";
+    private string _statusText = string.Empty;
     public string StatusText
     {
         get
         {
-            if (IsBusy) return "⏳ Встановлення...";
+            var loc = LocalizationManager.Instance;
+            if (IsBusy) return loc["Common.Installing"];
             if (!string.IsNullOrWhiteSpace(SpecialAction))
             {
                 return SpecialAction switch
                 {
-                    "MAS" => "⚡ Активація",
-                    "VCREDIST" => "⚡ Встановити все",
-                    "DIRECTX" => "⚡ Оновити DirectX",
+                    "MAS" => loc["Tools.BtnActivate"],
+                    "VCREDIST" => loc["Tools.BtnInstallAll"],
+                    "DIRECTX" => loc["Tools.BtnUpdateDx"],
                     _ => _statusText
                 };
             }
-            return IsInstalled ? "✓ Встановлено" : _statusText;
+            return IsInstalled ? loc["Tools.BtnInstalled"] : loc["Tools.BtnInstall"];
         }
         set
         {
@@ -96,6 +108,8 @@ public class ToolItem : INotifyPropertyChanged
             OnPropertyChanged();
         }
     }
+
+    public string SiteButtonText => LocalizationManager.Instance["Tools.BtnSite"];
 
     public string StatusColor => IsInstalled ? "#107C41" : "#0078D4";
 
@@ -108,9 +122,6 @@ public static class ToolsEngine
 {
     public static List<ToolItem> Catalog { get; } = new()
     {
-        // =========================================================================
-        // 1. ЗАЛІЗО, ДІАГНОСТИКА & СЕНСОРИ
-        // =========================================================================
         new()
         {
             Id = "hwinfo",
@@ -211,10 +222,6 @@ public static class ToolsEngine
             WingetId = "FinalWire.AIDA64.Extreme",
             ExeCheckName = "aida64.exe"
         },
-
-        // =========================================================================
-        // 2. СТРЕС-ТЕСТИ, БЕНЧМАРКИ ТА СТАБІЛЬНІСТЬ
-        // =========================================================================
         new()
         {
             Id = "occt",
@@ -265,10 +272,6 @@ public static class ToolsEngine
             WingetId = "PrimateLabs.Geekbench.6",
             ExeCheckName = "Geekbench6.exe"
         },
-
-        // =========================================================================
-        // 3. FPS, ГЕЙМІНГ & DPC ЗАТРИМКИ
-        // =========================================================================
         new()
         {
             Id = "latencymon",
@@ -329,10 +332,6 @@ public static class ToolsEngine
             WingetId = "Discord.Discord",
             ExeCheckName = "Discord.exe"
         },
-
-        // =========================================================================
-        // 4. БЕЗПЕКА & АВТОНОМНІ СКАНЕРИ (БЕЗ ФОНОВИХ СЛУЖБ)
-        // =========================================================================
         new()
         {
             Id = "adwcleaner",
@@ -363,10 +362,6 @@ public static class ToolsEngine
             WingetId = "Sophos.HitmanPro",
             ExeCheckName = "hitmanpro.exe"
         },
-
-        // =========================================================================
-        // 5. НАКОПИЧУВАЧІ ТА ОБРАЗИ
-        // =========================================================================
         new()
         {
             Id = "crystaldiskinfo",
@@ -427,10 +422,6 @@ public static class ToolsEngine
             WingetId = "Ventoy.Ventoy",
             ExeCheckName = "Ventoy2Disk.exe"
         },
-
-        // =========================================================================
-        // 6. СИСТЕМНІ ІНСТРУМЕНТИ ТА УТИЛІТИ
-        // =========================================================================
         new()
         {
             Id = "7zip",
@@ -481,10 +472,6 @@ public static class ToolsEngine
             WingetId = "Notepad++.Notepad++",
             ExeCheckName = "notepad++.exe"
         },
-
-        // =========================================================================
-        // 7. ДРАЙВЕРИ ТА ДЕІНСТАЛЯТОРИ
-        // =========================================================================
         new()
         {
             Id = "ddu",
@@ -525,10 +512,6 @@ public static class ToolsEngine
             WingetId = "GeekUninstaller.GeekUninstaller",
             ExeCheckName = "geek.exe"
         },
-
-        // =========================================================================
-        // 8. МЕРЕЖА, АНАЛІЗ ТА VPN
-        // =========================================================================
         new()
         {
             Id = "wireshark",
@@ -569,10 +552,6 @@ public static class ToolsEngine
             WingetId = "qBittorrent.qBittorrent",
             ExeCheckName = "qbittorrent.exe"
         },
-
-        // =========================================================================
-        // 9. БРАУЗЕРИ ТА МЕДІА
-        // =========================================================================
         new()
         {
             Id = "brave",
@@ -633,10 +612,6 @@ public static class ToolsEngine
             WingetId = "RustDesk.RustDesk",
             ExeCheckName = "rustdesk.exe"
         },
-
-        // =========================================================================
-        // 10. ІГРОВІ ЛАУНЧЕРИ
-        // =========================================================================
         new()
         {
             Id = "steam",
@@ -687,10 +662,6 @@ public static class ToolsEngine
             WingetId = "GOG.Galaxy",
             ExeCheckName = "GalaxyClient.exe"
         },
-
-        // =========================================================================
-        // 11. RUNTIME, БІБЛІОТЕКИ ТА АКТИВАЦІЯ
-        // =========================================================================
         new()
         {
             Id = "vcredist",
@@ -801,7 +772,6 @@ public static class ToolsEngine
         {
             var installedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // Скануємо встановлені програми через реєстр Uninstall
             ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", installedNames);
             ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", installedNames);
             ScanUninstallRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Uninstall", installedNames);
@@ -819,7 +789,6 @@ public static class ToolsEngine
 
                 if (!found && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
                 {
-                    // Додаткова перевірка в Program Files
                     string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
                     string pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
                     string localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -890,6 +859,10 @@ public static class ToolsEngine
         tool.IsInstalled = success;
         tool.StatusText = success ? "✓ Встановлено" : "⚠️ Помилка";
         tool.IsBusy = false;
+        AppLogger.Log(success
+            ? $"Успішно встановлено через Winget: {tool.Name}"
+            : $"Помилка встановлення утиліти: {tool.Name}",
+            success ? "SUCCESS" : "ERROR");
         return success;
     }
 
@@ -897,6 +870,7 @@ public static class ToolsEngine
     {
         try
         {
+            AppLogger.Log("Запущено скрипт активації Microsoft Activation Scripts (MAS)", "INFO");
             Process.Start(new ProcessStartInfo
             {
                 FileName = "powershell.exe",
@@ -904,7 +878,10 @@ public static class ToolsEngine
                 UseShellExecute = true
             });
         }
-        catch { }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка запуску MAS: {ex.Message}", "ERROR");
+        }
     }
 
     public static async Task<bool> InstallVcRedistAllAsync(ToolItem tool)
@@ -914,7 +891,6 @@ public static class ToolsEngine
 
         bool success = await Task.Run(async () =>
         {
-            // 1. Спроба швидкого встановлення через Winget
             try
             {
                 var psi = new ProcessStartInfo
@@ -931,7 +907,6 @@ public static class ToolsEngine
             }
             catch { }
 
-            // 2. Fallback: Пряме завантаження архіву з GitHub
             try
             {
                 string tempZip = Path.Combine(Path.GetTempPath(), "vcredist_aio.zip");
@@ -973,6 +948,10 @@ public static class ToolsEngine
 
         tool.StatusText = success ? "✓ Встановлено" : "⚠️ Помилка";
         tool.IsBusy = false;
+        AppLogger.Log(success
+            ? "Visual C++ All-in-One успішно встановлено!"
+            : "Помилка встановлення пакетів Visual C++",
+            success ? "SUCCESS" : "ERROR");
         return success;
     }
 
@@ -1014,6 +993,10 @@ public static class ToolsEngine
 
         tool.StatusText = success ? "✓ Оновлено" : "⚠️ Помилка";
         tool.IsBusy = false;
+        AppLogger.Log(success
+            ? "Бібліотеки DirectX успішно оновлено!"
+            : "Помилка оновлення бібліотек DirectX",
+            success ? "SUCCESS" : "ERROR");
         return success;
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -40,6 +41,21 @@ public class CleanerStats
 
 public class CleanerItem : INotifyPropertyChanged
 {
+    public CleanerItem()
+    {
+        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(SizeFormatted));
+        OnPropertyChanged(nameof(ActionButtonText));
+        OnPropertyChanged(nameof(NameLocalized));
+        OnPropertyChanged(nameof(DescriptionLocalized));
+        OnPropertyChanged(nameof(CategoryLocalized));
+        OnPropertyChanged(nameof(SafetyBadgeLocalized));
+    }
+
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = "Безпечний кеш";
@@ -52,6 +68,38 @@ public class CleanerItem : INotifyPropertyChanged
     public List<string> TargetPaths { get; set; } = new();
     public Func<Task<long>>? CustomCleaner { get; set; }
     public Func<Task<long>>? CustomSizeCalculator { get; set; }
+
+    /// <summary>Локалізована назва пункту очищення (Cleaner.Item.{Id}.Name).</summary>
+    public string NameLocalized
+        => LocalizationManager.Instance.TryGet($"Cleaner.Item.{Id}.Name", out var n) && !string.IsNullOrWhiteSpace(n)
+            ? n
+            : Name;
+
+    /// <summary>Локалізований опис пункту очищення (Cleaner.Item.{Id}.Description).</summary>
+    public string DescriptionLocalized
+        => LocalizationManager.Instance.TryGet($"Cleaner.Item.{Id}.Description", out var d) && !string.IsNullOrWhiteSpace(d)
+            ? d
+            : Description;
+
+    /// <summary>Локалізована категорія (Cleaner.Item.{Id}.Category або Categories.*).</summary>
+    public string CategoryLocalized
+    {
+        get
+        {
+            if (LocalizationManager.Instance.TryGet($"Cleaner.Item.{Id}.Category", out var cat) && !string.IsNullOrWhiteSpace(cat))
+            {
+                return cat;
+            }
+            return LocalizationManager.Instance.TryGet($"Categories.{Category}", out var gen) && !string.IsNullOrWhiteSpace(gen)
+                ? gen
+                : Category;
+        }
+    }
+
+    /// <summary>Локалізований бейдж безпеки (Безпечно / Ручний режим).</summary>
+    public string SafetyBadgeLocalized => IsSafeBatch
+        ? LocalizationManager.Instance["Cleaner.SafeBadge"]
+        : LocalizationManager.Instance["Cleaner.ManualBadge"];
 
     private long _bytesFound;
     public long BytesFound
@@ -88,17 +136,20 @@ public class CleanerItem : INotifyPropertyChanged
     {
         get
         {
-            if (IsDism) return "Системне сховище";
-            if (BytesFound >= 1024 * 1024 * 1024) return $"{BytesFound / (1024.0 * 1024 * 1024):N2} ГБ";
-            if (BytesFound >= 1024 * 1024) return $"{BytesFound / (1024.0 * 1024):N2} МБ";
-            if (BytesFound >= 1024) return $"{BytesFound / 1024.0:N2} КБ";
-            return $"{BytesFound} Байт";
+            var loc = LocalizationManager.Instance;
+            if (IsDism) return loc["Common.SystemStorage"];
+            if (BytesFound >= 1024 * 1024 * 1024) return $"{BytesFound / (1024.0 * 1024 * 1024):N2} {loc["Common.UnitGB"]}";
+            if (BytesFound >= 1024 * 1024) return $"{BytesFound / (1024.0 * 1024):N2} {loc["Common.UnitMB"]}";
+            if (BytesFound >= 1024) return $"{BytesFound / 1024.0:N2} {loc["Common.UnitKB"]}";
+            return $"{BytesFound} {loc["Common.UnitBytes"]}";
         }
     }
 
     public string StatusColor => BytesFound > 0 ? "#38BDF8" : "#64748B";
     public string SafetyBadge => IsSafeBatch ? "🟢 БЕЗПЕЧНО" : "🟡 РУЧНИЙ РЕЖИМ";
-    public string ActionButtonText => IsBusy ? "⏳ Очищення..." : "🧹 Очистити";
+    public string ActionButtonText => IsBusy
+        ? LocalizationManager.Instance["Common.Cleaning"]
+        : LocalizationManager.Instance["Cleaner.BtnClean"];
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -112,6 +163,21 @@ public static class CleanerEngine
     private static readonly string ProgramData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
     private static readonly string WinDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
     private static readonly string SysDrive = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
+
+    // Білий список «не чіпати»: корінь диска, Windows, System32, Program Files, профіль, AppData.
+    private static readonly HashSet<string> ProtectedPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        SysDrive,
+        WinDir,
+        Environment.SystemDirectory,
+        Path.GetDirectoryName(Environment.SystemDirectory) ?? WinDir,
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+        ProgramData,
+        AppData,
+        LocalAppData,
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+    };
 
     public static List<CleanerItem> Cleaners { get; } = new()
     {
@@ -335,9 +401,9 @@ public static class CleanerEngine
             Name = "Системні журнали подій Windows (Event Logs)",
             Category = "Дампи & Логи (Manual)",
             IsSafeBatch = false,
-            Description = "Повне очищення всіх системних журналів подій через нативний API.",
+            Description = "Очищення системних журналів подій через нативний API (крім журналу безпеки Security).",
             Benefits = "Конфіденційність дій та скидання накопичених логів помилок.",
-            SideEffects = "Історія в утиліті «Переглядач подій» (Event Viewer) буде очищена.",
+            SideEffects = "Історія в «Переглядачі подій» (Event Viewer) буде очищена; журнал безпеки (Security) зберігається для аудиту.",
             TargetPaths = new() { Path.Combine(WinDir, @"System32\winevt\Logs") },
             CustomCleaner = async () => await Task.Run(ClearAllEventLogsNative)
         },
@@ -347,10 +413,11 @@ public static class CleanerEngine
             Name = "Кеш ескізів Провідника (Thumbnails Cache)",
             Category = "Дампи & Логи (Manual)",
             IsSafeBatch = false,
-            Description = "Бази даних збережених мініатюр зображень та відео (thumbcache_*.db).",
+            Description = "Бази даних збережених мініатюр та значків (thumbcache_*.db, iconcache_*.db).",
             Benefits = "Звільняє місце на SSD та виправляє відображення пошкоджених значків.",
-            SideEffects = "Короткочасно перезапускає Провідник. Ескізи створюватимуться заново.",
+            SideEffects = "Провідник не перезапускається; зайняті файли буде пропущено. Ескізи створюватимуться заново.",
             TargetPaths = new() { Path.Combine(LocalAppData, @"Microsoft\Windows\Explorer") },
+            CustomSizeCalculator = async () => await Task.Run(GetThumbnailCacheSize),
             CustomCleaner = async () => await Task.Run(CleanThumbnailCache)
         },
 
@@ -439,17 +506,19 @@ public static class CleanerEngine
 
     public static async Task CalculateSizesAsync()
     {
+        var results = new ConcurrentDictionary<CleanerItem, long>();
+
         await Parallel.ForEachAsync(Cleaners, async (item, token) =>
         {
             if (item.IsDism)
             {
-                item.BytesFound = 0;
+                results[item] = 0;
                 return;
             }
 
             if (item.CustomSizeCalculator != null)
             {
-                item.BytesFound = await item.CustomSizeCalculator();
+                results[item] = await item.CustomSizeCalculator();
                 return;
             }
 
@@ -458,35 +527,108 @@ public static class CleanerEngine
             {
                 total += FastGetDirectorySize(path);
             }
-            item.BytesFound = total;
+            results[item] = total;
+        });
+
+        // Оновлення UI-залежних властивостей — лише на UI-потоці (D-10)
+        RunOnUi(() =>
+        {
+            foreach (var kv in results)
+                kv.Key.BytesFound = kv.Value;
         });
     }
 
     public static async Task<long> CleanItemAsync(CleanerItem item)
     {
-        item.IsBusy = true;
+        RunOnUi(() => item.IsBusy = true);
         long freed = 0;
 
-        if (item.CustomCleaner != null)
+        try
         {
-            freed = await item.CustomCleaner();
-        }
-        else
-        {
-            freed = await Task.Run(() =>
+            if (item.CustomCleaner != null)
             {
-                long localFreed = 0;
-                foreach (var path in item.TargetPaths)
+                freed = await item.CustomCleaner();
+            }
+            else
+            {
+                freed = await Task.Run(() =>
                 {
-                    localFreed += FastDeleteDirectoryContents(path);
-                }
-                return localFreed;
-            });
+                    long localFreed = 0;
+                    foreach (var path in item.TargetPaths)
+                    {
+                        localFreed += FastDeleteDirectoryContents(path);
+                    }
+                    return localFreed;
+                });
+            }
+
+            AppLogger.Log($"Очищено: {item.Name} (+{FormatBytes(freed)})", "SUCCESS");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка очищення {item.Name}: {ex.Message}", "ERROR");
         }
 
-        item.BytesFound = 0;
-        item.IsBusy = false;
+        RunOnUi(() =>
+        {
+            item.BytesFound = 0;
+            item.IsBusy = false;
+        });
         return freed;
+    }
+
+    // Виконання на UI-потоці лише за потреби; без Dispatcher — інлайн (тести/CLI).
+    private static void RunOnUi(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+        dispatcher.Invoke(action);
+    }
+
+    // Захист від випадкового видалення кореня диска або системних каталогів.
+    private static bool IsPathSafeForCleanup(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+
+        string full;
+        try
+        {
+            full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (full.Length == 0) return false;
+
+        string root = (Path.GetPathRoot(full) ?? string.Empty)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (full.Length <= root.Length) return false; // корінь диска ("C:\")
+
+        foreach (var protectedPath in ProtectedPaths)
+        {
+            if (string.IsNullOrWhiteSpace(protectedPath)) continue;
+
+            string pFull;
+            try
+            {
+                pFull = Path.GetFullPath(protectedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (string.Equals(full, pFull, StringComparison.OrdinalIgnoreCase))
+                return false;
+        }
+
+        return true;
     }
 
     public static async Task<long> CleanAllSafeAsync(IProgress<(int Percent, string Name, long Freed)>? progress = null)
@@ -517,7 +659,12 @@ public static class CleanerEngine
         if (string.IsNullOrWhiteSpace(path)) return 0;
         if (File.Exists(path))
         {
-            try { return new FileInfo(path).Length; } catch { return 0; }
+            try
+            {
+                var fi = new FileInfo(path);
+                return (fi.Attributes & FileAttributes.ReparsePoint) == 0 ? fi.Length : 0;
+            }
+            catch { return 0; }
         }
         if (!Directory.Exists(path)) return 0;
 
@@ -530,12 +677,18 @@ public static class CleanerEngine
             string current = stack.Pop();
             try
             {
-                foreach (var file in Directory.GetFiles(current))
+                foreach (var file in Directory.EnumerateFiles(current))
                 {
-                    try { total += new FileInfo(file).Length; } catch { }
+                    try
+                    {
+                        var fi = new FileInfo(file);
+                        if ((fi.Attributes & FileAttributes.ReparsePoint) == 0)
+                            total += fi.Length;
+                    }
+                    catch { }
                 }
 
-                foreach (var dir in Directory.GetDirectories(current))
+                foreach (var dir in Directory.EnumerateDirectories(current))
                 {
                     try
                     {
@@ -557,11 +710,16 @@ public static class CleanerEngine
     private static long FastDeleteDirectoryContents(string path)
     {
         if (string.IsNullOrWhiteSpace(path)) return 0;
+        if (!IsPathSafeForCleanup(path)) return 0;
+
         if (File.Exists(path))
         {
             try
             {
-                long len = new FileInfo(path).Length;
+                var fi = new FileInfo(path);
+                if ((fi.Attributes & FileAttributes.ReparsePoint) != 0) return 0;
+
+                long len = fi.Length;
                 File.SetAttributes(path, FileAttributes.Normal);
                 File.Delete(path);
                 return len;
@@ -574,10 +732,12 @@ public static class CleanerEngine
         try
         {
             var dir = new DirectoryInfo(path);
-            foreach (var file in dir.GetFiles("*", SearchOption.TopDirectoryOnly))
+            foreach (var file in dir.EnumerateFiles("*", SearchOption.TopDirectoryOnly))
             {
                 try
                 {
+                    if ((file.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+
                     long len = file.Length;
                     file.Attributes = FileAttributes.Normal;
                     file.Delete();
@@ -586,7 +746,7 @@ public static class CleanerEngine
                 catch { }
             }
 
-            foreach (var sub in dir.GetDirectories("*", SearchOption.TopDirectoryOnly))
+            foreach (var sub in dir.EnumerateDirectories("*", SearchOption.TopDirectoryOnly).ToList())
             {
                 try
                 {
@@ -650,50 +810,105 @@ public static class CleanerEngine
     private static long EmptyRecycleBinNative()
     {
         long before = GetRecycleBinTotalSize();
+        uint hresult = 0xFFFFFFFF;
         try
         {
-            SHEmptyRecycleBin(IntPtr.Zero, null, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
+            hresult = SHEmptyRecycleBin(IntPtr.Zero, null, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка очищення Кошика: {ex.Message}", "ERROR");
+        }
+
         long after = GetRecycleBinTotalSize();
-        return Math.Max(0, before - after);
+        long freed = Math.Max(0, before - after);
+
+        if (hresult != 0)
+        {
+            AppLogger.Log($"SHEmptyRecycleBin повернула HRESULT 0x{hresult:X8}", "WARN");
+        }
+
+        return freed;
     }
 
     private static long ClearAllEventLogsNative()
     {
-        long initialSize = FastGetDirectorySize(Path.Combine(WinDir, @"System32\winevt\Logs"));
+        string logsDir = Path.Combine(WinDir, @"System32\winevt\Logs");
+        long initialSize = FastGetDirectorySize(logsDir);
+        int cleared = 0, skipped = 0;
+
         try
         {
-            var session = new EventLogSession();
+            using var session = new EventLogSession();
             foreach (var name in session.GetLogNames())
             {
-                try { session.ClearLog(name); } catch { }
+                if (name.Equals("Security", StringComparison.OrdinalIgnoreCase))
+                {
+                    skipped++; // D-40: не знищуємо аудит-трейл безпеки
+                    continue;
+                }
+
+                try { session.ClearLog(name); cleared++; } catch { }
             }
         }
         catch { }
-        long finalSize = FastGetDirectorySize(Path.Combine(WinDir, @"System32\winevt\Logs"));
-        return Math.Max(0, initialSize - finalSize);
+
+        long finalSize = FastGetDirectorySize(logsDir);
+        long freed = Math.Max(0, initialSize - finalSize);
+        AppLogger.Log($"Журнали подій: очищено {cleared}, пропущено {skipped} (Security)", "INFO");
+        return freed;
+    }
+
+    private static long GetThumbnailCacheSize()
+    {
+        string dir = Path.Combine(LocalAppData, @"Microsoft\Windows\Explorer");
+        if (!Directory.Exists(dir)) return 0;
+
+        long total = 0;
+        try
+        {
+            var di = new DirectoryInfo(dir);
+            foreach (var pattern in new[] { "thumbcache_*.db", "iconcache_*.db" })
+            {
+                foreach (var file in di.EnumerateFiles(pattern, SearchOption.TopDirectoryOnly))
+                {
+                    try { total += file.Length; } catch { }
+                }
+            }
+        }
+        catch { }
+        return total;
     }
 
     private static long CleanThumbnailCache()
     {
         string dir = Path.Combine(LocalAppData, @"Microsoft\Windows\Explorer");
         if (!Directory.Exists(dir)) return 0;
+
         long freed = 0;
         try
         {
-            foreach (var p in Process.GetProcessesByName("explorer")) { try { p.Kill(); p.WaitForExit(1000); } catch { } }
             var di = new DirectoryInfo(dir);
-            foreach (var file in di.GetFiles("thumbcache_*.db", SearchOption.TopDirectoryOnly))
+            var targets = di.EnumerateFiles("thumbcache_*.db", SearchOption.TopDirectoryOnly)
+                            .Concat(di.EnumerateFiles("iconcache_*.db", SearchOption.TopDirectoryOnly));
+
+            foreach (var file in targets)
             {
-                try { long sz = file.Length; file.Attributes = FileAttributes.Normal; file.Delete(); freed += sz; } catch { }
+                try
+                {
+                    long sz = file.Length;
+                    file.Attributes = FileAttributes.Normal;
+                    file.Delete();
+                    freed += sz;
+                }
+                catch
+                {
+                    // Файл зайнятий Провідником — пропускаємо без вбивства explorer.exe (D-41).
+                }
             }
         }
         catch { }
-        finally
-        {
-            if (Process.GetProcessesByName("explorer").Length == 0) Process.Start("explorer.exe");
-        }
+
         return freed;
     }
 
@@ -701,19 +916,70 @@ public static class CleanerEngine
     {
         try
         {
-            using var proc = Process.Start(new ProcessStartInfo
+            using var proc = new Process
             {
-                FileName = "dism.exe",
-                Arguments = "/online /cleanup-image /startcomponentcleanup /norestart",
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                WindowStyle = ProcessWindowStyle.Hidden
-            });
-            proc?.WaitForExit();
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "dism.exe",
+                    Arguments = "/online /cleanup-image /startcomponentcleanup /norestart",
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                }
+            };
+
+            if (!proc.Start())
+            {
+                AppLogger.Log("DISM: не вдалося запустити dism.exe", "ERROR");
+                return 0;
+            }
+
+            var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+            var stderrTask = proc.StandardError.ReadToEndAsync();
+
+            const int timeoutMs = 10 * 60 * 1000; // 10 хвилин
+            if (!proc.WaitForExit(timeoutMs))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                AppLogger.Log("DISM: таймаут (10 хв) — процес примусово зупинено", "ERROR");
+                return 0;
+            }
+
+            string stdout = stdoutTask.GetAwaiter().GetResult();
+            string stderr = stderrTask.GetAwaiter().GetResult();
+
+            if (proc.ExitCode == 0)
+            {
+                AppLogger.Log("DISM Component Cleanup завершено успішно", "SUCCESS");
+            }
+            else if (proc.ExitCode == 740)
+            {
+                AppLogger.Log("DISM: потрібні права адміністратора (код 740)", "ERROR");
+            }
+            else
+            {
+                string detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                AppLogger.Log($"DISM: помилка (код {proc.ExitCode}): {detail.Trim()}", "ERROR");
+            }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"DISM: виняток — {ex.Message}", "ERROR");
+        }
+
         return 0;
     }
 
     #endregion
+
+    // Форматування розміту у людському форматі для логування
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes >= 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024 * 1024):N2} ГБ";
+        if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):N2} МБ";
+        if (bytes >= 1024) return $"{bytes / 1024.0:N2} КБ";
+        return $"{bytes} Байт";
+    }
 }

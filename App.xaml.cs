@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Windows;
+using Application = System.Windows.Application;
 
 namespace MASLOOPTIMIZER;
 
@@ -13,17 +15,39 @@ public partial class App : System.Windows.Application
         // 1. Глобальне перехоплення збоїв і створення краш-дампів
         RegisterCrashHandlers();
 
-        // 2. Тихий запуск тільки HUD-віджета при автозавантаженні Windows
-        if (e.Args.Length > 0 && e.Args[0].Equals("--widget", StringComparison.OrdinalIgnoreCase))
+        // Режими запуску з командного рядка
+        bool widgetOnly = HasArg(e.Args, "--widget", "--widget-only");
+        bool silent = HasArg(e.Args, "-silent", "--silent");
+
+        // 2. Тихий запуск тільки HUD-віджета при автозавантаженні Windows.
+        //    Головне вікно НЕ створюється і не висить у фоні.
+        if (widgetOnly)
         {
             TrayManager.Initialize();
             TrayManager.ToggleWidget();
             return;
         }
 
-        // 3. Звичайний запуск головного вікна програми
+        // 3. Тему застосовуємо до створення головного вікна
+        ThemeEngine.ApplySavedAppTheme();
+
         var mainWindow = new MainWindow();
-        mainWindow.Show();
+
+        if (silent)
+        {
+            // Повна програма, згорнута в трей: вікно створене, але не показане.
+            TrayManager.Initialize();
+            Application.Current.MainWindow = mainWindow;
+        }
+        else
+        {
+            mainWindow.Show();
+        }
+    }
+
+    private static bool HasArg(string[] args, params string[] names)
+    {
+        return args.Any(a => names.Any(n => a.Equals(n, StringComparison.OrdinalIgnoreCase)));
     }
 
     private void RegisterCrashHandlers()
@@ -56,10 +80,8 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            string logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
-            Directory.CreateDirectory(logDir);
-
-            string dumpPath = Path.Combine(logDir, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
+            AppPaths.EnsureDirectories();
+            string dumpPath = Path.Combine(AppPaths.Logs, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
             string dumpContent = $@"=====================================================
 MASLOOPTIMIZER CRASH DUMP
 Date/Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}

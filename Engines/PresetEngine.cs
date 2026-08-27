@@ -8,16 +8,12 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 
-// Явні аліаси для усунення конфлікту між WPF та WinForms
-using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
-using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
-
 namespace MASLOOPTIMIZER;
 
 public class MasloProfileConfig
 {
     [JsonPropertyName("Version")]
-    public string Version { get; set; } = "0.3.2";
+    public string Version { get; set; } = "0.3.3";
 
     [JsonPropertyName("Name")]
     public string Name { get; set; } = "Мій профіль";
@@ -61,13 +57,10 @@ public static class PresetEngine
     {
         get
         {
-            string dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "presets");
-            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            return dir;
+            AppPaths.EnsureDirectories();
+            return AppPaths.Presets;
         }
     }
-
-    #region Зчитування списку збережених пресетів
 
     public static List<PresetItemInfo> GetAvailablePresets()
     {
@@ -109,17 +102,13 @@ public static class PresetEngine
         return list.OrderByDescending(p => p.CreatedAt).ToList();
     }
 
-    #endregion
-
-    #region Експорт профілю
-
     public static (bool Success, string Message) ExportFullProfile(
         IEnumerable<TweakModel> tweaks,
         IEnumerable<DebloatItem> debloatItems,
         string profileName = "Власний профіль",
-        string description = "Збережена конфігурація робочої системи")
+        string description = "Збережена конфігурація системи")
     {
-        var dlg = new SaveFileDialog
+        var dlg = new Microsoft.Win32.SaveFileDialog
         {
             Filter = "Maslo Preset (*.json)|*.json",
             FileName = $"MasloConfig_{DateTime.Now:yyyy-MM-dd_HH-mm}.json",
@@ -166,16 +155,12 @@ public static class PresetEngine
         return (false, "Експорт скасовано.");
     }
 
-    #endregion
-
-    #region Імпорт та застосування
-
     public static async Task<(bool Success, string Message)> ImportAndApplyProfileAsync(
         IEnumerable<TweakModel> tweaks,
         IEnumerable<DebloatItem> debloatItems,
         Action<int, string>? progressCallback = null)
     {
-        var dlg = new OpenFileDialog
+        var dlg = new Microsoft.Win32.OpenFileDialog
         {
             Filter = "Maslo Preset (*.json)|*.json",
             InitialDirectory = PresetsDirectory
@@ -240,13 +225,13 @@ public static class PresetEngine
             {
                 if (shouldBeApplied && !tweak.IsApplied)
                 {
-                    progressCallback?.Invoke(pct, $"Оптимізація: {tweak.Name}");
+                    progressCallback?.Invoke(pct, $"Оптимізація: {tweak.LocalizedName}");
                     bool ok = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
                     if (ok) appliedCount++;
                 }
                 else if (!shouldBeApplied && tweak.IsApplied)
                 {
-                    progressCallback?.Invoke(pct, $"Відновлення: {tweak.Name}");
+                    progressCallback?.Invoke(pct, $"Відновлення: {tweak.LocalizedName}");
                     bool ok = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: false);
                     if (ok) restoredCount++;
                 }
@@ -279,10 +264,6 @@ public static class PresetEngine
         return (true, resMsg);
     }
 
-    #endregion
-
-    #region Фірмовий Maslo Pack
-
     public static async Task<(bool Success, string Message)> ApplyMasloSignaturePackAsync(
         IEnumerable<TweakModel> tweaks,
         IEnumerable<DebloatItem> debloatItems,
@@ -296,26 +277,6 @@ public static class PresetEngine
                 return await ApplyProfileFromFileAsync(localSignaturePath, tweaks, debloatItems, progressCallback);
             }
 
-            var assembly = Assembly.GetExecutingAssembly();
-            var resName = assembly.GetManifestResourceNames()
-                .FirstOrDefault(r => r.EndsWith("maslo_signature.json", StringComparison.OrdinalIgnoreCase));
-
-            if (!string.IsNullOrEmpty(resName))
-            {
-                using var stream = assembly.GetManifestResourceStream(resName);
-                if (stream != null)
-                {
-                    using var reader = new StreamReader(stream);
-                    string json = await reader.ReadToEndAsync();
-                    var cfg = JsonSerializer.Deserialize<MasloProfileConfig>(json);
-                    if (cfg != null)
-                    {
-                        return await ApplyConfigObjectAsync(cfg, tweaks, debloatItems, progressCallback);
-                    }
-                }
-            }
-
-            // Стандартна поведінка при відсутності файлу
             var targetTweaks = tweaks.Where(t => t.Risk == "Safe" || t.Risk == "UI").ToList();
             var targetBloat = debloatItems.Where(d =>
                 d.IsInstalled && (
@@ -335,7 +296,7 @@ public static class PresetEngine
             {
                 current++;
                 int pct = (int)((current / (double)total) * 100);
-                progressCallback?.Invoke(pct, $"Maslo Pack: {tweak.Name}");
+                progressCallback?.Invoke(pct, $"Maslo Pack: {tweak.LocalizedName}");
 
                 if (!tweak.IsApplied)
                 {
@@ -355,7 +316,7 @@ public static class PresetEngine
             }
 
             progressCallback?.Invoke(100, "1-Click Safe Maslo Pack успішно застосовано!");
-            string msg = $"Maslo Pack активовано! (+{appliedTweaks} перевірених твіків, -{removedApps} додатків).";
+            string msg = $"Maslo Pack активовано! (+{appliedTweaks} твіків, -{removedApps} додатків).";
             AppLogger.Log(msg, "SUCCESS");
             return (true, msg);
         }
@@ -365,6 +326,4 @@ public static class PresetEngine
             return (false, $"Помилка: {ex.Message}");
         }
     }
-
-    #endregion
 }

@@ -25,7 +25,22 @@ public partial class DiagnosticWindow : Window
     public DiagnosticWindow()
     {
         InitializeComponent();
-        Loaded += async (s, e) => await RefreshTelemetryAsync();
+        Loaded += async (s, e) =>
+        {
+            ApplyLocalizedLabels();
+            await RefreshTelemetryAsync();
+        };
+        LocalizationManager.Instance.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == "Item[]")
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ApplyLocalizedLabels();
+                    if (_cachedData != null) UpdateUiWithTelemetry(_cachedData);
+                });
+            }
+        };
     }
 
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -34,6 +49,54 @@ public partial class DiagnosticWindow : Window
         {
             try { DragMove(); } catch { }
         }
+    }
+
+    /// <summary>Локалізує статичні мітки вікна діагностики.</summary>
+    private void ApplyLocalizedLabels()
+    {
+        var loc = LocalizationManager.Instance;
+
+        TxtTitle.Text = loc["Diagnostic.Title"];
+        TxtSubtitle.Text = loc["Diagnostic.Subtitle"];
+        TxtLiveBadge.Text = loc["Diagnostic.LiveBadge"];
+
+        LblCpuSection.Text = loc["Diagnostic.CpuSection"];
+        LblModel.Text = loc["Diagnostic.LblModel"];
+        LblConfig.Text = loc["Diagnostic.LblConfig"];
+        LblSocket.Text = loc["Diagnostic.LblSocket"];
+        LblBaseFreq.Text = loc["Diagnostic.LblBaseFreq"];
+        LblMaxFreq.Text = loc["Diagnostic.LblMaxFreq"];
+        LblCache.Text = loc["Diagnostic.LblCache"];
+        LblVirtual.Text = loc["Diagnostic.LblVirtual"];
+
+        LblGpuSection.Text = loc["Diagnostic.GpuSection"];
+        LblGpuModel.Text = loc["Diagnostic.LblGpuModel"];
+        LblGpuVram.Text = loc["Diagnostic.LblGpuVram"];
+        LblGpuBus.Text = loc["Diagnostic.LblGpuBus"];
+        LblGpuDriver.Text = loc["Diagnostic.LblGpuDriver"];
+        LblGpuClockPower.Text = loc["Diagnostic.LblGpuClockPower"];
+        LblGpuFan.Text = loc["Diagnostic.LblGpuFan"];
+        LblGpuDisplays.Text = loc["Diagnostic.LblGpuDisplays"];
+
+        LblRamSection.Text = loc["Diagnostic.RamSection"];
+        LblRamCapacity.Text = loc["Diagnostic.LblRamCapacity"];
+        LblRamLoad.Text = loc["Diagnostic.LblRamLoad"];
+        LblRamSlots.Text = loc["Diagnostic.LblRamSlots"];
+        LblRamModules.Text = loc["Diagnostic.LblRamModules"];
+
+        LblStorageSection.Text = loc["Diagnostic.StorageSection"];
+
+        LblBoardSection.Text = loc["Diagnostic.BoardSection"];
+        LblBoardModel.Text = loc["Diagnostic.LblBoardModel"];
+        LblBios.Text = loc["Diagnostic.LblBios"];
+        LblNetAdapter.Text = loc["Diagnostic.LblNetAdapter"];
+        LblNetIp.Text = loc["Diagnostic.LblNetIp"];
+        LblSecurity.Text = loc["Diagnostic.LblSecurity"];
+
+        BtnRefresh.Content = loc["Diagnostic.BtnRefresh"];
+        BtnCopyReport.Content = loc["Diagnostic.BtnCopy"];
+        BtnSaveReport.Content = loc["Diagnostic.BtnSave"];
+        BtnCloseWindow.Content = loc["Diagnostic.BtnClose"];
     }
 
     private async Task RefreshTelemetryAsync()
@@ -45,35 +108,49 @@ public partial class DiagnosticWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Помилка опитування сенсорів: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            var loc = LocalizationManager.Instance;
+            MessageBox.Show(loc.Format("Diagnostic.ErrorCollect", ex.Message), loc["Diagnostic.ErrorTitle"],
+                MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
     private void UpdateUiWithTelemetry(DetailedHardwareInfo data)
     {
+        var loc = LocalizationManager.Instance;
+
         // CPU
         TxtCpuModel.Text = data.CPUModel;
-        TxtCpuCores.Text = $"{data.CPUCores} ядер / {data.CPUThreads} потоків";
+        TxtCpuCores.Text = loc.Format("Diagnostic.CoresFormat", data.CPUCores, data.CPUThreads);
         TxtCpuSocket.Text = data.CPUSocket;
+        TxtCpuBaseClock.Text = data.CPUBaseClockGHz;
         TxtCpuClock.Text = data.CPUMaxClockGHz;
-        TxtCpuCache.Text = $"L3: {data.CPUL3Cache} | L2: {data.CPUL2Cache}";
+        TxtCpuCache.Text = loc.Format("Diagnostic.L3L2Format", data.CPUL3Cache, data.CPUL2Cache);
         TxtCpuVirtual.Text = data.CPUVirtual;
 
-        TxtCpuTemp.Text = $"Пакет: {data.CPUTemp}";
-        TxtVrmTemp.Text = $"VRM: {data.VRMTemp}";
-        TxtBoardTemp.Text = $"Плата: {data.BoardTemp}";
+        TxtCpuTemp.Text = loc.Format("Diagnostic.CpuTempFormat", data.CPUTemp);
+        TxtVrmTemp.Text = loc.Format("Diagnostic.VrmTempFormat", data.VRMTemp);
+        TxtBoardTemp.Text = loc.Format("Diagnostic.BoardTempFormat", data.BoardTemp);
 
         // GPU
-        TxtGpuModel.Text = data.GPUModel;
+        if (data.Gpus != null && data.Gpus.Count > 0)
+        {
+            TxtGpuModel.Text = string.Join(Environment.NewLine,
+                data.Gpus.Select(g => $"{g.Name} [{g.KindDisplay}] — {g.VramDisplay}"));
+        }
+        else
+        {
+            TxtGpuModel.Text = data.GPUModel;
+        }
+
         TxtGpuVram.Text = $"{data.GPUVRAM} ({data.GPUVRAMUsed})";
         TxtGpuBus.Text = $"{data.GPUPCIeLink} | {data.GPUReBAR}";
         TxtGpuDriver.Text = data.GPUDriver;
         TxtGpuPowerClock.Text = $"{data.GPUClock} / {data.GPUPower}";
         TxtGpuFan.Text = data.GPUFan;
 
-        TxtGpuCoreTemp.Text = $"GPU: {data.GPUTemp}";
-        TxtGpuHotspotTemp.Text = $"Hotspot: {data.GPUHotspotTemp}";
-        TxtGpuVramTemp.Text = $"VRAM: {data.GPUVramTemp}";
+        TxtGpuCoreTemp.Text = loc.Format("Diagnostic.GpuCoreTempFormat", data.GPUTemp);
+        TxtGpuHotspotTemp.Text = loc.Format("Diagnostic.GpuHotspotTempFormat", data.GPUHotspotTemp);
+        TxtGpuVramTemp.Text = loc.Format("Diagnostic.GpuVramTempFormat", data.GPUVramTemp);
 
         if (data.Displays != null && data.Displays.Count > 0)
         {
@@ -81,13 +158,14 @@ public partial class DiagnosticWindow : Window
         }
         else
         {
-            TxtGpuDisplays.Text = "Основний монітор";
+            TxtGpuDisplays.Text = loc["Diagnostic.PrimaryDisplay"];
         }
 
         // RAM
-        TxtRamCapacity.Text = $"{data.RAMTotalGB} ГБ {data.RAMType} (Вільно: {data.RAMFreeGB} ГБ)";
-        TxtRamLoad.Text = $"{data.RAMUsedGB} ГБ ({data.RAMLoadPercent}%)";
-        TxtRamSlots.Text = $"{data.RAMSlotsUsed} з {data.RAMSlotsTotal} слотів";
+        TxtRamCapacity.Text = loc.Format("Diagnostic.FreeRamFormat",
+            data.RAMCapacityDisplay, data.RAMType, data.RAMFreeDisplay);
+        TxtRamLoad.Text = loc.Format("Diagnostic.LoadFormat", $"{data.RAMUsedGB:0.#}", data.RAMLoadPercent);
+        TxtRamSlots.Text = loc.Format("Diagnostic.SlotsFormat", data.RAMSlotsUsed, data.RAMSlotsTotal);
         TxtRamSpeedBadge.Text = $"{data.RAMType} @ {data.RAMSpeedMHz}";
 
         if (data.RAMModules != null && data.RAMModules.Count > 0)
@@ -96,18 +174,18 @@ public partial class DiagnosticWindow : Window
         }
         else
         {
-            TxtRamModulesList.Text = $"• Dual-Channel @ {data.RAMSpeedMHz}";
+            TxtRamModulesList.Text = loc["Diagnostic.ModulesEmpty"];
         }
 
         // Накопичувачі
         var sbStorage = new StringBuilder();
         foreach (var v in data.Volumes)
         {
-            sbStorage.AppendLine($"📁 {v.Name}\\ [{v.Label}] — {v.FreeGB} ГБ вільно з {v.TotalGB} ГБ ({v.PercentUsed}%, {v.Format})");
+            sbStorage.AppendLine(data.FormatVolume(v));
         }
-        foreach (var pd in data.PhysicalDisks)
+        foreach (var d in data.Disks)
         {
-            sbStorage.AppendLine(pd);
+            sbStorage.AppendLine(data.FormatPhysicalDisk(d));
         }
         TxtStorageVolumes.Text = sbStorage.ToString().TrimEnd();
 
@@ -115,9 +193,10 @@ public partial class DiagnosticWindow : Window
         TxtBoardModel.Text = $"{data.BoardVendor} {data.BoardModel}".Trim();
         TxtBiosVersion.Text = $"{data.BIOSVersion} ({data.BIOSDate})";
         TxtNetAdapter.Text = $"{data.NetAdapterName} ({data.NetLinkSpeed})";
-        TxtNetIpPing.Text = $"{data.NetIPv4} (Шлюз: {data.GatewayPing})";
+        TxtNetIpPing.Text = $"{data.NetIPv4} ({data.NetGateway}, {data.GatewayPing})";
         TxtSecurityStatus.Text = $"SecureBoot: {data.SecureBoot} | {data.VBSStatus}";
     }
+
 
     private async void BtnRefresh_Click(object sender, RoutedEventArgs e)
     {
@@ -130,7 +209,8 @@ public partial class DiagnosticWindow : Window
         {
             string report = DiagnosticEngine.GenerateTextReport(_cachedData);
             Clipboard.SetText(report);
-            MessageBox.Show("Повний апаратний звіт успішно скопійовано в буфер обміну!", "MASLOOPTIMIZER", MessageBoxButton.OK, MessageBoxImage.Information);
+            var loc = LocalizationManager.Instance;
+            MessageBox.Show(loc["Diagnostic.ReportCopied"], "MASLOOPTIMIZER", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
@@ -138,9 +218,10 @@ public partial class DiagnosticWindow : Window
     {
         if (_cachedData == null) return;
 
+        var loc = LocalizationManager.Instance;
         var dlg = new SaveFileDialog
         {
-            Filter = "Текстовий файл (*.txt)|*.txt",
+            Filter = "Text (*.txt)|*.txt",
             FileName = $"HardwareReport_{Environment.MachineName}_{DateTime.Now:yyyy-MM-dd}.txt"
         };
 
@@ -150,11 +231,13 @@ public partial class DiagnosticWindow : Window
             {
                 string report = DiagnosticEngine.GenerateTextReport(_cachedData);
                 File.WriteAllText(dlg.FileName, report, Encoding.UTF8);
-                MessageBox.Show($"Звіт успішно збережено:\n{dlg.FileName}", "MASLOOPTIMIZER", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(loc.Format("Diagnostic.ReportSaved", dlg.FileName), "MASLOOPTIMIZER",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Помилка збереження файлу: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(loc.Format("Diagnostic.SaveError", ex.Message), loc["Diagnostic.ErrorTitle"],
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }
@@ -164,3 +247,4 @@ public partial class DiagnosticWindow : Window
         Close();
     }
 }
+

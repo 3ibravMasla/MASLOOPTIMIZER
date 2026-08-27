@@ -1,6 +1,6 @@
-using System.Collections.Specialized;
+using System;
+using System.Diagnostics;
 using System.Windows;
-using System.Windows.Input;
 
 namespace MASLOOPTIMIZER;
 
@@ -9,34 +9,26 @@ public partial class LogWindow : Window
     public LogWindow()
     {
         InitializeComponent();
-        LogsItemsControl.ItemsSource = AppLogger.SessionLogs;
+        LogsListView.ItemsSource = AppLogger.LogEntries;
+    }
 
-        // Автоскрол до останнього рядка при додаванні нового логу
-        if (AppLogger.SessionLogs is INotifyCollectionChanged notifyCollection)
+    private void OpenLogsFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
         {
-            notifyCollection.CollectionChanged += (s, e) =>
+            AppPaths.EnsureDirectories();
+            Process.Start(new ProcessStartInfo
             {
-                if (e.Action == NotifyCollectionChangedAction.Add)
-                {
-                    Dispatcher.InvokeAsync(() => LogsScrollViewer.ScrollToEnd());
-                }
-            };
+                FileName = "explorer.exe",
+                Arguments = $"\"{AppPaths.Logs}\"",
+                UseShellExecute = true
+            });
         }
-
-        // Початкова прокрутка вниз при відкритті вікна
-        Loaded += (s, e) => LogsScrollViewer.ScrollToEnd();
+        catch { }
     }
 
-    private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    private void ClearHistory_Click(object sender, RoutedEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
-        {
-            DragMove();
-        }
-    }
-
-    private void BtnClose_Click(object sender, RoutedEventArgs e)
-    {
-        Close();
+        AppLogger.ClearHistory();
     }
 }

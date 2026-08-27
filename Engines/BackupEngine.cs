@@ -35,16 +35,7 @@ public class BackupEntry
 
 public static class BackupEngine
 {
-    public static string BackupsDirectory
-    {
-        get
-        {
-            string programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-            string dir = Path.Combine(programData, "MASLOOPTIMIZER", "backups");
-            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-            return dir;
-        }
-    }
+    public static string BackupsDirectory => AppPaths.Backups;
 
     public static string LocalBackupsDirectory
     {
@@ -153,10 +144,12 @@ public static class BackupEngine
 
                 if (returnCode == 0)
                 {
+                    AppLogger.Log("Створено системну точку відновлення Windows (VSS)", "SUCCESS");
                     return (true, "Системну точку відновлення Windows (VSS) успішно створено!");
                 }
                 else
                 {
+                    AppLogger.Log($"Помилка створення точки VSS: Код {returnCode}", "WARN");
                     return (false, $"Помилка VSS (Код: {returnCode}). Перевірте, чи увімкнено захист системи у властивостях Windows.");
                 }
             }
@@ -174,12 +167,18 @@ public static class BackupEngine
                     });
                     proc?.WaitForExit(10000);
 
-                    return proc?.ExitCode == 0
-                        ? (true, "Точку відновлення Windows створено через PowerShell!")
-                        : (false, "Служба VSS вимкнена або заблокована політиками захисту Windows.");
+                    if (proc?.ExitCode == 0)
+                    {
+                        AppLogger.Log("Точку відновлення Windows (VSS) створено через PowerShell", "SUCCESS");
+                        return (true, "Точку відновлення Windows створено через PowerShell!");
+                    }
+
+                    AppLogger.Log("Служба VSS вимкнена або заблокована", "ERROR");
+                    return (false, "Служба VSS вимкнена або заблокована політиками захисту Windows.");
                 }
                 catch
                 {
+                    AppLogger.Log($"Помилка створення точки VSS: {ex.Message}", "ERROR");
                     return (false, $"Помилка створення точки VSS: {ex.Message}");
                 }
             }
@@ -252,12 +251,17 @@ public static class BackupEngine
 
                 MirrorBackupToStorageLocations(targetFolder, folderName);
 
-                return successCount > 0
-                    ? (true, $"Бекап реєстру ({successCount} гілок, {FormatBytes(totalBytes)}) збережено!", targetFolder)
-                    : (false, "Не вдалося експортувати гілки реєстру.", string.Empty);
+                if (successCount > 0)
+                {
+                    AppLogger.Log($"Збережено бекап реєстру: {folderName} ({successCount} гілок)", "SUCCESS");
+                    return (true, $"Бекап реєстру ({successCount} гілок, {FormatBytes(totalBytes)}) збережено!", targetFolder);
+                }
+
+                return (false, "Не вдалося експортувати гілки реєстру.", string.Empty);
             }
             catch (Exception ex)
             {
+                AppLogger.Log($"Помилка експорту реєстру: {ex.Message}", "ERROR");
                 return (false, $"Помилка експорту реєстру: {ex.Message}", string.Empty);
             }
         });
@@ -324,6 +328,7 @@ public static class BackupEngine
             }
 
             string folderName = Path.GetFileName(folderPath);
+            AppLogger.Log($"Відновлено стан реєстру з бекапу: {folderName} ({count} ключів)", "SUCCESS");
             return (true, $"Успішно імпортовано {count} ключів із бекапу [{folderName}].");
         });
     }
@@ -431,9 +436,13 @@ public static class BackupEngine
                     }
                 }
 
+                AppLogger.Log($"Видалено резервну копію реєстру: {folderName}", "INFO");
                 return true;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"Помилка видалення бекапу: {ex.Message}", "ERROR");
+            }
             return false;
         });
     }
@@ -455,7 +464,7 @@ public static class BackupEngine
     private static string FormatBytes(long bytes)
     {
         if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):N2} МБ";
-        if (bytes >= 1024) return $"{bytes / 1024.0:N2} КБ";
+        if (bytes >= 1024) return $"{bytes / (1024.0 * 1024):N2} КБ";
         return $"{bytes} Байт";
     }
 

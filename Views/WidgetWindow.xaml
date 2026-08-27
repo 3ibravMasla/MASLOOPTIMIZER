@@ -13,14 +13,14 @@
         </Style>
 
         <Style x:Key="WidgetActionBtn" TargetType="Button">
-            <Setter Property="Background" Value="#141824"/>
-            <Setter Property="Foreground" Value="#F8FAFC"/>
+            <Setter Property="Background" Value="{DynamicResource ActionBtnBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
             <Setter Property="FontSize" Value="10.5"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Padding" Value="4,6"/>
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderBrush" Value="#222B3D"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ActionBtnBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -33,11 +33,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="btnBrd" Property="Background" Value="#1F293D"/>
-                                <Setter TargetName="btnBrd" Property="BorderBrush" Value="#00FF9D"/>
+                                <Setter TargetName="btnBrd" Property="Background" Value="{DynamicResource ChipHoverBg}"/>
+                                <Setter TargetName="btnBrd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="btnBrd" Property="Background" Value="#05D384"/>
+                                <Setter TargetName="btnBrd" Property="Background" Value="{DynamicResource ChipActiveBg}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -46,14 +46,14 @@
         </Style>
 
         <Style x:Key="ThemeChipBtn" TargetType="Button">
-            <Setter Property="Background" Value="#151A28"/>
-            <Setter Property="Foreground" Value="#F1F5F9"/>
+            <Setter Property="Background" Value="{DynamicResource ChipBg}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ChipText}"/>
             <Setter Property="FontSize" Value="10"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Padding" Value="6,4"/>
             <Setter Property="Margin" Value="2"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="BorderBrush" Value="#263147"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ChipBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
@@ -66,8 +66,8 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="chipBrd" Property="Background" Value="#243047"/>
-                                <Setter TargetName="chipBrd" Property="BorderBrush" Value="#38BDF8"/>
+                                <Setter TargetName="chipBrd" Property="Background" Value="{DynamicResource ChipHoverBg}"/>
+                                <Setter TargetName="chipBrd" Property="BorderBrush" Value="{DynamicResource ChipActiveBorder}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -81,7 +81,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
                         <Border Background="Transparent" Width="14" Height="14">
-                            <Path Data="M 10,2 L 12,2 L 12,12 L 2,12 L 2,10 L 10,10 Z M 6,6 L 8,6 L 8,12 L 6,12 Z" Fill="#00FF9D" Opacity="0.65"/>
+                            <Path Data="M 10,2 L 12,2 L 12,12 L 2,12 L 2,10 L 10,10 Z M 6,6 L 8,6 L 8,12 L 6,12 Z" Fill="{DynamicResource AccentBrush}" Opacity="0.65"/>
                         </Border>
                     </ControlTemplate>
                 </Setter.Value>
@@ -90,7 +90,7 @@
     </Window.Resources>
 
     <Viewbox Stretch="Uniform">
-        <Border x:Name="MainWidgetBorder" Width="430" Height="360" Background="#F00B0E17" BorderBrush="#00FF9D" BorderThickness="1.8"
+        <Border x:Name="MainWidgetBorder" Width="430" Height="360" Background="#F00B0E17" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.8"
                 CornerRadius="14" Padding="14,10" Margin="4" Cursor="SizeAll" MouseLeftButtonDown="Border_MouseLeftButtonDown">
             <Border.Effect>
                 <DropShadowEffect x:Name="MainGlow" BlurRadius="20" ShadowDepth="1" Direction="270" Color="#00FF9D" Opacity="0.4"/>
@@ -108,7 +108,7 @@
                     <!-- Хедер віджета -->
                     <Grid Grid.Row="0" Margin="0,2,0,8">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="10" Margin="0,-4,-2,0">
-                            <Button x:Name="BtnSettings" Content="⚙️" FontSize="13" Background="Transparent" BorderThickness="0" Foreground="#94A3B8" Cursor="Hand" Padding="3,1" ToolTip="Налаштування віджета" Click="BtnSettings_Click"/>
+                            <Button x:Name="BtnSettings" Content="⚙️" FontSize="13" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextSecondary}" Cursor="Hand" Padding="3,1" ToolTip="Налаштування віджета" Click="BtnSettings_Click"/>
                             <TextBlock x:Name="BtnCloseWidget" Text="✕" FontSize="13.5" FontWeight="Black" Foreground="#64748B" Cursor="Hand" Margin="5,2,2,0" VerticalAlignment="Center" ToolTip="Приховати в трей" MouseDown="BtnCloseWidget_MouseDown"/>
                         </StackPanel>
 
@@ -120,9 +120,9 @@
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0" x:Name="TxtBrandLeft" Text="MASL" FontSize="24" FontWeight="Black" 
-                                       Foreground="#00FF9D" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                       Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
 
-                            <Border Grid.Column="1" x:Name="LogoBorder" Width="86" Height="86" CornerRadius="43" BorderBrush="#00FF9D" BorderThickness="2.6" VerticalAlignment="Center" Margin="0,0,12,0">
+                            <Border Grid.Column="1" x:Name="LogoBorder" Width="86" Height="86" CornerRadius="43" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2.6" VerticalAlignment="Center" Margin="0,0,12,0">
                                 <Border.Effect>
                                     <DropShadowEffect x:Name="LogoGlow" BlurRadius="18" Color="#00FF9D" Opacity="0.7"/>
                                 </Border.Effect>
@@ -137,12 +137,12 @@
                             </Border>
 
                             <TextBlock Grid.Column="2" Text="PTIMIZER" FontSize="24" FontWeight="Black" 
-                                       Foreground="#FFFFFF" VerticalAlignment="Center"/>
+                                       Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                         </Grid>
                     </Grid>
 
                     <!-- Телеметрія заліза -->
-                    <Border Grid.Row="1" Background="#10141F" CornerRadius="8" Padding="10,7" Margin="0,0,0,7" BorderBrush="#1C2436" BorderThickness="1">
+                    <Border Grid.Row="1" Background="{DynamicResource SidebarBg}" CornerRadius="8" Padding="10,7" Margin="0,0,0,7" BorderBrush="{DynamicResource SidebarBorder}" BorderThickness="1">
                         <StackPanel>
                             <!-- CPU -->
                             <Grid Margin="0,0,0,2.5">
@@ -151,9 +151,9 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="🔥 CPU: " FontSize="11" FontWeight="Bold" Foreground="#94A3B8"/>
-                                <TextBlock Grid.Column="1" x:Name="TxtCpuModel" Text="CPU" FontSize="11" FontWeight="SemiBold" Foreground="#F8FAFC" TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtCpuLoad" Text="0%" FontSize="11" FontWeight="Black" Foreground="#00FF9D" Margin="4,0,0,0"/>
+                                <TextBlock Grid.Column="0" Text="🔥 CPU: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}"/>
+                                <TextBlock Grid.Column="1" x:Name="TxtCpuModel" Text="CPU" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="2" x:Name="TxtCpuLoad" Text="0%" FontSize="11" FontWeight="Black" Foreground="{DynamicResource AccentBrush}" Margin="4,0,0,0"/>
                             </Grid>
 
                             <!-- GPU -->
@@ -163,8 +163,8 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="🎮 GPU: " FontSize="11" FontWeight="Bold" Foreground="#94A3B8"/>
-                                <TextBlock Grid.Column="1" x:Name="TxtGpuModel" Text="GPU" FontSize="11" FontWeight="SemiBold" Foreground="#F8FAFC" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="0" Text="🎮 GPU: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}"/>
+                                <TextBlock Grid.Column="1" x:Name="TxtGpuModel" Text="GPU" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtGpuLoad" Text="0%" FontSize="11" FontWeight="Black" Foreground="#38BDF8" Margin="4,0,0,0"/>
                             </Grid>
 
@@ -175,8 +175,8 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="⚡ RAM: " FontSize="11" FontWeight="Bold" Foreground="#94A3B8"/>
-                                <TextBlock Grid.Column="1" x:Name="TxtRamUsage" Text="Завантаження..." FontSize="11" FontWeight="SemiBold" Foreground="#F8FAFC" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Grid.Column="0" Text="⚡ RAM: " FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}"/>
+                                <TextBlock Grid.Column="1" x:Name="TxtRamUsage" Text="Завантаження..." FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
                                 <TextBlock Grid.Column="2" x:Name="TxtRamPercent" Text="0%" FontSize="11" FontWeight="Black" Foreground="#F59E0B" Margin="4,0,0,0"/>
                             </Grid>
 
@@ -187,11 +187,11 @@
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                    <TextBlock Text="💾 C: " FontSize="10.5" FontWeight="Bold" Foreground="#94A3B8"/>
-                                    <TextBlock x:Name="TxtDiskUsage" Text="0 / 0 ГБ" FontSize="10.5" FontWeight="SemiBold" Foreground="#F8FAFC"/>
+                                    <TextBlock Text="💾 C: " FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}"/>
+                                    <TextBlock x:Name="TxtDiskUsage" Text="0 / 0 ГБ" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <TextBlock Text="🌐 " FontSize="10.5" Foreground="#94A3B8"/>
+                                    <TextBlock Text="🌐 " FontSize="10.5" Foreground="{DynamicResource TextSecondary}"/>
                                     <TextBlock x:Name="TxtNetSpeed" Text="↓ 0 KB/s  ↑ 0 KB/s" FontSize="10.5" FontWeight="SemiBold" Foreground="#38BDF8"/>
                                 </StackPanel>
                             </Grid>
@@ -202,11 +202,11 @@
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="⏱️ Uptime: " FontSize="10.5" FontWeight="Bold" Foreground="#94A3B8"/>
+                                <TextBlock Grid.Column="0" Text="⏱️ Uptime: " FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}"/>
                                 <TextBlock Grid.Column="1" x:Name="TxtUptime" Text="Розрахунок..." FontSize="10.5" FontWeight="SemiBold" Foreground="#A78BFA"/>
                             </Grid>
 
-                            <ProgressBar x:Name="ProgressRam" Height="4" Background="#0A0D14" Foreground="#00FF9D" BorderThickness="0" Minimum="0" Maximum="100" Value="50"/>
+                            <ProgressBar x:Name="ProgressRam" Height="4" Background="{DynamicResource ProgressTrack}" Foreground="{DynamicResource ProgressFill}" BorderThickness="0" Minimum="0" Maximum="100" Value="50"/>
                         </StackPanel>
                     </Border>
 
@@ -245,37 +245,41 @@
                     </Grid.RowDefinitions>
 
                     <Grid Grid.Row="0" Margin="0,0,0,10">
-                        <TextBlock Text="⚙️ НАЛАШТУВАННЯ ВІДЖЕТА" FontSize="13" FontWeight="Black" Foreground="#00FF9D"/>
-                        <Button Content="✕ Назад" FontSize="11" FontWeight="Bold" Background="#182030" Foreground="#F8FAFC" BorderThickness="0" HorizontalAlignment="Right" Padding="8,3" Cursor="Hand" Click="BtnBackFromSettings_Click"/>
+                        <TextBlock Text="⚙️ НАЛАШТУВАННЯ ВІДЖЕТА" FontSize="13" FontWeight="Black" Foreground="{DynamicResource AccentBrush}"/>
+                        <Button Content="✕ Назад" FontSize="11" FontWeight="Bold" Background="{DynamicResource ActionBtnBg}" Foreground="{DynamicResource TextPrimary}" BorderThickness="0" HorizontalAlignment="Right" Padding="8,3" Cursor="Hand" Click="BtnBackFromSettings_Click"/>
                     </Grid>
 
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <TextBlock Text="Стиль підсвітки (Neon Themes):" FontSize="11" FontWeight="Bold" Foreground="#94A3B8" Margin="0,0,0,6"/>
-                            <WrapPanel Margin="0,0,0,10">
-                                <Button Content="🌟 Emerald" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="Emerald"/>
-                                <Button Content="🌈 RGB Райдуга" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="Rainbow"/>
-                                <Button Content="💓 Pulse" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="Pulse"/>
-                                <Button Content="💎 Cyber Cyan" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="CyberCyan"/>
-                                <Button Content="🔥 Lava Orange" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="LavaOrange"/>
-                                <Button Content="🩸 Crimson" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="Crimson"/>
-                                <Button Content="🔮 Violet" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="Violet"/>
-                                <Button Content="👑 Amber Gold" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="AmberGold"/>
-                                <Button Content="⚡ Toxic Lime" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="ToxicLime"/>
-                                <Button Content="🌑 Stealth Matte" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="Stealth"/>
-                                <Button Content="👻 Ghost Glass" Style="{StaticResource ThemeChipBtn}" Click="ThemeChip_Click" Tag="GhostGlass"/>
-                            </WrapPanel>
+                            <TextBlock Text="Стиль підсвітки (Neon Themes):" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,6"/>
+                            <WrapPanel x:Name="ThemeChipsPanel" Margin="0,0,0,10"/>
 
-                            <Separator Background="#1E293B" Margin="0,4,0,8"/>
+                            <Separator Background="{DynamicResource CardBorder}" Margin="0,4,0,8"/>
 
-                            <TextBlock Text="Параметри поведінки:" FontSize="11" FontWeight="Bold" Foreground="#94A3B8" Margin="0,0,0,6"/>
-                            <CheckBox x:Name="ChkAutostart" Content="🚀 Автозапуск віджета при старті Windows" Foreground="#F8FAFC" FontSize="11" FontWeight="SemiBold" Margin="0,2,0,6" Click="ChkAutostart_Click"/>
-                            <CheckBox x:Name="ChkTopMost" Content="📌 Закріпити поверх усіх вікон (TopMost)" Foreground="#F8FAFC" FontSize="11" FontWeight="SemiBold" Margin="0,2,0,6" Click="ChkTopMost_Click"/>
+                            <TextBlock Text="Параметри поведінки:" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,6"/>
+                            <CheckBox x:Name="ChkAutostart" Content="🚀 Автозапуск віджета при старті Windows" Foreground="{DynamicResource TextPrimary}" FontSize="11" FontWeight="SemiBold" Margin="0,2,0,6" Click="ChkAutostart_Click"/>
+                            <CheckBox x:Name="ChkTopMost" Content="📌 Закріпити поверх усіх вікон (TopMost)" Foreground="{DynamicResource TextPrimary}" FontSize="11" FontWeight="SemiBold" Margin="0,2,0,6" Click="ChkTopMost_Click"/>
                         </StackPanel>
                     </ScrollViewer>
 
                     <Button Grid.Row="2" Content="Готово" Background="#0078D4" Foreground="White" FontWeight="Bold" FontSize="11" Padding="0,7" Margin="0,8,0,0" Cursor="Hand" Click="BtnBackFromSettings_Click"/>
                 </Grid>
+
+                <!-- Тост-сповіщення про нове оновлення MASLOOPTIMIZER -->
+                <Border x:Name="WidgetUpdateToast" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
+                        Background="#F20B0E17" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="1.5"
+                        CornerRadius="10" Padding="10,8" Margin="2,0,2,2" Panel.ZIndex="50">
+                    <Border.RenderTransform>
+                        <TranslateTransform Y="18"/>
+                    </Border.RenderTransform>
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock x:Name="WidgetUpdateText" Text="Знайдено нове оновлення!" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap" Margin="0,0,18,0"/>
+                            <Button x:Name="WidgetUpdateDismiss" Content="✕" FontSize="10" FontWeight="Bold" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextMuted}" Cursor="Hand" Padding="3,0" HorizontalAlignment="Right" VerticalAlignment="Top" ToolTip="Закрити сповіщення" Click="WidgetUpdateDismiss_Click"/>
+                        </Grid>
+                        <Button x:Name="WidgetUpdateBtn" Content="🚀 Оновити" FontSize="10" FontWeight="Bold" Background="#8E44AD" Foreground="White" BorderThickness="0" Padding="8,4" Margin="0,6,0,0" HorizontalAlignment="Left" Cursor="Hand" Click="WidgetUpdateBtn_Click"/>
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
     </Viewbox>

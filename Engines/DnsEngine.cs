@@ -20,14 +20,59 @@ public enum DnsSortMode
     Category
 }
 
+/// <summary>Групи-чіпси фільтрації DNS: Всі / Швидкі / Безпечні / Геймінг.</summary>
+public enum DnsGroup
+{
+    All,
+    Speed,
+    Gaming,
+    Security
+}
+
 public class DnsPreset : INotifyPropertyChanged
 {
+    public DnsPreset()
+    {
+        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(NameLocalized));
+        OnPropertyChanged(nameof(DescriptionLocalized));
+        OnPropertyChanged(nameof(CategoryLocalized));
+        OnPropertyChanged(nameof(PingText));
+        OnPropertyChanged(nameof(StatusText));
+        OnPropertyChanged(nameof(ButtonText));
+    }
+
+    /// <summary>Стабільний ключ для локалізації (Dns.Preset.{NameKey}.Name/Description).</summary>
+    public string NameKey { get; set; } = string.Empty;
+
+    /// <summary>Чіп-група (DnsGroup): Speed / Gaming / Security.</summary>
+    public string Group { get; set; } = "Security";
+
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = "Швидкість & Геймінг";
     public string Primary { get; set; } = string.Empty;
     public string Secondary { get; set; } = string.Empty;
     public string PingHost { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+
+    public string NameLocalized
+        => LocalizationManager.Instance.TryGet($"Dns.Preset.{NameKey}.Name", out var name) && !string.IsNullOrWhiteSpace(name)
+            ? name
+            : Name;
+
+    public string DescriptionLocalized
+        => LocalizationManager.Instance.TryGet($"Dns.Preset.{NameKey}.Description", out var desc) && !string.IsNullOrWhiteSpace(desc)
+            ? desc
+            : Description;
+
+    public string CategoryLocalized
+        => LocalizationManager.Instance.TryGet($"Categories.{Category}", out var cat) && !string.IsNullOrWhiteSpace(cat)
+            ? cat
+            : Category;
 
     private int _ping = 999;
     public int Ping
@@ -58,11 +103,23 @@ public class DnsPreset : INotifyPropertyChanged
         }
     }
 
-    public string PingText => Ping < 900 ? $"{Ping} ms" : "Timeout";
+    public string PingText => Ping < 900
+        ? $"{Ping} ms"
+        : LocalizationManager.Instance["Dns.PingTimeout"];
     public string PingColor => Ping < 30 ? "#107C41" : (Ping < 70 ? "#D87A00" : "#C42B1C");
-    public string StatusText => IsActive ? "🟢 АКТИВНИЙ" : (Ping < 900 ? "⚪ ДОСТУПНИЙ" : "🔴 ТАЙМАУТ");
+    public string StatusText
+    {
+        get
+        {
+            var loc = LocalizationManager.Instance;
+            if (IsActive) return loc["Dns.StatusActive"];
+            return Ping < 900 ? loc["Dns.StatusAvailable"] : loc["Dns.StatusTimeout"];
+        }
+    }
     public string StatusColor => IsActive ? "#107C41" : (Ping < 900 ? "#2A2D3D" : "#C42B1C");
-    public string ButtonText => IsActive ? "✓ Активний" : "⚡ Застосувати";
+    public string ButtonText => IsActive
+        ? LocalizationManager.Instance["Dns.BtnActive"]
+        : LocalizationManager.Instance["Dns.BtnApply"];
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -428,7 +485,98 @@ public static class DnsEngine
         }
     };
 
+    #region Статична ініціалізація: NameKey та чіп-групи (Group)
+
+    static DnsEngine()
+    {
+        foreach (var preset in Catalog)
+        {
+            if (string.IsNullOrWhiteSpace(preset.NameKey) && NameKeyMap.TryGetValue(preset.Name, out var key))
+            {
+                preset.NameKey = key;
+            }
+
+            if (GroupMap.TryGetValue(preset.Name, out var group))
+            {
+                preset.Group = group;
+            }
+        }
+    }
+
+    private static readonly Dictionary<string, string> NameKeyMap = new(StringComparer.Ordinal)
+    {
+        ["Cloudflare DNS (1.1.1.1)"] = "cloudflare",
+        ["Google Public DNS"] = "google",
+        ["Gcore Global Anycast"] = "gcore",
+        ["OpenDNS Home (Cisco)"] = "opendns_home",
+        ["Control D (Speed Anycast)"] = "controld_speed",
+        ["Level 3 / Lumen Backbone"] = "level3",
+        ["Level 3 Alternate"] = "level3_alt",
+        ["Verisign Public DNS"] = "verisign",
+        ["DNS.SB (Anycast Speed)"] = "dnssb",
+        ["UltraDNS (Neustar 1)"] = "ultradns",
+        ["AliDNS Global"] = "alidns",
+        ["AdGuard DNS (Блокування реклами)"] = "adguard",
+        ["Mullvad DNS (AdBlock + Malware)"] = "mullvad_adblock",
+        ["Control D (Ad & Tracker Block)"] = "controld_ad",
+        ["Mullvad Extended (Ad + Social)"] = "mullvad_extended",
+        ["Alternate DNS (AdBlock)"] = "alternate_dns",
+        ["Quad9 (Безпека & Захист)"] = "quad9",
+        ["Cloudflare Security (Anti-Malware)"] = "cloudflare_security",
+        ["Control D (Malware Shield)"] = "controld_malware",
+        ["CleanBrowsing Security"] = "cleanbrowsing_security",
+        ["Comodo Secure DNS"] = "comodo",
+        ["Neustar Threat Protection"] = "neustar_threat",
+        ["CIRA Canadian Shield"] = "cira",
+        ["Mullvad DNS (Zero-Logs)"] = "mullvad_zero",
+        ["DNS.WATCH (Німеччина)"] = "dnswatch",
+        ["Digitale Gesellschaft (Швейцарія)"] = "digitale_gesellschaft",
+        ["Applied Privacy (Австрія / ЄС)"] = "applied_privacy",
+        ["Quad9 Uncensored (Без фільтрації)"] = "quad9_uncensored",
+        ["Censurfridns (Данія)"] = "censurfridns",
+        ["FreeDNS (Австрія)"] = "freedns",
+        ["FDN (Франція)"] = "fdn",
+        ["Cloudflare Family (Захист сім'ї)"] = "cloudflare_family",
+        ["AdGuard Family (Безпечний пошук)"] = "adguard_family",
+        ["CleanBrowsing Family Filter"] = "cleanbrowsing_family",
+        ["OpenDNS FamilyShield (Cisco)"] = "opendns_familyshield",
+        ["Neustar Family Secure"] = "neustar_family"
+    };
+
+    private static readonly Dictionary<string, string> GroupMap = new(StringComparer.Ordinal)
+    {
+        ["Google Public DNS"] = "Speed",
+        ["Gcore Global Anycast"] = "Speed",
+        ["OpenDNS Home (Cisco)"] = "Speed",
+        ["Level 3 / Lumen Backbone"] = "Speed",
+        ["Level 3 Alternate"] = "Speed",
+        ["Verisign Public DNS"] = "Speed",
+        ["UltraDNS (Neustar 1)"] = "Speed",
+        ["Cloudflare DNS (1.1.1.1)"] = "Gaming",
+        ["Control D (Speed Anycast)"] = "Gaming",
+        ["DNS.SB (Anycast Speed)"] = "Gaming",
+        ["AliDNS Global"] = "Gaming"
+        // Всі інші пресети (захист, реклама, приватність, сім'я) — Security за замовчуванням
+    };
+
+    #endregion
+
     #region Контекстна фільтрація, сортування та категорії
+
+    /// <summary>Список чіпсів-груп для фільтрації DNS (стабільний порядок).</summary>
+    public static IReadOnlyList<DnsGroup> GetGroups() => new[] { DnsGroup.All, DnsGroup.Speed, DnsGroup.Security, DnsGroup.Gaming };
+
+    public static bool PresetMatchesGroup(DnsPreset preset, DnsGroup group)
+    {
+        return group switch
+        {
+            DnsGroup.All => true,
+            DnsGroup.Speed => string.Equals(preset.Group, "Speed", StringComparison.OrdinalIgnoreCase),
+            DnsGroup.Gaming => string.Equals(preset.Group, "Gaming", StringComparison.OrdinalIgnoreCase),
+            DnsGroup.Security => string.Equals(preset.Group, "Security", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
 
     /// <summary>
     /// Отримує відфільтровані та відсортовані DNS-пресети за контекстом
@@ -436,11 +584,18 @@ public static class DnsEngine
     public static IEnumerable<DnsPreset> GetFilteredAndSortedPresets(
         string? category = null,
         string? searchQuery = null,
-        DnsSortMode sortMode = DnsSortMode.FastestFirst)
+        DnsSortMode sortMode = DnsSortMode.FastestFirst,
+        DnsGroup? group = null)
     {
         var query = Catalog.AsEnumerable();
 
-        // 1. Фільтрація за категорією
+        // 1. Фільтрація за чіп-групою (Всі / Швидкі / Безпечні / Геймінг)
+        if (group.HasValue && group.Value != DnsGroup.All)
+        {
+            query = query.Where(d => PresetMatchesGroup(d, group.Value));
+        }
+
+        // 1a. Фільтрація за категорією
         if (!string.IsNullOrWhiteSpace(category) && !category.Equals("Всі", StringComparison.OrdinalIgnoreCase))
         {
             query = query.Where(d => string.Equals(d.Category, category, StringComparison.OrdinalIgnoreCase));
@@ -631,10 +786,14 @@ public static class DnsEngine
 
             FlushDnsCache();
             DetectActiveDns();
+            AppLogger.Log(string.IsNullOrWhiteSpace(primary) || primary.Equals("DHCP", StringComparison.OrdinalIgnoreCase)
+                ? "DNS налаштування скинуто до автоматичних (DHCP)"
+                : $"Активовано DNS-сервер: {primary} / {secondary}", "SUCCESS");
             return true;
         }
         catch
         {
+            AppLogger.Log($"Помилка встановлення DNS ({primary})", "ERROR");
             return false;
         }
     }

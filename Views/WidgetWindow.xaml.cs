@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -30,6 +31,13 @@ public partial class WidgetWindow : Window
     private readonly DispatcherTimer _pulseTimer = new();
     private readonly DispatcherTimer _rebootCancelTimer = new();
     private readonly DispatcherTimer _shutdownCancelTimer = new();
+
+    // Фонова перевірка оновлень GitHub (для режиму --widget-only)
+    private readonly DispatcherTimer _updateCheckTimer = new();
+    private bool _widgetUpdateDismissed;
+    private bool _widgetUpdateDownloading;
+    private string? _widgetUpdateVersion;
+    private string? _widgetUpdateUrl;
 
     private PerformanceCounter? _cpuCounter;
     private double _rgbHue = 0;
@@ -79,7 +87,12 @@ public partial class WidgetWindow : Window
     public WidgetWindow()
     {
         InitializeComponent();
+        BuildThemeChips();
         Loaded += WidgetWindow_Loaded;
+
+        // Синхронізація теми віджета з темою головної програми
+        ThemeEngine.WidgetThemeRequired += OnWidgetThemeRequired;
+        Closed += (s, e) => ThemeEngine.WidgetThemeRequired -= OnWidgetThemeRequired;
 
         _timer.Interval = TimeSpan.FromMilliseconds(1500);
         _timer.Tick += Timer_Tick;
@@ -156,7 +169,94 @@ public partial class WidgetWindow : Window
         RestoreStateFromRegistry();
         UpdateNetworkBaseline();
         _timer.Start();
+
+        // Періодична перевірка оновлень (раз на 30 хвилин) + перевірка при старті.
+        _updateCheckTimer.Interval = TimeSpan.FromMinutes(30);
+        _updateCheckTimer.Tick += (s, e) => _ = CheckForWidgetUpdatesAsync();
+        _updateCheckTimer.Start();
+        _ = CheckForWidgetUpdatesAsync();
     }
+
+    #region Фонова перевірка оновлень (GitHub Toast)
+
+    private async Task CheckForWidgetUpdatesAsync()
+    {
+        if (_widgetUpdateDismissed || _widgetUpdateDownloading) return;
+
+        try
+        {
+            var (available, newVer, url) = await UpdateManager.CheckForUpdateAsync();
+            if (!available || string.IsNullOrWhiteSpace(url) || _widgetUpdateDismissed) return;
+
+            _widgetUpdateVersion = newVer;
+            _widgetUpdateUrl = url;
+
+            Dispatcher.Invoke(ShowWidgetUpdateToast);
+        }
+        catch { }
+    }
+
+    private void ShowWidgetUpdateToast()
+    {
+        if (WidgetUpdateToast.Visibility == Visibility.Visible || _widgetUpdateDismissed || _widgetUpdateDownloading) return;
+
+        var loc = LocalizationManager.Instance;
+        WidgetUpdateText.Text = loc.Format("Update.ToastTitle", _widgetUpdateVersion ?? UpdateManager.CurrentVersion);
+        WidgetUpdateBtn.Content = loc["Update.BtnNow"];
+        WidgetUpdateToast.Visibility = Visibility.Visible;
+
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(280))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        var slide = new DoubleAnimation(18, 0, TimeSpan.FromMilliseconds(320))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+
+        WidgetUpdateToast.BeginAnimation(OpacityProperty, fade);
+        if (WidgetUpdateToast.RenderTransform is TranslateTransform tr)
+        {
+            tr.BeginAnimation(TranslateTransform.YProperty, slide);
+        }
+    }
+
+    private void WidgetUpdateDismiss_Click(object sender, RoutedEventArgs e)
+    {
+        _widgetUpdateDismissed = true; // Приховати до наступного перезапуску.
+        WidgetUpdateToast.Visibility = Visibility.Collapsed;
+    }
+
+    private async void WidgetUpdateBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_widgetUpdateUrl) || _widgetUpdateDownloading) return;
+
+        _widgetUpdateDownloading = true;
+        var loc = LocalizationManager.Instance;
+
+        WidgetUpdateText.Text = loc.Format("Update.DownloadingTitle", _widgetUpdateVersion ?? UpdateManager.CurrentVersion);
+        WidgetUpdateBtn.IsEnabled = false;
+        WidgetUpdateDismiss.IsEnabled = false;
+        WidgetUpdateBtn.Content = "0%";
+
+        var progress = new Progress<double>(pct =>
+        {
+            if (double.IsFinite(pct))
+            {
+                Dispatcher.Invoke(() => WidgetUpdateBtn.Content = $"{pct:0}%");
+            }
+        });
+
+        await UpdateManager.DownloadAndInstallUpdateAsync(_widgetUpdateUrl, progress);
+
+        if (!_widgetUpdateDownloading) return;
+        _widgetUpdateDownloading = false;
+        WidgetUpdateBtn.IsEnabled = true;
+        WidgetUpdateDismiss.IsEnabled = true;
+        WidgetUpdateBtn.Content = loc["Update.BtnNow"];
+    }
+
+    #endregion
 
     private void LoadEmbeddedLogo()
     {
@@ -336,88 +436,45 @@ public partial class WidgetWindow : Window
 
     public void ApplyTheme(string themeName)
     {
-        _currentTheme = themeName;
+        var theme = ThemeEngine.GetWidgetTheme(themeName) ?? ThemeEngine.WidgetThemes[0];
+        _currentTheme = theme.Key;
         SaveStateToRegistry();
 
         _rgbTimer.Stop();
         _pulseTimer.Stop();
 
-        MainWidgetBorder.Background = HexBrush("#F00B0E17");
+        MainWidgetBorder.Background = HexBrush(theme.Background ?? "#F00B0E17");
         MainWidgetBorder.BorderThickness = new Thickness(1.8);
-        MainGlow.Opacity = 0.40;
-        LogoGlow.Opacity = 0.70;
 
-        switch (themeName)
-        {
-            case "Rainbow":
-                _rgbTimer.Start();
-                break;
+        var accentColor = (Color)ColorConverter.ConvertFromString(theme.Accent);
+        MainWidgetBorder.BorderBrush = HexBrush(theme.Border ?? theme.Accent);
+        MainGlow.Color = accentColor;
+        LogoBorder.BorderBrush = HexBrush(theme.Border ?? theme.Accent);
+        LogoGlow.Color = accentColor;
+        TxtBrandLeft.Foreground = HexBrush(theme.BrandForeground ?? theme.Accent);
+        ProgressRam.Foreground = HexBrush(theme.ProgressForeground ?? theme.Accent);
+        MainGlow.Opacity = theme.GlowOpacity;
+        LogoGlow.Opacity = theme.LogoGlowOpacity;
 
-            case "Pulse":
-                SetThemeColors("#00FF9D");
-                _pulseTimer.Start();
-                break;
-
-            case "ToxicLime":
-                SetThemeColors("#76FF03");
-                break;
-
-            case "CyberCyan":
-                SetThemeColors("#00F0FF");
-                break;
-
-            case "LavaOrange":
-                SetThemeColors("#FF6D00");
-                break;
-
-            case "Crimson":
-                SetThemeColors("#FF1744");
-                break;
-
-            case "Violet":
-                SetThemeColors("#B026FF");
-                break;
-
-            case "AmberGold":
-                SetThemeColors("#FFD700");
-                break;
-
-            case "GhostGlass":
-                MainWidgetBorder.Background = HexBrush("#220A0D14");
-                MainWidgetBorder.BorderBrush = HexBrush("#60FFFFFF");
-                LogoBorder.BorderBrush = HexBrush("#60FFFFFF");
-                TxtBrandLeft.Foreground = Brushes.White;
-                ProgressRam.Foreground = Brushes.White;
-                MainGlow.Opacity = 0;
-                LogoGlow.Opacity = 0;
-                break;
-
-            case "Stealth":
-                MainWidgetBorder.Background = HexBrush("#F4080B10");
-                MainWidgetBorder.BorderBrush = HexBrush("#2A344A");
-                LogoBorder.BorderBrush = HexBrush("#2A344A");
-                TxtBrandLeft.Foreground = HexBrush("#94A3B8");
-                ProgressRam.Foreground = HexBrush("#38BDF8");
-                MainGlow.Opacity = 0;
-                LogoGlow.Opacity = 0;
-                break;
-
-            default:
-                SetThemeColors("#00FF9D");
-                break;
-        }
+        if (theme.Animation == "Rainbow") _rgbTimer.Start();
+        else if (theme.Animation == "Pulse") _pulseTimer.Start();
     }
 
-    private void SetThemeColors(string hex)
+    private void BuildThemeChips()
     {
-        var b = HexBrush(hex);
-        var c = (Color)ColorConverter.ConvertFromString(hex);
-        MainWidgetBorder.BorderBrush = b;
-        MainGlow.Color = c;
-        LogoBorder.BorderBrush = b;
-        LogoGlow.Color = c;
-        TxtBrandLeft.Foreground = b;
-        ProgressRam.Foreground = b;
+        ThemeChipsPanel.Children.Clear();
+        foreach (var theme in ThemeEngine.WidgetThemes)
+        {
+            var chip = new Button
+            {
+                Content = theme.DisplayName,
+                Tag = theme.Key,
+                Style = (Style)FindResource("ThemeChipBtn"),
+                ToolTip = theme.Category
+            };
+            chip.Click += ThemeChip_Click;
+            ThemeChipsPanel.Children.Add(chip);
+        }
     }
 
     private static Color HsvToRgb(double h, double s, double v)
@@ -462,7 +519,7 @@ public partial class WidgetWindow : Window
             using var key = Registry.CurrentUser.OpenSubKey(WidgetRegKey);
             if (key != null)
             {
-                _currentTheme = key.GetValue("Theme")?.ToString() ?? "Emerald";
+                _currentTheme = key.GetValue("Theme")?.ToString() ?? ThemeEngine.CurrentWidgetThemeKey;
                 int posX = (int)(key.GetValue("PosX") ?? (int)Left);
                 int posY = (int)(key.GetValue("PosY") ?? (int)Top);
                 int w = (int)(key.GetValue("Width") ?? (int)Width);
@@ -517,11 +574,39 @@ public partial class WidgetWindow : Window
 
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
+        if (e.ButtonState != MouseButtonState.Pressed)
+            return;
+
+        // Не починаємо DragMove при кліку на інтерактивні елементи (кнопки/чекбокси),
+        // інакше клік поглинається і натискання «Налаштування» не спрацьовує.
+        if (IsInteractiveClick(e.OriginalSource))
+            return;
+
+        DragMove();
+        SaveStateToRegistry();
+    }
+
+    private bool IsInteractiveClick(object source)
+    {
+        if (source is not DependencyObject current)
+            return false;
+
+        while (current != null)
         {
-            DragMove();
-            SaveStateToRegistry();
+            if (ReferenceEquals(current, BtnSettings) ||
+                ReferenceEquals(current, BtnCloseWidget) ||
+                current is System.Windows.Controls.Primitives.ButtonBase)
+            {
+                return true;
+            }
+
+            var next = VisualTreeHelper.GetParent(current);
+            if (next == null)
+                next = LogicalTreeHelper.GetParent(current);
+            current = next;
         }
+
+        return false;
     }
 
     private void ResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
@@ -563,6 +648,12 @@ public partial class WidgetWindow : Window
         {
             ApplyTheme(tag);
         }
+    }
+
+    /// <summary>Отримує подію зміни теми від головної програми та перезастосовує палітру віджета.</summary>
+    private void OnWidgetThemeRequired(string key)
+    {
+        Dispatcher.Invoke(() => ApplyTheme(key));
     }
 
     private void ChkAutostart_Click(object sender, RoutedEventArgs e)
