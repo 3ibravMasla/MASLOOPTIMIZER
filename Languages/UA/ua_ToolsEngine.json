@@ -1,0 +1,30 @@
+{
+    "Tools":  {
+                  "Title":  "🛠️ БІБЛІОТЕКА НЕОБХІДНОГО СОФТУ ТА ДІАГНОСТИКИ",
+                  "Description":  "Тихе встановлення офіційних інструментів через Winget та прямі лінки",
+                  "BtnRescan":  "🔄 Оновити статус",
+                  "BtnInstall":  "⬇️ Встановити",
+                  "BtnInstalled":  "✓ Встановлено",
+                  "BtnSite":  "🌐 Сайт",
+                  "StatsSummary":  "Виявлено в системі: {0} | Доступно для встановлення: {1} з {2} утиліт",
+                  "BtnActivate":  "⚡ Активація",
+                  "BtnInstallAll":  "⚡ Встановити все",
+                  "BtnUpdateDx":  "⚡ Оновити DirectX",
+                  "BtnOpen":  "▶️ Відкрити",
+                  "Ready":  "🛠️ Бібліотека софту та інструментів готова.",
+                  "MasLaunched":  "Запущено Microsoft Activation Scripts.",
+                  "VcRedistInstalling":  "Встановлення Visual C++ All-in-One...",
+                  "VcRedistDone":  "Всі пакети Visual C++ успішно встановлено!",
+                  "VcRedistError":  "Помилка встановлення VC++.",
+                  "DirectXUpdating":  "Оновлення бібліотек DirectX...",
+                  "DirectXDone":  "Бібліотеки DirectX успішно оновлено!",
+                  "DirectXError":  "Помилка оновлення DirectX.",
+                  "WingetInstalling":  "Встановлення {0} через Winget...",
+                  "InstallDone":  "Успішно встановлено: {0}",
+                  "InstallError":  "Помилка встановлення {0}.",
+                  "Rescanning":  "Сканування встановленого софту...",
+                  "RescanDone":  "Статуси програм оновлено.",
+                  "Launched":  "▶️ Запущено: {0}",
+                  "LaunchError":  "Помилка запуску: {0}"
+              }
+}

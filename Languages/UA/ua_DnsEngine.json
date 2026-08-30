@@ -1,0 +1,176 @@
+{
+    "Dns":  {
+                "Title":  "🌐 ОПТИМІЗАТОР МЕРЕЖЕВИХ ЗАТРИМОК DNS",
+                "Description":  "Паралельний вимір пінгу та 1-Click активація найшвидших DNS-серверів",
+                "BtnFastest":  "⚡ Найшвидший DNS",
+                "BtnReset":  "🔄 Скинути до DHCP",
+                "StatusActive":  "🟢 АКТИВНИЙ",
+                "StatusAvailable":  "⚪ ДОСТУПНИЙ",
+                "StatusTimeout":  "🔴 ТАЙМАУТ",
+                "BtnApply":  "⚡ Застосувати",
+                "BtnActive":  "✓ Активний",
+                "ChipAll":  "🌟 Всі",
+                "ChipSpeed":  "⚡ Швидкі",
+                "ChipSecurity":  "🛡️ Безпечні / З блокуванням реклами",
+                "ChipGaming":  "🎮 Геймінг",
+                "SortLabel":  "Сортування:",
+                "SortFastest":  "⚡ Найменший пінг спочатку",
+                "SortName":  "🔤 За алфавітом",
+                "PingTimeout":  "Таймаут",
+                "Measuring":  "Замір пінгу DNS-серверів...",
+                "Measured":  "DNS-сервери відсортовано за найменшим пінгом.",
+                "SearchingFastest":  "Пошук найшвидшого DNS...",
+                "ApplyDone":  "DNS встановлено: {0}",
+                "ApplyFailed":  "Помилка встановлення DNS.",
+                "ResetDone":  "DNS успішно повернуто до початкового стану (DHCP).",
+                "ResetFailed":  "Помилка відновлення DNS.",
+                "FastestApplied":  "Встановлено найшвидший DNS: {0} ({1} ms)",
+                "FastestFound":  "Найшвидший сервер: {0}\nЗатримка (Ping): {1} ms\n\nСервер успішно активовано!",
+                "Preset":  {
+                               "cloudflare":  {
+                                                  "Name":  "Cloudflare DNS (1.1.1.1)",
+                                                  "Description":  "Мінімальний пінг для онлайн-ігор та швидкий відгук (Anycast у 300+ містах)."
+                                              },
+                               "google":  {
+                                              "Name":  "Google Public DNS",
+                                              "Description":  "Глобальна Anycast-інфраструктура Google із максимальною стабільністю."
+                                          },
+                               "gcore":  {
+                                             "Name":  "Gcore Global Anycast",
+                                             "Description":  "Швидка європейська мережа Anycast із прямими магістральними каналами."
+                                         },
+                               "opendns_home":  {
+                                                    "Name":  "OpenDNS Home (Cisco)",
+                                                    "Description":  "Хмарна платформа резолвінгу DNS від корпорації Cisco."
+                                                },
+                               "controld_speed":  {
+                                                      "Name":  "Control D (Speed Anycast)",
+                                                      "Description":  "Сучасний Anycast DNS із оптимізацією BGP-пакетів без фільтрації."
+                                                  },
+                               "level3":  {
+                                              "Name":  "Level 3 / Lumen Backbone",
+                                              "Description":  "Магістральний провайдер першого рівня (Tier-1) із прямими транзитними стиками."
+                                          },
+                               "level3_alt":  {
+                                                  "Name":  "Level 3 Alternate",
+                                                  "Description":  "Резервний магістральний пул Level 3."
+                                              },
+                               "verisign":  {
+                                                "Name":  "Verisign Public DNS",
+                                                "Description":  "Стабільний DNS від офіційного оператора доменних зон .com та .net."
+                                            },
+                               "dnssb":  {
+                                             "Name":  "DNS.SB (Anycast Speed)",
+                                             "Description":  "Європейський Anycast DNS з оптимізацією маршрутів та DNSSEC."
+                                         },
+                               "ultradns":  {
+                                                "Name":  "UltraDNS (Neustar 1)",
+                                                "Description":  "Високошвидкісні корпоративні резолвери UltraDNS."
+                                            },
+                               "alidns":  {
+                                              "Name":  "AliDNS Global",
+                                              "Description":  "Оптимізовані маршрути до азійських та європейських ігрових кластерів."
+                                          },
+                               "adguard":  {
+                                               "Name":  "AdGuard DNS (Блокування реклами)",
+                                               "Description":  "Блокує банери, аналітику, спливаючі вікна та телеметрію на рівні всієї ОС."
+                                           },
+                               "mullvad_adblock":  {
+                                                       "Name":  "Mullvad DNS (AdBlock + Malware)",
+                                                       "Description":  "Відсікання реклами, трекінгу та фішингу на шведських серверах Mullvad."
+                                                   },
+                               "controld_ad":  {
+                                                   "Name":  "Control D (Ad \u0026 Tracker Block)",
+                                                   "Description":  "Блокує рекламу, шпигунські скрипти та фонову телеметрію."
+                                               },
+                               "mullvad_extended":  {
+                                                        "Name":  "Mullvad Extended (Ad + Social)",
+                                                        "Description":  "Повне блокування реклами, трекерів та віджетів соціальних мереж."
+                                                    },
+                               "alternate_dns":  {
+                                                     "Name":  "Alternate DNS (AdBlock)",
+                                                     "Description":  "Хмарне блокування реклами, спам-ботів та небажаних редиректів."
+                                                 },
+                               "quad9":  {
+                                             "Name":  "Quad9 (Безпека \u0026 Захист)",
+                                             "Description":  "Блокує фішинг, експлойти та ботнети за базами 20+ провідних лабораторій."
+                                         },
+                               "cloudflare_security":  {
+                                                           "Name":  "Cloudflare Security (Anti-Malware)",
+                                                           "Description":  "Швидкість Cloudflare із автоматичною ізоляцією вірусів та фішингу."
+                                                       },
+                               "controld_malware":  {
+                                                        "Name":  "Control D (Malware Shield)",
+                                                        "Description":  "Блокує небезпечні домени, фішингові форми та джерела криптомайнінгу."
+                                                    },
+                               "cleanbrowsing_security":  {
+                                                              "Name":  "CleanBrowsing Security",
+                                                              "Description":  "Фільтрація фішингу, сайтів-клонів та спам-серверів розповсюдження вірусів."
+                                                          },
+                               "comodo":  {
+                                              "Name":  "Comodo Secure DNS",
+                                              "Description":  "Хмарний евристичний фільтр небезпечних веб-ресурсів від Comodo."
+                                          },
+                               "neustar_threat":  {
+                                                      "Name":  "Neustar Threat Protection",
+                                                      "Description":  "Корпоративний захист від кібератак, підміни DNS та шкідливих вузлів."
+                                                  },
+                               "cira":  {
+                                            "Name":  "CIRA Canadian Shield",
+                                            "Description":  "Високий рівень захисту від крадіжки облікових даних та фішингу."
+                                        },
+                               "mullvad_zero":  {
+                                                    "Name":  "Mullvad DNS (Zero-Logs)",
+                                                    "Description":  "Конфіденційність: сервери у Швеції, що працюють у RAM без збереження логів."
+                                                },
+                               "dnswatch":  {
+                                                "Name":  "DNS.WATCH (Німеччина)",
+                                                "Description":  "Швидкісні сервери в Німеччині: повна відсутність цензури та логування."
+                                            },
+                               "digitale_gesellschaft":  {
+                                                             "Name":  "Digitale Gesellschaft (Швейцарія)",
+                                                             "Description":  "Некомерційний швейцарський DNS із захистом приватності та DNSSEC."
+                                                         },
+                               "applied_privacy":  {
+                                                       "Name":  "Applied Privacy (Австрія / ЄС)",
+                                                       "Description":  "Незалежні австрійські сервери для захисту від провайдерського стеження."
+                                                   },
+                               "quad9_uncensored":  {
+                                                        "Name":  "Quad9 Uncensored (Без фільтрації)",
+                                                        "Description":  "Оригінальний Quad9 без списків блокувань із підтримкою DNSSEC."
+                                                    },
+                               "censurfridns":  {
+                                                    "Name":  "Censurfridns (Данія)",
+                                                    "Description":  "Некомерційний проєкт із прямим підключенням до вузлів обміну трафіком ЄС."
+                                                },
+                               "freedns":  {
+                                               "Name":  "FreeDNS (Австрія)",
+                                               "Description":  "Австрійський некомерційний DNS без збереження запитів."
+                                           },
+                               "fdn":  {
+                                           "Name":  "FDN (Франція)",
+                                           "Description":  "Громадські сервери асоціації FDN для вільного доступу до мережі."
+                                       },
+                               "cloudflare_family":  {
+                                                         "Name":  "Cloudflare Family (Захист сім\u0027ї)",
+                                                         "Description":  "Блокування шкідливих сайтів та контенту 18+ (SafeSearch) на базі Cloudflare."
+                                                     },
+                               "adguard_family":  {
+                                                      "Name":  "AdGuard Family (Безпечний пошук)",
+                                                      "Description":  "Блокування реклами + безпечний пошук у Google, Bing та YouTube."
+                                                  },
+                               "cleanbrowsing_family":  {
+                                                            "Name":  "CleanBrowsing Family Filter",
+                                                            "Description":  "Строга сімейна фільтрація дорослого контенту, проксі, торрентів та SafeSearch."
+                                                        },
+                               "opendns_familyshield":  {
+                                                            "Name":  "OpenDNS FamilyShield (Cisco)",
+                                                            "Description":  "Примусове блокування сайтів 18+, фішингу та небезпечних доменів від Cisco."
+                                                        },
+                               "neustar_family":  {
+                                                      "Name":  "Neustar Family Secure",
+                                                      "Description":  "Фільтрація контенту для дорослих та шкідливих посилань."
+                                                  }
+                           }
+            }
+}

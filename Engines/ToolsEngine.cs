@@ -8,6 +8,9 @@ using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 using Microsoft.Win32;
 
 namespace MASLOOPTIMIZER;
@@ -30,17 +33,30 @@ public class ToolStats
     public int CategoriesCount { get; set; }
 }
 
-public class ToolItem : INotifyPropertyChanged
+public class ToolItem : INotifyPropertyChanged, IWeakEventListener
 {
     public ToolItem()
     {
-        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+        // Слабка підписка на зміну мови: статичний синглтон не утримує об'єкт.
+        PropertyChangedEventManager.AddListener(LocalizationManager.Instance, this, string.Empty);
+    }
+
+    bool IWeakEventListener.ReceiveWeakEvent(Type managerType, object sender, EventArgs e)
+    {
+        if (managerType == typeof(PropertyChangedEventManager))
+        {
+            OnLocalizationChanged(sender, (PropertyChangedEventArgs)e);
+            return true;
+        }
+
+        return false;
     }
 
     private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
     {
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(SiteButtonText));
+        OnPropertyChanged(nameof(OpenButtonText));
     }
 
     public string Id { get; set; } = string.Empty;
@@ -64,6 +80,7 @@ public class ToolItem : INotifyPropertyChanged
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(StatusText));
                 OnPropertyChanged(nameof(StatusColor));
+                OnPropertyChanged(nameof(IsOpenVisible));
             }
         }
     }
@@ -111,7 +128,27 @@ public class ToolItem : INotifyPropertyChanged
 
     public string SiteButtonText => LocalizationManager.Instance["Tools.BtnSite"];
 
-    public string StatusColor => IsInstalled ? "#107C41" : "#0078D4";
+    public string OpenButtonText => LocalizationManager.Instance["Tools.BtnOpen"];
+
+    /// <summary>Кнопка «Відкрити» показується лише для встановлених програм з відомим шляхом до EXE.</summary>
+    public bool IsOpenVisible => IsInstalled && !string.IsNullOrWhiteSpace(ExePath);
+
+    private string _exePath = string.Empty;
+    public string ExePath
+    {
+        get => _exePath;
+        set
+        {
+            if (_exePath != value)
+            {
+                _exePath = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsOpenVisible));
+            }
+        }
+    }
+
+    public Brush StatusColor => IsInstalled ? ThemeEngine.Brush("SuccessBrush") : ThemeEngine.Brush("InfoBrush");
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -770,40 +807,62 @@ public static class ToolsEngine
     {
         await Task.Run(() =>
         {
-            var installedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var entries = new Dictionary<string, UninstallEntry>(StringComparer.OrdinalIgnoreCase);
 
-            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", installedNames);
-            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", installedNames);
-            ScanUninstallRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Uninstall", installedNames);
+            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", entries);
+            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", entries);
+            ScanUninstallRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Uninstall", entries);
 
             foreach (var tool in Catalog)
             {
                 if (!string.IsNullOrWhiteSpace(tool.SpecialAction))
                 {
                     tool.IsInstalled = false;
+                    tool.ExePath = string.Empty;
                     continue;
                 }
 
-                bool found = installedNames.Any(name => name.Contains(tool.Name, StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrEmpty(tool.Id) && name.Contains(tool.Id, StringComparison.OrdinalIgnoreCase)));
+                bool found = false;
+                string exePath = string.Empty;
+
+                foreach (var kvp in entries)
+                {
+                    string name = kvp.Key;
+                    if (name.Contains(tool.Name, StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrEmpty(tool.Id) && name.Contains(tool.Id, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        found = true;
+                        exePath = ResolveExeFromRegistryEntry(kvp.Value, tool);
+                        break;
+                    }
+                }
 
                 if (!found && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
                 {
-                    string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-                    string pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-                    string localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                    exePath = FindExeInKnownFolders(tool);
+                    found = !string.IsNullOrEmpty(exePath);
+                }
 
-                    found = File.Exists(Path.Combine(pf, tool.Name, tool.ExeCheckName)) ||
-                            File.Exists(Path.Combine(pfx86, tool.Name, tool.ExeCheckName)) ||
-                            File.Exists(Path.Combine(localApp, "Programs", tool.Name, tool.ExeCheckName));
+                if (found && string.IsNullOrEmpty(exePath) && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
+                {
+                    exePath = ResolveToolExePath(tool);
                 }
 
                 tool.IsInstalled = found;
+                tool.ExePath = exePath;
             }
         });
     }
 
-    private static void ScanUninstallRegistry(RegistryKey root, string subKey, HashSet<string> names)
+    /// <summary>Запис з розділу реєстру Uninstall із даними про шлях до програми.</summary>
+    private sealed class UninstallEntry
+    {
+        public string DisplayName = string.Empty;
+        public string DisplayIcon = string.Empty;
+        public string InstallLocation = string.Empty;
+    }
+
+    private static void ScanUninstallRegistry(RegistryKey root, string subKey, Dictionary<string, UninstallEntry> entries)
     {
         try
         {
@@ -816,12 +875,138 @@ public static class ToolsEngine
                 {
                     using var appKey = key.OpenSubKey(kn);
                     string? disp = appKey?.GetValue("DisplayName")?.ToString();
-                    if (!string.IsNullOrWhiteSpace(disp)) names.Add(disp.Trim());
+                    if (string.IsNullOrWhiteSpace(disp)) continue;
+
+                    string trimmed = disp.Trim();
+                    if (!entries.TryGetValue(trimmed, out var entry))
+                    {
+                        entry = new UninstallEntry { DisplayName = trimmed };
+                        entries[trimmed] = entry;
+                    }
+                    entry.DisplayIcon = appKey?.GetValue("DisplayIcon")?.ToString() ?? entry.DisplayIcon;
+                    entry.InstallLocation = appKey?.GetValue("InstallLocation")?.ToString() ?? entry.InstallLocation;
                 }
                 catch { }
             }
         }
         catch { }
+    }
+
+    /// <summary>Спроба знайти EXE за даними з реєстру (DisplayIcon / InstallLocation).</summary>
+    private static string ResolveExeFromRegistryEntry(UninstallEntry entry, ToolItem tool)
+    {
+        string icon = entry.DisplayIcon?.Trim().Trim('"') ?? string.Empty;
+        if (icon.Length > 0)
+        {
+            string exeCandidate = icon;
+            int comma = icon.LastIndexOf(',');
+            if (comma > 0)
+            {
+                string tail = icon.Substring(comma + 1).Trim();
+                if (tail.Length > 0 && tail.All(char.IsDigit))
+                {
+                    exeCandidate = icon.Substring(0, comma).Trim().Trim('"');
+                }
+            }
+            if (exeCandidate.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(exeCandidate))
+            {
+                return exeCandidate;
+            }
+        }
+
+        string installLocation = entry.InstallLocation?.Trim().Trim('"') ?? string.Empty;
+        if (installLocation.Length > 0 && File.Exists(installLocation))
+        {
+            return installLocation;
+        }
+
+        if (installLocation.Length > 0 && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
+        {
+            string direct = Path.Combine(installLocation, tool.ExeCheckName);
+            if (File.Exists(direct)) return direct;
+
+            string? nested = SearchForExe(installLocation, tool.ExeCheckName, 0, 2);
+            if (nested != null) return nested;
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>Типові шляхи встановлення (Program Files / Program Files (x86) / LocalAppData).</summary>
+    private static string FindExeInKnownFolders(ToolItem tool)
+    {
+        if (tool == null || string.IsNullOrWhiteSpace(tool.ExeCheckName)) return string.Empty;
+
+        string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        string localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        string[] candidates =
+        {
+            Path.Combine(pf, tool.Name, tool.ExeCheckName),
+            Path.Combine(pfx86, tool.Name, tool.ExeCheckName),
+            Path.Combine(localApp, "Programs", tool.Name, tool.ExeCheckName),
+            Path.Combine(pf, tool.ExeCheckName),
+            Path.Combine(pfx86, tool.ExeCheckName),
+            Path.Combine(localApp, "Programs", tool.ExeCheckName),
+            Path.Combine(localApp, tool.Name, tool.ExeCheckName)
+        };
+
+        foreach (var c in candidates)
+        {
+            try
+            {
+                if (File.Exists(c)) return c;
+            }
+            catch { }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>Повний пошук EXE: типові шляхи + обмежений рекурсивний пошук у системних папках.</summary>
+    public static string ResolveToolExePath(ToolItem tool)
+    {
+        if (tool == null || string.IsNullOrWhiteSpace(tool.ExeCheckName)) return string.Empty;
+
+        string direct = FindExeInKnownFolders(tool);
+        if (!string.IsNullOrEmpty(direct)) return direct;
+
+        string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string pfx86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        string localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        foreach (var root in new[] { pf, pfx86, localApp })
+        {
+            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) continue;
+
+            string? found = SearchForExe(root, tool.ExeCheckName, 0, 3);
+            if (found != null) return found;
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>Рекурсивний пошук файлу EXE із обмеженням глибини (недоступні каталоги пропускаються).</summary>
+    private static string? SearchForExe(string root, string exeName, int depth, int maxDepth)
+    {
+        try
+        {
+            if (File.Exists(Path.Combine(root, exeName))) return Path.Combine(root, exeName);
+            if (depth >= maxDepth) return null;
+
+            foreach (var dir in Directory.GetDirectories(root))
+            {
+                string? found = SearchForExe(dir, exeName, depth + 1, maxDepth);
+                if (found != null) return found;
+            }
+        }
+        catch
+        {
+            // Каталог недоступний (немає прав) — пропускаємо
+        }
+
+        return null;
     }
 
     #endregion
@@ -848,7 +1033,12 @@ public static class ToolsEngine
 
                 using var proc = Process.Start(psi);
                 proc?.WaitForExit();
-                return proc?.ExitCode == 0;
+                bool ok = proc?.ExitCode == 0;
+                if (ok && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
+                {
+                    tool.ExePath = ResolveToolExePath(tool);
+                }
+                return ok;
             }
             catch
             {
@@ -998,6 +1188,38 @@ public static class ToolsEngine
             : "Помилка оновлення бібліотек DirectX",
             success ? "SUCCESS" : "ERROR");
         return success;
+    }
+
+    /// <summary>Запуск встановленої програми. Повертає true, якщо запуск вдався.</summary>
+    public static bool OpenInstalledTool(ToolItem tool)
+    {
+        if (tool == null) return false;
+
+        string path = string.IsNullOrWhiteSpace(tool.ExePath) ? ResolveToolExePath(tool) : tool.ExePath;
+
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true,
+                    WorkingDirectory = Path.GetDirectoryName(path) ?? string.Empty
+                });
+                tool.ExePath = path;
+                AppLogger.Log($"Запуск утиліти: {path}", "SUCCESS");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"Помилка запуску {tool.Name}: {ex.Message}", "ERROR");
+                return false;
+            }
+        }
+
+        AppLogger.Log($"Виконуваний файл не знайдено: {tool.Name}", "WARNING");
+        return false;
     }
 
     public static void OpenUrl(string url)

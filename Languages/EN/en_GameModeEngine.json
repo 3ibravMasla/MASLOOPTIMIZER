@@ -1,0 +1,25 @@
+{
+    "GameMode":  {
+                     "Title":  "🎮 GAME MODE",
+                     "Description":  "GPU/CPU priority, stop background services and free memory for maximum FPS",
+                     "BtnActivate":  "⚡ Activate",
+                     "BtnDeactivate":  "🔄 Deactivate",
+                     "StatusActive":  "🟢 ACTIVE",
+                     "StatusInactive":  "⚪ INACTIVE",
+                     "Ready":  "🎮 Game Mode & MSI ready.",
+                     "ToggleOn":  "🎮 Game Mode: ON",
+                     "ToggleOff":  "🎮 Game Mode: OFF",
+                     "Activating":  "⏳ Activating Game Mode...",
+                     "Deactivating":  "⏳ Deactivating Game Mode...",
+                     "BtnPurge":  "🧹 Purge Standby RAM",
+                     "HowItWorksTitle":  "📖 HOW IT WORKS",
+                     "HowItWorks":  "Game Mode stops non-critical background services (Windows Search, SysMain/Superfetch, telemetry, updaters), raises the active process priority to 100% (Realtime class) and switches the system to the Ultimate Performance power plan (or High Performance) for minimal stutters and maximum FPS.",
+                     "StandbyTitle":  "🧹 STANDBY RAM PURGE",
+                     "StandbyDesc":  "Calls the native system API NtSetSystemInformation (SystemMemoryListInformation → MemoryPurgeStandbyList), which flushes modified and standby memory pages. This eliminates micro-stutters and frees RAM without a reboot.",
+                     "PurgeBusy":  "⏳...",
+                     "PurgeFreed":  "✓ {0:N0} MB",
+                     "PurgeError":  "⚠️ Failed",
+                     "PurgeOk":  "Standby RAM purged: {0:N0} MB",
+                     "PurgeFail":  "Standby RAM purge failed (administrator rights required)."
+                 }
+}

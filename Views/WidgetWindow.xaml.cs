@@ -44,6 +44,12 @@ public partial class WidgetWindow : Window
     private double _pulseAngle = 0;
     private string _currentTheme = "Emerald";
 
+    // Поточний профіль живлення сегментного перемикача віджета (Eco → Std → Turbo).
+    private SystemPowerMode _widgetPowerMode = SystemPowerMode.OriginalSnapshot;
+
+    // Захист від повторного застосування під час програмної синхронізації сегментів.
+    private bool _syncingPowerUi;
+
     private long _lastBytesReceived = 0;
     private long _lastBytesSent = 0;
     private DateTime _lastNetCheck = DateTime.Now;
@@ -92,7 +98,27 @@ public partial class WidgetWindow : Window
 
         // Синхронізація теми віджета з темою головної програми
         ThemeEngine.WidgetThemeRequired += OnWidgetThemeRequired;
-        Closed += (s, e) => ThemeEngine.WidgetThemeRequired -= OnWidgetThemeRequired;
+
+        // Синхронізація кнопки Game Mode з реальним станом ядра (подія спрацьовує з фонового потоку).
+        GameModeEngine.OnGameModeStateChanged += OnGameModeStateChanged;
+
+        Closed += (s, e) =>
+        {
+            ThemeEngine.WidgetThemeRequired -= OnWidgetThemeRequired;
+            GameModeEngine.OnGameModeStateChanged -= OnGameModeStateChanged;
+
+            // Зупиняємо всі таймери та звільняємо PerformanceCounter,
+            // щоб не лишати фонові оновлення/дескриптори після закриття.
+            _timer.Stop();
+            _rgbTimer.Stop();
+            _pulseTimer.Stop();
+            _rebootCancelTimer.Stop();
+            _shutdownCancelTimer.Stop();
+            _updateCheckTimer.Stop();
+
+            try { _cpuCounter?.Dispose(); } catch { }
+            _cpuCounter = null;
+        };
 
         _timer.Interval = TimeSpan.FromMilliseconds(1500);
         _timer.Tick += Timer_Tick;
@@ -167,6 +193,8 @@ public partial class WidgetWindow : Window
         catch { }
 
         RestoreStateFromRegistry();
+        UpdatePowerCycleControl();
+        RefreshWidgetGameModeToggle();
         UpdateNetworkBaseline();
         _timer.Start();
 
@@ -756,6 +784,82 @@ public partial class WidgetWindow : Window
             BtnShutdown.Content = "⏳ Вимикання...";
             Process.Start(new ProcessStartInfo { FileName = "shutdown.exe", Arguments = "/s /f /t 0", CreateNoWindow = true, UseShellExecute = false });
         }
+    }
+
+    private async void PowerSegment_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_syncingPowerUi) return;
+        if (sender is not System.Windows.Controls.RadioButton rb || rb.Tag is not string tag) return;
+        if (!Enum.TryParse(tag, out SystemPowerMode mode)) return;
+        if (mode == _widgetPowerMode) return;
+
+        _widgetPowerMode = mode;
+        PowerSegmentPanel.IsEnabled = false;
+        try
+        {
+            // Перед відновленням зліпка переконуємось, що він існує (інакше Std нічого не відновить).
+            if (mode == SystemPowerMode.OriginalSnapshot)
+                await PowerEngine.CaptureInitialSnapshotIfNeededAsync();
+
+            await PowerEngine.ApplyProfileAsync(mode);
+        }
+        finally
+        {
+            PowerSegmentPanel.IsEnabled = true;
+        }
+    }
+
+    private void UpdatePowerCycleControl()
+    {
+        _syncingPowerUi = true;
+        try
+        {
+            RbEco.IsChecked = _widgetPowerMode == SystemPowerMode.EcoPowerSaver;
+            RbStd.IsChecked = _widgetPowerMode == SystemPowerMode.OriginalSnapshot;
+            RbTurbo.IsChecked = _widgetPowerMode == SystemPowerMode.UltraPerformance;
+        }
+        finally
+        {
+            _syncingPowerUi = false;
+        }
+    }
+
+    private async void BtnWidgetGameMode_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleButton? btn = sender as ToggleButton;
+        if (btn is not null)
+            btn.IsEnabled = false;
+
+        try
+        {
+            await GameModeEngine.ToggleGameModeAsync();
+        }
+        finally
+        {
+            RefreshWidgetGameModeToggle();
+            if (btn is not null)
+                btn.IsEnabled = true;
+        }
+    }
+
+    private void RefreshWidgetGameModeToggle()
+    {
+        bool active = GameModeEngine.IsGameModeActive;
+        BtnWidgetGameMode.IsChecked = active;
+        BtnWidgetGameMode.ToolTip = active
+            ? "Game Mode увімкнено — натисніть, щоб вимкнути"
+            : "Game Mode вимкнено — натисніть, щоб увімкнути";
+    }
+
+    private void OnGameModeStateChanged(bool isActive)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => OnGameModeStateChanged(isActive));
+            return;
+        }
+
+        RefreshWidgetGameModeToggle();
     }
 
     private static SolidColorBrush HexBrush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;

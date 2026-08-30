@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Management;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.Win32;
 
@@ -29,13 +30,19 @@ public class BackupEntry
     public string MachineName { get; set; } = string.Empty;
     public string User { get; set; } = string.Empty;
     public string FormattedDate => CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
-    public string SizeFormatted { get; set; } = "0 КБ";
+    public string SizeFormatted { get; set; } = "0 Б";
     public bool IsValid { get; set; } = true;
+
+    /// <summary>Локалізований рядок «Створено: {date}» для списку бекапів.</summary>
+    [JsonIgnore]
+    public string CreatedText => LocalizationManager.Instance.Format("BackupEngine.CreatedFormat", FormattedDate);
 }
 
 public static class BackupEngine
 {
     public static string BackupsDirectory => AppPaths.Backups;
+
+    private static ModuleStrings Loc => LocalizationManager.Instance.For("BackupEngine");
 
     public static string LocalBackupsDirectory
     {
@@ -52,9 +59,10 @@ public static class BackupEngine
         var secondaryDirs = new List<string>();
         try
         {
+            string sysRoot = Path.GetPathRoot(Environment.SystemDirectory) ?? "C:\\";
             var otherDrives = DriveInfo.GetDrives()
                 .Where(d => d.IsReady && d.DriveType == DriveType.Fixed &&
-                            !d.Name.StartsWith("C", StringComparison.OrdinalIgnoreCase));
+                            !string.Equals(d.Name, sysRoot, StringComparison.OrdinalIgnoreCase));
 
             foreach (var drive in otherDrives)
             {
@@ -145,12 +153,12 @@ public static class BackupEngine
                 if (returnCode == 0)
                 {
                     AppLogger.Log("Створено системну точку відновлення Windows (VSS)", "SUCCESS");
-                    return (true, "Системну точку відновлення Windows (VSS) успішно створено!");
+                    return (true, Loc["VssCreated"]);
                 }
                 else
                 {
                     AppLogger.Log($"Помилка створення точки VSS: Код {returnCode}", "WARN");
-                    return (false, $"Помилка VSS (Код: {returnCode}). Перевірте, чи увімкнено захист системи у властивостях Windows.");
+                    return (false, Loc.Format("VssError", returnCode));
                 }
             }
             catch (Exception ex)
@@ -170,16 +178,16 @@ public static class BackupEngine
                     if (proc?.ExitCode == 0)
                     {
                         AppLogger.Log("Точку відновлення Windows (VSS) створено через PowerShell", "SUCCESS");
-                        return (true, "Точку відновлення Windows створено через PowerShell!");
+                        return (true, Loc["VssPowerShellOk"]);
                     }
 
                     AppLogger.Log("Служба VSS вимкнена або заблокована", "ERROR");
-                    return (false, "Служба VSS вимкнена або заблокована політиками захисту Windows.");
+                    return (false, Loc["VssServiceBlocked"]);
                 }
                 catch
                 {
                     AppLogger.Log($"Помилка створення точки VSS: {ex.Message}", "ERROR");
-                    return (false, $"Помилка створення точки VSS: {ex.Message}");
+                    return (false, Loc.Format("VssFailed", ex.Message));
                 }
             }
         });
@@ -220,7 +228,29 @@ public static class BackupEngine
                         UseShellExecute = false,
                         WindowStyle = ProcessWindowStyle.Hidden
                     });
-                    proc?.WaitForExit(3000);
+
+                    if (proc == null)
+                    {
+                        TryDeletePartialFile(outFile);
+                        continue;
+                    }
+
+                    // reg.exe на великих гілках може виконуватися довше 3 с; без Kill() процес
+                    // міг би дописати файл уже після перевірки File.Exists, залишивши частковий бекап.
+                    if (!proc.WaitForExit(3000))
+                    {
+                        try { proc.Kill(entireProcessTree: true); } catch { }
+                        AppLogger.Log($"Експорт {key} перевищив таймаут — пропущено", "WARN");
+                        TryDeletePartialFile(outFile);
+                        continue;
+                    }
+
+                    if (proc.ExitCode != 0)
+                    {
+                        AppLogger.Log($"Експорт {key} завершився з кодом {proc.ExitCode} — пропущено", "WARN");
+                        TryDeletePartialFile(outFile);
+                        continue;
+                    }
 
                     if (File.Exists(outFile))
                     {
@@ -254,15 +284,15 @@ public static class BackupEngine
                 if (successCount > 0)
                 {
                     AppLogger.Log($"Збережено бекап реєстру: {folderName} ({successCount} гілок)", "SUCCESS");
-                    return (true, $"Бекап реєстру ({successCount} гілок, {FormatBytes(totalBytes)}) збережено!", targetFolder);
+                    return (true, Loc.Format("BackupSaved", successCount, FormatBytes(totalBytes)), targetFolder);
                 }
 
-                return (false, "Не вдалося експортувати гілки реєстру.", string.Empty);
+                return (false, Loc["BackupExportFailed"], string.Empty);
             }
             catch (Exception ex)
             {
                 AppLogger.Log($"Помилка експорту реєстру: {ex.Message}", "ERROR");
-                return (false, $"Помилка експорту реєстру: {ex.Message}", string.Empty);
+                return (false, Loc.Format("BackupExportError", ex.Message), string.Empty);
             }
         });
     }
@@ -297,19 +327,28 @@ public static class BackupEngine
         }
     }
 
+    private static void TryDeletePartialFile(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath)) File.Delete(filePath);
+        }
+        catch { }
+    }
+
     public static async Task<(bool Success, string Message)> RestoreRegistryFromFolderAsync(string folderPath)
     {
         return await Task.Run(() =>
         {
             if (!Directory.Exists(folderPath))
             {
-                return (false, "Папку бекапу не знайдено.");
+                return (false, Loc["RestoreFolderMissing"]);
             }
 
             var regFiles = Directory.GetFiles(folderPath, "*.reg");
             if (regFiles.Length == 0)
             {
-                return (false, "У вибраній папці не знайдено файлів .reg.");
+                return (false, Loc["RestoreNoRegFiles"]);
             }
 
             int count = 0;
@@ -323,13 +362,31 @@ public static class BackupEngine
                     UseShellExecute = false,
                     WindowStyle = ProcessWindowStyle.Hidden
                 });
-                proc?.WaitForExit(3000);
-                if (proc?.ExitCode == 0) count++;
+
+                if (proc == null) continue;
+
+                // Очікуємо завершення до 10 с; якщо імпорт великої гілки довший — примусово
+                // перериваємо процес, щоб не залишити незавершений імпорт та не рахувати хибний ExitCode.
+                if (!proc.WaitForExit(10_000))
+                {
+                    try { proc.Kill(entireProcessTree: true); } catch { }
+                    AppLogger.Log($"Імпорт {Path.GetFileName(reg)} перевищив таймаут — пропущено", "WARN");
+                    continue;
+                }
+
+                if (proc.ExitCode == 0) count++;
             }
 
             string folderName = Path.GetFileName(folderPath);
+
+            if (count == 0)
+            {
+                AppLogger.Log($"Не вдалося імпортувати жодного ключа з бекапу: {folderName}", "ERROR");
+                return (false, Loc["RestoreImportFailed"]);
+            }
+
             AppLogger.Log($"Відновлено стан реєстру з бекапу: {folderName} ({count} ключів)", "SUCCESS");
-            return (true, $"Успішно імпортовано {count} ключів із бекапу [{folderName}].");
+            return (true, Loc.Format("RestoreImported", count, folderName));
         });
     }
 
@@ -463,9 +520,10 @@ public static class BackupEngine
 
     private static string FormatBytes(long bytes)
     {
-        if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):N2} МБ";
-        if (bytes >= 1024) return $"{bytes / (1024.0 * 1024):N2} КБ";
-        return $"{bytes} Байт";
+        var loc = LocalizationManager.Instance;
+        if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):N2} {loc["Common.UnitMB"]}";
+        if (bytes >= 1024) return $"{bytes / 1024.0:N2} {loc["Common.UnitKB"]}";
+        return $"{bytes} {loc["Common.UnitBytes"]}";
     }
 
     #endregion

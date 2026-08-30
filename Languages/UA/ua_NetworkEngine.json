@@ -1,0 +1,30 @@
+{
+    "Network": {
+        "Title": "⚡ МЕРЕЖА & TCP ОПТИМІЗАЦІЯ",
+        "Description": "Зниження затримок, вимкнення енергозбереження адаптерів та розблокування 20% QoS",
+        "StatusInitial": "Статус: —",
+        "Reading": "⏳ Зчитування стану мережі...",
+        "StatusPrefix": "Статус: {0}",
+        "Error": "Помилка: {0}",
+        "DetailsInitial": "Натисніть кнопку для застосування оптимізації мережі.",
+        "ActiveAdapters": "Активні адаптери ({0}): {1}",
+        "NagleOn": "🟢 Nagle вимкнено",
+        "NagleOff": "⚪ Nagle активний",
+        "EeeOn": "🟢 EEE вимкнено",
+        "EeeOff": "⚪ EEE активний",
+        "QosOn": "🟢 QoS 100%",
+        "QosOff": "⚪ QoS 80%",
+        "DnsCacheOn": "🟢 DNS кеш",
+        "DnsCacheOff": "⚪ DNS кеш",
+        "BtnNagle": "🔌 1-Click Вимкнути Nagle (TCP NoDelay)",
+        "BtnEee": "🌿 Вимкнути EEE/Green Ethernet",
+        "BtnQos": "📶 Розблокувати 20% QoS",
+        "BtnReset": "🛟 Аварійне відновлення мережі",
+        "Busy": "⏳...",
+        "NagleDone": "✓ Nagle вимкнено",
+        "EeeDone": "✓ EEE вимкнено",
+        "QosDone": "✓ QoS 100%",
+        "ResetDone": "✓ Мережу відновлено",
+        "ErrorShort": "⚠️ Помилка"
+    }
+}

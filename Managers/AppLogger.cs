@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Windows;
 
 namespace MASLOOPTIMIZER;
@@ -32,12 +33,19 @@ public class LogEntry
 
 public static class AppLogger
 {
+    // Пауза накопичення змін перед збереженням history.json (debounce),
+    // щоб уникнути повного перезапису файлу на кожен виклик Log().
+    private static readonly TimeSpan HistoryFlushDelay = TimeSpan.FromSeconds(2);
+
     public static ObservableCollection<LogEntry> LogEntries { get; } = new();
     private static readonly List<LogEntry> _historySnapshot = new();
     private static readonly object _lock = new();
+    private static System.Threading.Timer? _historyFlushTimer;
+    private static bool _historyDirty;
 
     static AppLogger()
     {
+        _historyFlushTimer = new System.Threading.Timer(_ => FlushHistory(), null, Timeout.Infinite, Timeout.Infinite);
         LoadHistory();
     }
 
@@ -69,6 +77,7 @@ public static class AppLogger
         });
 
         AppendToFile(entry);
+        ScheduleHistoryFlush();
     }
 
     private static void AppendToFile(LogEntry entry)
@@ -79,16 +88,40 @@ public static class AppLogger
             {
                 AppPaths.EnsureDirectories();
 
-                // Текстовий лог
+                // Текстовий лог — дешеве дописування в кінець файлу.
                 string logLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{entry.Level}] {entry.Message}{Environment.NewLine}";
                 File.AppendAllText(AppPaths.AppLogFile, logLine);
-
-                // JSON історія з безпечного знімка
-                string json = JsonSerializer.Serialize(_historySnapshot, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(AppPaths.HistoryLogFile, json);
             }
             catch { }
         }
+    }
+
+    private static void ScheduleHistoryFlush()
+    {
+        lock (_lock)
+        {
+            _historyDirty = true;
+            _historyFlushTimer?.Change(HistoryFlushDelay, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    public static void FlushHistory()
+    {
+        List<LogEntry> snapshot;
+        lock (_lock)
+        {
+            if (!_historyDirty) return;
+            snapshot = new List<LogEntry>(_historySnapshot);
+            _historyDirty = false;
+        }
+
+        try
+        {
+            AppPaths.EnsureDirectories();
+            string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(AppPaths.HistoryLogFile, json);
+        }
+        catch { }
     }
 
     public static void LoadHistory()
@@ -127,6 +160,8 @@ public static class AppLogger
         {
             try
             {
+                _historyDirty = false;
+                _historyFlushTimer?.Change(Timeout.Infinite, Timeout.Infinite);
                 _historySnapshot.Clear();
                 System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => LogEntries.Clear());
 

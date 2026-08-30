@@ -9,8 +9,10 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32;
+using LibreHardwareMonitor.Hardware;
 
 namespace MASLOOPTIMIZER;
 
@@ -227,6 +229,11 @@ public class DetailedHardwareInfo
 
 public static class DiagnosticEngine
 {
+    // Стан для обчислення дельти завантаження CPU через GetSystemTimes
+    private static ulong? _cpuIdlePrev;
+    private static ulong? _cpuKernelPrev;
+    private static ulong? _cpuUserPrev;
+
     #region Win32 P/Invoke
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
@@ -253,6 +260,60 @@ public static class DiagnosticEngine
 
     private const int FirmwareTypeBios = 0;
     private const int FirmwareTypeUefi = 1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FILETIME
+    {
+        public uint dwLowDateTime;
+        public uint dwHighDateTime;
+    }
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetSystemTimes(out FILETIME lpIdleTime, out FILETIME lpKernelTime, out FILETIME lpUserTime);
+
+    private static ulong ToUInt64(FILETIME ft) => ((ulong)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+
+    // ---- AMD ADL (atiadlxx.dll) — драйверна бібліотека Radeon (64-bit) ----
+    [DllImport("atiadlxx.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int ADL_Main_Control_Create(IntPtr callback, int enumConnectedAdapters);
+
+    [DllImport("atiadlxx.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int ADL_Main_Control_Destroy();
+
+    [DllImport("atiadlxx.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int ADL_Adapter_NumberOfAdapters_Get(ref int numAdapters);
+
+    [DllImport("atiadlxx.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int ADL_Adapter_Active_Get(int adapterIndex, ref int status);
+
+    [DllImport("atiadlxx.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int ADL_Overdrive5_Temperature_Get(int adapterIndex, int thermalControllerIndex, ref ADLTemperature temperature);
+
+    [DllImport("atiadlxx.dll", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int ADL_Overdrive5_CurrentActivity_Get(int adapterIndex, ref ADLPMActivity activity);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ADLTemperature
+    {
+        public int iSize;
+        public int iTemperature; // у 0.001 °C
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ADLPMActivity
+    {
+        public int iSize;
+        public int iEngineClock;
+        public int iMemoryClock;
+        public int iVddc;
+        public int iActivityPercent;
+        public int iCurrentPerformanceLevel;
+        public int iCurrentBusSpeed;
+        public int iCurrentBusLanes;
+        public int iMaximumBusLanes;
+        public int iReserved;
+    }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
     private struct DEVMODE
@@ -309,17 +370,17 @@ public static class DiagnosticEngine
 
                 info.OS = $"{prodName} {displayVer} (Build {build})".Trim();
             }
-            catch { info.OS = "Windows 11 Pro x64"; }
+            catch { info.OS = "Windows"; }
 
             // CPU
             try
             {
                 using var cpuKey = Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0");
-                string cpuName = cpuKey?.GetValue("ProcessorNameString")?.ToString() ?? "AMD Ryzen CPU";
+                string cpuName = cpuKey?.GetValue("ProcessorNameString")?.ToString() ?? "CPU";
                 cpuName = CleanCpuName(cpuName);
                 info.CPU = $"{cpuName} ({Environment.ProcessorCount}T)";
             }
-            catch { info.CPU = $"{Environment.ProcessorCount} Cores CPU"; }
+            catch { info.CPU = "CPU (не визначено)"; }
 
             // GPU
             try
@@ -337,7 +398,7 @@ public static class DiagnosticEngine
                     }
                 }
             }
-            catch { info.GPU = "GeForce RTX"; }
+            catch { info.GPU = "GPU (не визначено)"; }
 
             // RAM
             try
@@ -349,7 +410,7 @@ public static class DiagnosticEngine
                     info.RAM = $"{Math.Round(totalGb, 1)} {loc["Common.UnitGB"]}";
                 }
             }
-            catch { info.RAM = "32.0 GB"; }
+            catch { info.RAM = "N/A"; }
 
             // Диск C:
             try
@@ -362,7 +423,7 @@ public static class DiagnosticEngine
                     info.DiskFree = $"{freeGb} / {totalGb} {loc["Common.UnitGB"]}";
                 }
             }
-            catch { info.DiskFree = "OK"; }
+            catch { info.DiskFree = "N/A"; }
 
             return info;
         });
@@ -387,11 +448,14 @@ public static class DiagnosticEngine
         {
             var data = new DetailedHardwareInfo();
 
+            // LibreHardwareMonitorLib — основне джерело точних температур ядер CPU/GPU.
+            var libreSensors = ReadLibreHardwareMonitorSnapshot();
+
             CollectOsTelemetry(data);
             CollectSecurityTelemetry(data);
-            CollectCpuTelemetry(data);
+            CollectCpuTelemetry(data, libreSensors);
             CollectMemoryTelemetry(data);
-            CollectGpuTelemetry(data);
+            CollectGpuTelemetry(data, libreSensors);
             data.Displays = GetActiveMonitorsNative();
             CollectStorageTelemetry(data);
             CollectBoardBiosTelemetry(data);
@@ -477,15 +541,45 @@ public static class DiagnosticEngine
         }
         catch { }
 
-        data.TPMStatus = loc["Diagnostic.TpmReady"];
+        data.TPMStatus = GetTpmStatus();
         data.PowerPlan = GetActivePowerPlan();
+    }
+
+    /// <summary>Реальне опитування TPM через WMI Win32_Tpm (а не хардкод «Готовий»).</summary>
+    private static string GetTpmStatus()
+    {
+        var loc = LocalizationManager.Instance;
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT IsEnabled_InitialValue, IsActivated_InitialValue, Status FROM Win32_Tpm");
+
+            foreach (var o in searcher.Get())
+            {
+                bool enabled = false, activated = false;
+                try { enabled = Convert.ToBoolean(o["IsEnabled_InitialValue"] ?? false); } catch { }
+                try { activated = Convert.ToBoolean(o["IsActivated_InitialValue"] ?? false); } catch { }
+
+                string status = o["Status"]?.ToString() ?? string.Empty;
+
+                if (enabled && activated)
+                {
+                    return loc["Diagnostic.TpmReady"];
+                }
+
+                return loc["Diagnostic.TpmDisabled"];
+            }
+        }
+        catch { }
+
+        return loc["Diagnostic.TpmUnavailable"];
     }
 
     #endregion
 
     #region 3. Процесор (точна назва, частоти, кеш, віртуалізація)
 
-    private static void CollectCpuTelemetry(DetailedHardwareInfo data)
+    private static void CollectCpuTelemetry(DetailedHardwareInfo data, LibreSensorSnapshot libreSensors)
     {
         var loc = LocalizationManager.Instance;
 
@@ -559,9 +653,17 @@ public static class DiagnosticEngine
         }
         catch { }
 
-        data.CPUTemp = "N/A";
-        data.BoardTemp = "N/A";
-        data.VRMTemp = "N/A";
+        // ===== ЖИВІ СЕНСОРИ: навантаження та температура процесора =====
+        // Навантаження — через GetSystemTimes (точне на всіх Windows, Intel/AMD, старі/нові).
+        data.CPULoadPercent = FormatLoad(ReadCpuLoadPercentValue());
+
+        // Температура ядер CPU — спершу LibreHardwareMonitorLib (точні ядра Intel/AMD),
+        // інакше fallback на ACPI ThermalZone.
+        data.CPUTemp = FormatTemperature(libreSensors.CpuTempC ?? ReadAcpiThermalZoneTemperatureC());
+
+        // Плата/VRM — з LHM, якщо материнська плата дає відповідні датчики.
+        data.BoardTemp = FormatTemperature(libreSensors.BoardTempC);
+        data.VRMTemp = FormatTemperature(libreSensors.VrmTempC);
     }
 
     private static string CleanCpuName(string raw)
@@ -667,7 +769,7 @@ public static class DiagnosticEngine
 
     #region 5. Відеокарти (дискретна + вбудована, VRAM, драйвер)
 
-    private static void CollectGpuTelemetry(DetailedHardwareInfo data)
+    private static void CollectGpuTelemetry(DetailedHardwareInfo data, LibreSensorSnapshot libreSensors)
     {
         data.Gpus.Clear();
 
@@ -728,8 +830,8 @@ public static class DiagnosticEngine
         data.GPUDriver = primary.DriverVersion;
         data.GPUVRAM = primary.VramDisplay;
 
-        // Жива телеметрія NVIDIA через nvidia-smi (якщо доступний)
-        CollectNvidiaSmiTelemetry(data, primary);
+        // Жива телеметрія GPU: LHM (основне) → NVIDIA (nvidia-smi) / AMD (ADL) / Intel (fallback)
+        ReadGpuSensors(data, primary, libreSensors);
     }
 
     private static bool IsIntegratedGpu(string name, string pnpId)
@@ -788,55 +890,554 @@ public static class DiagnosticEngine
     }
 
 
-    private static void CollectNvidiaSmiTelemetry(DetailedHardwareInfo data, GpuAdapterInfo primary)
+    #region Сенсори: навантаження та температури (CPU/GPU, універсальні)
+
+    private enum GpuVendor { Unknown, Nvidia, Amd, Intel }
+
+    /// <summary>Точне навантаження CPU через GetSystemTimes (без локалізованих лічильників).</summary>
+    private static double? ReadCpuLoadPercentValue()
+    {
+        try
+        {
+            // Перший виклик лише фіксує базову точку; після невеликої паузи рахуємо дельту.
+            if (_cpuKernelPrev == null)
+            {
+                if (GetSystemTimes(out var idle0, out var kern0, out var user0))
+                {
+                    _cpuIdlePrev = ToUInt64(idle0);
+                    _cpuKernelPrev = ToUInt64(kern0);
+                    _cpuUserPrev = ToUInt64(user0);
+                }
+                Thread.Sleep(200);
+            }
+
+            if (!GetSystemTimes(out var idle, out var kernel, out var user)) return null;
+
+            ulong idleNow = ToUInt64(idle);
+            ulong totalNow = ToUInt64(kernel) + ToUInt64(user);
+
+            if (_cpuIdlePrev is ulong idlePrev && _cpuKernelPrev is ulong kernPrev && _cpuUserPrev is ulong userPrev)
+            {
+                ulong totalPrev = kernPrev + userPrev;
+                ulong idleDelta = idleNow - idlePrev;
+                ulong totalDelta = totalNow - totalPrev;
+
+                _cpuIdlePrev = idleNow;
+                _cpuKernelPrev = ToUInt64(kernel);
+                _cpuUserPrev = ToUInt64(user);
+
+                if (totalDelta > 0)
+                {
+                    double pct = (1.0 - (double)idleDelta / totalDelta) * 100.0;
+                    return Math.Clamp(Math.Round(pct, 1), 0.0, 100.0);
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>Температура через ACPI Thermal Zone (root\WMI). Driver-less, Intel/AMD.</summary>
+    private static double? ReadAcpiThermalZoneTemperatureC()
+    {
+        double best = double.NaN;
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                @"root\WMI", "SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature");
+
+            foreach (var o in searcher.Get())
+            {
+                if (o["CurrentTemperature"] == null) continue;
+                double tenthsKelvin = Convert.ToDouble(o["CurrentTemperature"], CultureInfo.InvariantCulture);
+                if (tenthsKelvin <= 0) continue;
+
+                double c = (tenthsKelvin / 10.0) - 273.15;
+                if (c < 0.0 || c > 125.0) continue; // відсіюємо явний ACPI-смітник
+                if (double.IsNaN(best) || c > best) best = c;
+            }
+        }
+        catch { }
+
+        return double.IsNaN(best) ? (double?)null : Math.Round(best, 1);
+    }
+
+    /// <summary>Загальне 3D/Compute-навантаження GPU через Performance Counter "GPU Engine" (Win10+).</summary>
+    private static double? ReadGpuEngineUtilizationPercent()
+    {
+        var counters = new List<PerformanceCounter>();
+        try
+        {
+            var category = new PerformanceCounterCategory("GPU Engine");
+            foreach (string instance in category.GetInstanceNames())
+            {
+                bool isRender = instance.IndexOf("engtype_3D", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                instance.IndexOf("engtype_Compute", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (!isRender) continue;
+
+                try { counters.Add(new PerformanceCounter("GPU Engine", "Utilization Percentage", instance, true)); }
+                catch { }
+            }
+
+            if (counters.Count == 0) return null;
+
+            // Прогрів лічильників (перше значення завжди 0)
+            foreach (var c in counters) { try { _ = c.NextValue(); } catch { } }
+            Thread.Sleep(150);
+
+            double total = 0;
+            foreach (var c in counters)
+            {
+                try { total += c.NextValue(); }
+                catch { }
+                finally { c.Dispose(); }
+            }
+            return Math.Clamp(Math.Round(total, 1), 0.0, 100.0);
+        }
+        catch
+        {
+            foreach (var c in counters) { try { c.Dispose(); } catch { } }
+            return null;
+        }
+    }
+
+    private static GpuVendor DetectGpuVendor(string name, string pnpId)
+    {
+        string n = (name ?? string.Empty).ToLowerInvariant();
+        string p = (pnpId ?? string.Empty).ToLowerInvariant();
+
+        if (n.Contains("nvidia") || n.Contains("geforce") || n.Contains("quadro") ||
+            n.Contains("rtx") || n.Contains("gtx") || p.Contains("ven_10de"))
+            return GpuVendor.Nvidia;
+
+        if (n.Contains("amd") || n.Contains("radeon") || p.Contains("ven_1002") || p.Contains("ven_1022"))
+            return GpuVendor.Amd;
+
+        if (n.Contains("intel") || p.Contains("ven_8086"))
+            return GpuVendor.Intel;
+
+        return GpuVendor.Unknown;
+    }
+
+    private static void ReadGpuSensors(DetailedHardwareInfo data, GpuAdapterInfo primary, LibreSensorSnapshot libreSensors)
+    {
+        GpuVendor vendor = DetectGpuVendor(primary.Name, primary.PnpDeviceId);
+
+        // 1) Основне джерело — LibreHardwareMonitorLib (точні датчики NVIDIA/AMD/Intel/Arc).
+        double? temp = libreSensors.GpuTempC;
+        double? load = libreSensors.GpuLoadPercent;
+
+        data.GPUTemp = FormatTemperature(temp);
+        data.GPUHotspotTemp = FormatTemperature(libreSensors.GpuHotspotTempC);
+        data.GPUVramTemp = FormatTemperature(libreSensors.GpuVramTempC);
+        data.GPULoad = FormatLoad(load);
+
+        if (libreSensors.GpuPowerW is double powerW && powerW > 0)
+            data.GPUPower = FormatPower(powerW);
+        if (libreSensors.GpuFan is double fanVal)
+            data.GPUFan = FormatFan(fanVal);
+        if (libreSensors.GpuClockMhz is double clockMhz && clockMhz > 0)
+            data.GPUClock = FormatClock(clockMhz);
+
+        // 2) Fallback тільки для того, що LHM не надав.
+        bool needTemp = temp == null;
+        bool needLoad = load == null;
+        bool needExtra = data.GPUPower == "N/A" || data.GPUFan == "N/A" ||
+                         data.GPUClock == "N/A" || data.GPUVRAMUsed == "N/A";
+
+        if (needTemp || needLoad || needExtra)
+        {
+            GpuVendorSensors fallback = vendor switch
+            {
+                GpuVendor.Nvidia => ReadNvidiaGpuSensors(primary),
+                GpuVendor.Amd => ReadAmdGpuSensors(),
+                _ => new GpuVendorSensors(
+                    ReadAcpiThermalZoneTemperatureC(),
+                    ReadGpuEngineUtilizationPercent(),
+                    null, null, null, null)
+            };
+
+            if (needTemp) temp = fallback.TempC;
+            if (needLoad) load = fallback.LoadPercent ?? ReadGpuEngineUtilizationPercent();
+
+            if (data.GPUPower == "N/A" && fallback.PowerW is double fPower && fPower > 0)
+                data.GPUPower = FormatPower(fPower);
+            if (data.GPUFan == "N/A" && fallback.FanPercent is double fFan)
+                data.GPUFan = FormatFan(fFan);
+            if (data.GPUClock == "N/A" && fallback.ClockMhz is double fClock && fClock > 0)
+                data.GPUClock = FormatClock(fClock);
+            if (data.GPUVRAMUsed == "N/A" && fallback.VramUsedMb is double fVram && fVram > 0)
+                data.GPUVRAMUsed = FormatVramUsed(fVram);
+
+            data.GPUTemp = FormatTemperature(temp);
+            data.GPULoad = FormatLoad(load);
+        }
+    }
+
+    private static string? FindNvidiaSmi()
     {
         string systemSmi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvidia-smi.exe");
         string progSmi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"NVIDIA Corporation\NVSMI\nvidia-smi.exe");
-        string nvsmiPath = File.Exists(systemSmi) ? systemSmi : (File.Exists(progSmi) ? progSmi : "nvidia-smi.exe");
+        if (File.Exists(systemSmi)) return systemSmi;
+        if (File.Exists(progSmi)) return progSmi;
+
+        // Остання спроба — пошук у PATH
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "nvidia-smi",
+                Arguments = "-L",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi);
+            if (proc != null)
+            {
+                proc.WaitForExit(1500);
+                if (proc.ExitCode == 0) return "nvidia-smi";
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static GpuVendorSensors ReadNvidiaGpuSensors(GpuAdapterInfo primary)
+    {
+        string? nvsmi = FindNvidiaSmi();
+        if (nvsmi == null) return default;
 
         try
         {
             var psi = new ProcessStartInfo
             {
-                FileName = nvsmiPath,
-                Arguments = "--query-gpu=name,memory.total,driver_version,temperature.gpu,power.draw,fan.speed,clocks.current.graphics,pci.link.gen.current,pci.link.width.current --format=csv,noheader,nounits",
+                FileName = nvsmi,
+                Arguments = "--query-gpu=name,utilization.gpu,temperature.gpu,power.draw,fan.speed,clocks.current.graphics,memory.used --format=csv,noheader,nounits",
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
             using var proc = Process.Start(psi);
-            if (proc == null) return;
+            if (proc == null) return default;
 
-            string outStr = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(1500);
-
-            if (string.IsNullOrWhiteSpace(outStr)) return;
-
-            var parts = outStr.Split(new[] { ',', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Select(p => p.Trim()).ToArray();
-            if (parts.Length < 4) return;
-
-            data.GPUModel = parts[0];
-            if (double.TryParse(parts[1], NumberStyles.Any, CultureInfo.InvariantCulture, out double vramMb) && vramMb > 0)
+            string output = proc.StandardOutput.ReadToEnd();
+            if (!proc.WaitForExit(2500))
             {
-                data.GPUVRAM = $"{Math.Round(vramMb / 1024, 1):0.#} {LocalizationManager.Instance["Common.UnitGB"]}";
-            }
-            data.GPUDriver = parts[2];
-            data.GPUTemp = $"{parts[3]} °C";
-
-            if (double.TryParse(parts[3], NumberStyles.Any, CultureInfo.InvariantCulture, out double coreT))
-            {
-                data.GPUHotspotTemp = $"{coreT + 12:N0} °C";
-                data.GPUVramTemp = $"{coreT + 7:N0} °C";
+                try { proc.Kill(); } catch { }
+                return default;
             }
 
-            if (parts.Length >= 5) data.GPUPower = $"{parts[4]} W";
-            if (parts.Length >= 6) data.GPUFan = parts[5].Contains("N/A") || parts[5] == "0" ? "0 RPM (0dB Silent)" : $"{parts[5]} %";
-            if (parts.Length >= 7) data.GPUClock = $"{parts[6]} MHz";
-            if (parts.Length >= 9) data.GPUPCIeLink = $"PCIe {parts[7]}.0 x{parts[8]}";
+            if (string.IsNullOrWhiteSpace(output)) return default;
+
+            // Кожен GPU — окремий рядок CSV
+            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                              .Select(l => l.Trim())
+                              .Where(l => l.Length > 0)
+                              .ToList();
+
+            if (lines.Count == 0) return default;
+
+            // Якщо GPU кілька — шукаємо рядок, що відповідає primary; інакше беремо перший.
+            string selected = lines[0];
+            foreach (string line in lines)
+            {
+                if (!string.IsNullOrWhiteSpace(primary.Name) &&
+                    line.IndexOf(primary.Name, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    selected = line;
+                    break;
+                }
+            }
+
+            var cols = selected.Split(',').Select(c => c.Trim()).ToArray();
+            if (cols.Length < 7) return default;
+
+            // name, utilization.gpu, temperature.gpu, power.draw, fan.speed, clocks.current.graphics, memory.used
+            return new GpuVendorSensors(
+                ParseDouble(cols[2]),
+                ParseDouble(cols[1]),
+                ParseDouble(cols[3]),
+                ParseDouble(cols[4]),
+                ParseDouble(cols[5]),
+                ParseDouble(cols[6]));
         }
         catch { }
+        return default;
     }
+
+    private static GpuVendorSensors ReadAmdGpuSensors()
+    {
+        double? temp = null;
+        double? load = null;
+
+        try
+        {
+            if (ADL_Main_Control_Create(IntPtr.Zero, 1) != 0) return default;
+
+            try
+            {
+                int numAdapters = 0;
+                if (ADL_Adapter_NumberOfAdapters_Get(ref numAdapters) != 0 || numAdapters <= 0)
+                    return default;
+
+                double bestTemp = double.NaN;
+                double bestLoad = double.NaN;
+
+                for (int i = 0; i < numAdapters; i++)
+                {
+                    int active = 0;
+                    if (ADL_Adapter_Active_Get(i, ref active) != 0 || active == 0) continue;
+
+                    var t = new ADLTemperature { iSize = Marshal.SizeOf(typeof(ADLTemperature)) };
+                    if (ADL_Overdrive5_Temperature_Get(i, 0, ref t) == 0 && t.iTemperature > 0)
+                    {
+                        double c = t.iTemperature / 1000.0;
+                        if (c > 0 && c < 150)
+                            bestTemp = double.IsNaN(bestTemp) ? c : Math.Max(bestTemp, c);
+                    }
+
+                    var a = new ADLPMActivity { iSize = Marshal.SizeOf(typeof(ADLPMActivity)) };
+                    if (ADL_Overdrive5_CurrentActivity_Get(i, ref a) == 0 && a.iActivityPercent >= 0)
+                    {
+                        bestLoad = double.IsNaN(bestLoad) ? a.iActivityPercent : Math.Max(bestLoad, a.iActivityPercent);
+                    }
+                }
+
+                if (!double.IsNaN(bestTemp)) temp = Math.Round(bestTemp, 1);
+                if (!double.IsNaN(bestLoad)) load = Math.Clamp(Math.Round(bestLoad, 1), 0.0, 100.0);
+            }
+            finally
+            {
+                ADL_Main_Control_Destroy();
+            }
+        }
+        catch { }
+
+        return new GpuVendorSensors(temp, load, null, null, null, null);
+    }
+
+    private static double? ParseDouble(string? text)
+    {
+        if (double.TryParse(text?.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out double v))
+            return v;
+        return null;
+    }
+
+    private static string FormatTemperature(double? celsius) => celsius.HasValue ? $"{celsius.Value:0.#} °C" : "N/A";
+
+    private static string FormatLoad(double? percent) => percent.HasValue ? $"{percent.Value:0.#} %" : "N/A";
+
+    #endregion
+
+    #endregion
+
+
+    #region LibreHardwareMonitorLib — точні сенсори (основне джерело)
+
+    private readonly record struct LhmSensor(string Name, double Value);
+
+    /// <summary>Знімок значень з LibreHardwareMonitorLib. null = датчик недоступний.</summary>
+    private sealed class LibreSensorSnapshot
+    {
+        public double? CpuTempC;
+        public double? GpuTempC;
+        public double? GpuHotspotTempC;
+        public double? GpuVramTempC;
+        public double? GpuPowerW;
+        public double? GpuFan;
+        public double? GpuClockMhz;
+        public double? GpuLoadPercent;
+        public double? BoardTempC;
+        public double? VrmTempC;
+    }
+
+    /// <summary>Результат вендорних fallback-датчиків (nvidia-smi / AMD ADL).</summary>
+    private readonly record struct GpuVendorSensors(
+        double? TempC, double? LoadPercent, double? PowerW, double? FanPercent, double? ClockMhz, double? VramUsedMb);
+
+    private static LibreSensorSnapshot ReadLibreHardwareMonitorSnapshot()
+    {
+        var snapshot = new LibreSensorSnapshot();
+
+        var computer = new Computer
+        {
+            IsCpuEnabled = true,
+            IsGpuEnabled = true,
+            IsMotherboardEnabled = true,
+        };
+
+        try
+        {
+            computer.Open();
+        }
+        catch
+        {
+            try { computer.Close(); } catch { }
+            return snapshot;
+        }
+
+        try
+        {
+            var cpuTemps = new List<LhmSensor>();
+            var gpuTemps = new List<LhmSensor>();
+            var gpuHotspots = new List<LhmSensor>();
+            var gpuVramTemps = new List<LhmSensor>();
+            var gpuPowers = new List<LhmSensor>();
+            var gpuFans = new List<LhmSensor>();
+            var gpuClocks = new List<LhmSensor>();
+            var gpuLoads = new List<LhmSensor>();
+            var boardTemps = new List<LhmSensor>();
+            var vrmTemps = new List<LhmSensor>();
+
+            foreach (IHardware hardware in computer.Hardware)
+            {
+                TraverseLhmHardware(hardware, hw =>
+                {
+                    switch (hw.HardwareType)
+                    {
+                        case HardwareType.Cpu:
+                            CollectTemperatureSensors(hw, cpuTemps);
+                            break;
+
+                        case HardwareType.GpuNvidia:
+                        case HardwareType.GpuAmd:
+                        case HardwareType.GpuIntel:
+                            CollectTemperatureSensors(hw, gpuTemps);
+                            CollectNamedSensors(hw, gpuHotspots, SensorType.Temperature, "Hot Spot", "Hotspot");
+                            CollectNamedSensors(hw, gpuVramTemps, SensorType.Temperature, "Memory Junction", "Memory Temperature", "VRAM", "GDDR");
+                            CollectSensors(hw, gpuPowers, SensorType.Power);
+                            CollectSensors(hw, gpuFans, SensorType.Fan);
+                            CollectSensors(hw, gpuClocks, SensorType.Clock);
+                            CollectSensors(hw, gpuLoads, SensorType.Load);
+                            break;
+
+                        case HardwareType.Motherboard:
+                        case HardwareType.SuperIO:
+                        case HardwareType.EmbeddedController:
+                            CollectNamedSensors(hw, boardTemps, SensorType.Temperature, "System", "Motherboard", "PCH", "Chipset");
+                            CollectNamedSensors(hw, vrmTemps, SensorType.Temperature, "VRM", "MOS");
+                            break;
+                    }
+                });
+            }
+
+            snapshot.CpuTempC = SelectCpuTemp(cpuTemps);
+            snapshot.GpuTempC = SelectFirst(gpuTemps, "GPU Core", "GPU Temperature");
+            snapshot.GpuHotspotTempC = SelectFirst(gpuHotspots, "Hot Spot", "Hotspot");
+            snapshot.GpuVramTempC = SelectFirst(gpuVramTemps, "Memory Junction", "Memory Temperature", "VRAM", "GDDR");
+            snapshot.GpuPowerW = SelectFirst(gpuPowers, "GPU Power", "GPU Package Power", "GPU Chip Power", "Power");
+            snapshot.GpuFan = SelectFirst(gpuFans, "GPU Fan", "Fan");
+            snapshot.GpuClockMhz = SelectFirst(gpuClocks, "GPU Core", "GPU Clock", "Clock");
+            snapshot.GpuLoadPercent = SelectFirst(gpuLoads, "GPU Core", "GPU");
+            snapshot.BoardTempC = SelectFirst(boardTemps, "System", "Motherboard", "PCH", "Chipset");
+            snapshot.VrmTempC = SelectFirst(vrmTemps, "VRM", "MOS");
+        }
+        catch { }
+        finally
+        {
+            try { computer.Close(); } catch { }
+        }
+
+        return snapshot;
+    }
+
+    private static void TraverseLhmHardware(IHardware hardware, Action<IHardware> visit)
+    {
+        try { hardware.Update(); } catch { }
+        visit(hardware);
+        foreach (IHardware sub in hardware.SubHardware)
+        {
+            TraverseLhmHardware(sub, visit);
+        }
+    }
+
+    private static void CollectTemperatureSensors(IHardware hardware, List<LhmSensor> target)
+    {
+        foreach (ISensor sensor in hardware.Sensors)
+        {
+            if (sensor.SensorType == SensorType.Temperature &&
+                sensor.Value.HasValue &&
+                sensor.Value.Value > -200f &&
+                sensor.Value.Value < 200f)
+            {
+                target.Add(new LhmSensor(sensor.Name ?? string.Empty, sensor.Value.Value));
+            }
+        }
+    }
+
+    private static void CollectSensors(IHardware hardware, List<LhmSensor> target, SensorType type)
+    {
+        foreach (ISensor sensor in hardware.Sensors)
+        {
+            if (sensor.SensorType == type && sensor.Value.HasValue)
+            {
+                target.Add(new LhmSensor(sensor.Name ?? string.Empty, sensor.Value.Value));
+            }
+        }
+    }
+
+    private static void CollectNamedSensors(IHardware hardware, List<LhmSensor> target, SensorType type, params string[] needles)
+    {
+        foreach (ISensor sensor in hardware.Sensors)
+        {
+            if (sensor.SensorType != type || !sensor.Value.HasValue) continue;
+            string name = sensor.Name ?? string.Empty;
+            if (needles.Any(n => name.Contains(n, StringComparison.OrdinalIgnoreCase)))
+            {
+                target.Add(new LhmSensor(name, sensor.Value.Value));
+            }
+        }
+    }
+
+    private static double? SelectCpuTemp(IReadOnlyList<LhmSensor> temps)
+    {
+        if (temps.Count == 0) return null;
+
+        double? v = SelectFirst(temps, "CPU Package", "Package");
+        if (v.HasValue) return v;
+
+        v = SelectFirst(temps, "Tctl", "Tdie");
+        if (v.HasValue) return v;
+
+        v = SelectFirst(temps, "Core Max");
+        if (v.HasValue) return v;
+
+        v = SelectFirst(temps, "Core Average");
+        if (v.HasValue) return v;
+
+        var cores = temps.Where(t => t.Name.Contains("Core #", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (cores.Count > 0) return cores.Max(t => t.Value);
+
+        return temps.Max(t => t.Value);
+    }
+
+    private static double? SelectFirst(IReadOnlyList<LhmSensor> sensors, params string[] needles)
+    {
+        foreach (string needle in needles)
+        {
+            foreach (LhmSensor s in sensors)
+            {
+                if (s.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)) return s.Value;
+            }
+        }
+        return null;
+    }
+
+    private static string FormatPower(double watts) => $"{watts:0.#} W";
+
+    private static string FormatFan(double value)
+    {
+        if (value <= 0) return "0 RPM (0dB Silent)";
+        return value > 100 ? $"{value:0} RPM" : $"{value:0} %";
+    }
+
+    private static string FormatClock(double mhz) => $"{mhz:0} MHz";
+
+    private static string FormatVramUsed(double mb) =>
+        $"{Math.Round(mb / 1024, 1):0.#} {LocalizationManager.Instance["Common.UnitGB"]}";
 
     #endregion
 
@@ -1265,14 +1866,15 @@ public static class DiagnosticEngine
         sb.AppendLine($"{loc["Diagnostic.ReportCpuConfig"]}  {hw.CPUCores} / {hw.CPUThreads} ({hw.CPUMaxClockGHz})");
         sb.AppendLine($"{loc["Diagnostic.ReportCpuCache"]}  L3: {hw.CPUL3Cache} | L2: {hw.CPUL2Cache}");
         sb.AppendLine($"{loc["Diagnostic.LblVirtual"]}  {hw.CPUVirtual}");
+        sb.AppendLine($"  {loc.Format("Diagnostic.CpuLoadFormat", hw.CPULoadPercent)} | {loc.Format("Diagnostic.CpuTempFormat", hw.CPUTemp)}");
         sb.AppendLine();
         sb.AppendLine(loc["Diagnostic.ReportGpu"]);
         foreach (var g in hw.Gpus)
         {
             sb.AppendLine($"  • {g.Name} [{g.KindDisplay}] — VRAM: {g.VramDisplay} | Driver: {g.DriverVersion}");
         }
-        sb.AppendLine($"{loc["Diagnostic.ReportGpuVram"]}  {hw.GPUVRAM}");
-        if (hw.GPUTemp != "N/A") sb.AppendLine($"{loc["Diagnostic.ReportGpuTemps"]}  Core: {hw.GPUTemp} | Hotspot: {hw.GPUHotspotTemp} | VRAM: {hw.GPUVramTemp}");
+        sb.AppendLine($"{loc["Diagnostic.ReportGpuVram"]}  {hw.GPUVRAM} ({hw.GPUVRAMUsed})");
+        sb.AppendLine($"  {loc.Format("Diagnostic.GpuLoadFormat", hw.GPULoad)} | {loc.Format("Diagnostic.GpuCoreTempFormat", hw.GPUTemp)}");
         sb.AppendLine($"{loc["Diagnostic.ReportGpuBus"]}  {hw.GPUPCIeLink}");
         sb.AppendLine($"{loc["Diagnostic.ReportGpuDriver"]}  {hw.GPUDriver} | {hw.GPUFan} | {hw.GPUPower}");
         sb.AppendLine(loc["Diagnostic.ReportGpuDisplays"]);

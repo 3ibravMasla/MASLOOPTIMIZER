@@ -28,6 +28,10 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
 
+        ApplyLocalizedUi();
+        LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+        Closed += OnSettingsWindowClosed;
+
         double scale = SettingsManager.ReadUiScalePercent();
         _suppressScaleEvents = true;
         ScaleSlider.Value = scale;
@@ -41,6 +45,32 @@ public partial class SettingsWindow : Window
         ChkWidgetOnly.IsChecked = SettingsManager.IsWidgetOnlyAutostartEnabled();
         ChkSilent.IsChecked = SettingsManager.IsSilentAutostartEnabled();
         _suppressCheckEvents = false;
+    }
+
+    private void ApplyLocalizedUi()
+    {
+        var loc = LocalizationManager.Instance;
+        Title = loc.T("Settings.WindowTitle");
+        TxtScaleLabel.Text = loc.T("Settings.ScaleLabel");
+        TxtScaleHint.Text = loc.T("Settings.ScaleHint");
+        TxtThemeLabel.Text = loc.T("Settings.ThemeLabel");
+        TxtAutostartLabel.Text = loc.T("Settings.AutostartLabel");
+        ChkWidgetOnly.Content = loc.T("Settings.AutostartWidgetOnly");
+        ChkSilent.Content = loc.T("Settings.AutostartSilent");
+        TxtAutostartHint.Text = loc.T("Settings.AutostartHint");
+        TxtLanguageLabel.Text = loc.T("Settings.LanguageLabel");
+        BtnClose.Content = loc.T("Settings.Close");
+    }
+
+    private void OnLanguageChanged(object? sender, LanguageChangedEventArgs e)
+    {
+        ApplyLocalizedUi();
+        RefreshLanguageButton();
+    }
+
+    private void OnSettingsWindowClosed(object? sender, EventArgs e)
+    {
+        LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
     }
 
     private void BuildThemeCards()
@@ -126,14 +156,27 @@ public partial class SettingsWindow : Window
     private void RefreshLanguageButton()
     {
         var loc = LocalizationManager.Instance;
+        bool locked = SettingsManager.ReadLanguageLocked();
+
+        if (locked)
+        {
+            // Мова заблокована політикою (RU-система → UA): зміни заборонені.
+            BtnLanguage.IsEnabled = false;
+            BtnLanguage.Content = loc.Format("Settings.LanguageButtonLocked", loc.CurrentLanguageName);
+            return;
+        }
+
+        BtnLanguage.IsEnabled = true;
         string next = loc.GetLanguageName(loc.NextLanguage());
         BtnLanguage.Content = string.IsNullOrWhiteSpace(next)
-            ? $"🌐 {loc.CurrentLanguageName}"
-            : $"🌐 Мова: {loc.CurrentLanguageName} → {next}";
+            ? loc.Format("Settings.LanguageButtonCurrent", loc.CurrentLanguageName)
+            : loc.Format("Settings.LanguageButtonNext", loc.CurrentLanguageName, next);
     }
 
     private void BtnLanguage_Click(object sender, RoutedEventArgs e)
     {
+        if (SettingsManager.ReadLanguageLocked()) return;
+
         var loc = LocalizationManager.Instance;
         loc.LoadLanguage(loc.NextLanguage());
         RefreshLanguageButton();

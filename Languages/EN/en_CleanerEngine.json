@@ -1,0 +1,124 @@
+{
+    "Cleaner":  {
+                    "Title":  "🧹 DEEP SSD CLEANING \u0026 DISK CLEANER",
+                    "Description":  "Safely clean caches, temporary files and free up space on the system drive",
+                    "Calculating":  "Calculating space...",
+                    "FoundTotal":  "Detected for cleanup: {0}",
+                    "BtnCleanAll":  "⚡ 1-Click Clean All",
+                    "BtnRescan":  "🔄 Rescan",
+                    "BtnClean":  "🧹 Clean",
+                    "SafeBadge":  "🟢 SAFE",
+                    "ManualBadge":  "🟡 MANUAL MODE",
+                    "Scanning":  "Scanning disk space...",
+                    "ScanDone":  "Cache analysis completed.",
+                    "CleaningItem":  "Cleaning: {0}...",
+                    "Freed":  "Freed: {0}",
+                    "FoundSummary":  "Detected for cleanup: {0}",
+                    "CleanedOne":  "Cleaned: {0} (+{1})",
+                    "CleanDone":  "Cleaning completed!",
+                    "TotalFreed":  "Successfully freed: {0}",
+                    "ConfirmAll":  "Clean all detected caches, temp files and outdated data (including Windows.old)? Deep WinSxS compression (DISM) runs separately.",
+                    "ConfirmAllTitle":  "1-Click Cleanup",
+                    "SortSizeDesc":  "📦 By size (desc)",
+                    "SortSizeAsc":  "📦 By size (asc)",
+                    "SortSafeFirst":  "🟢 Safe first",
+                    "SortCategory":  "📂 By category",
+                    "Item":  {
+                                 "clean_gpu_shaders":  {
+                                                           "Name":  "GPU shader cache (DirectX / NVIDIA / AMD / Intel / Vulkan)",
+                                                           "Description":  "Clears the compiled graphics driver shader cache. Fixes micro-stutters and artifacts after driver updates.",
+                                                           "Category":  "Games \u0026 GPU"
+                                                       },
+                                 "clean_gpu_driver_installers":  {
+                                                                     "Name":  "NVIDIA / AMD driver installer leftovers",
+                                                                     "Description":  "Removes temporary extracted GPU driver installation packages.",
+                                                                     "Category":  "Games \u0026 GPU"
+                                                                 },
+                                 "clean_game_launchers_cache":  {
+                                                                    "Name":  "Launcher web cache (Steam / Epic Games / Battle.net / EA / Ubisoft)",
+                                                                    "Description":  "Clears temporary web cache of built-in launcher browsers.",
+                                                                    "Category":  "Games \u0026 GPU"
+                                                                },
+                                 "clean_user_temp":  {
+                                                         "Name":  "User temporary files (%TEMP%)",
+                                                         "Description":  "Installer leftovers, temporary extracted archives and user session cache.",
+                                                         "Category":  "Safe cache"
+                                                     },
+                                 "clean_win_temp":  {
+                                                        "Name":  "Windows system cache (C:\\Windows\\Temp)",
+                                                        "Description":  "Temporary system files of Windows background services.",
+                                                        "Category":  "Safe cache"
+                                                    },
+                                 "clean_wu_cache":  {
+                                                        "Name":  "Downloaded updates cache (SoftwareDistribution)",
+                                                        "Description":  "Windows Update packages that were already successfully installed.",
+                                                        "Category":  "Safe cache"
+                                                    },
+                                 "clean_cbs_logs":  {
+                                                        "Name":  "Component servicing logs (CBS \u0026 Setup Logs)",
+                                                        "Description":  "Outdated component servicing logs after SFC/DISM and update installation.",
+                                                        "Category":  "Safe cache"
+                                                    },
+                                 "clean_delivery_opt":  {
+                                                            "Name":  "Delivery Optimization cache",
+                                                            "Description":  "Cache of the Windows update peer-distribution service over the local network.",
+                                                            "Category":  "Safe cache"
+                                                        },
+                                 "clean_recycle_bin":  {
+                                                           "Name":  "Windows Recycle Bin (all drives)",
+                                                           "Description":  "Permanently empties the Recycle Bin on all connected drives.",
+                                                           "Category":  "Safe cache"
+                                                       },
+                                 "clean_browser_cache":  {
+                                                             "Name":  "Chromium browsers cache (Chrome / Edge / Brave / Opera / Opera GX)",
+                                                             "Description":  "Clears only temporary media, script and GPU cache. Keeps all passwords, history and active sessions.",
+                                                             "Category":  "Browsers \u0026 Apps"
+                                                         },
+                                 "clean_messengers_media":  {
+                                                                "Name":  "Messenger cache (Discord / Telegram / Spotify)",
+                                                                "Description":  "Clears temporary audio, image and streamed video caches.",
+                                                                "Category":  "Browsers \u0026 Apps"
+                                                            },
+                                 "clean_store_winget":  {
+                                                            "Name":  "Microsoft Store and WinGet cache",
+                                                            "Description":  "Clears downloaded installer packages and temporary store/package-manager folders.",
+                                                            "Category":  "Browsers \u0026 Apps"
+                                                        },
+                                 "clean_explorer_thumbs":  {
+                                                               "Name":  "Explorer thumbnails cache",
+                                                               "Description":  "Thumbnail and icon databases (thumbcache_*.db, iconcache_*.db).",
+                                                               "Category":  "Manual mode"
+                                                           },
+                                 "clean_dism_winsxs":  {
+                                                           "Name":  "Deep WinSxS compression (DISM Component Cleanup)",
+                                                           "Description":  "Compresses and removes outdated system component versions in the WinSxS store.",
+                                                           "Category":  "System compression"
+                                                       },
+                                 "clean_firefox_cache":  {
+                                                             "Name":  "Firefox cache (cache2 / startupCache / shader-cache)",
+                                                             "Description":  "Clears the temporary web page, shader and startup cache of Firefox. Keeps passwords, bookmarks and history.",
+                                                             "Category":  "Browsers \u0026 Apps"
+                                                         },
+                                 "clean_inetcache":  {
+                                                         "Name":  "Internet Explorer / Legacy Edge cache (INetCache)",
+                                                         "Description":  "Temporary internet files of the legacy browser and the Windows shell web cache.",
+                                                         "Category":  "Browsers \u0026 Apps"
+                                                     },
+                                 "clean_prefetch":  {
+                                                        "Name":  "Prefetch (Windows preload files)",
+                                                        "Description":  "Removes old Prefetch .pf files that Windows uses to speed up application startup.",
+                                                        "Category":  "Safe cache"
+                                                    },
+                                 "clean_dev_pkg_caches":  {
+                                                              "Name":  "Package manager caches (pip / npm / NuGet)",
+                                                              "Description":  "Temporary downloaded Python (pip), Node (npm) and .NET (NuGet) packages that can be re-downloaded.",
+                                                              "Category":  "Safe cache"
+                                                          },
+                                 "clean_windows_old":  {
+                                                           "Name":  "Windows.old folder (Windows upgrade leftovers)",
+                                                           "Description":  "Backup copy of the previous Windows version after a major upgrade.",
+                                                           "Category":  "Manual mode"
+                                                       }
+                             }
+                }
+}

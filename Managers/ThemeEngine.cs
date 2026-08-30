@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 using Application = System.Windows.Application;
 
 namespace MASLOOPTIMIZER;
@@ -180,6 +181,24 @@ public static class ThemeEngine
         }
     }
 
+    /// <summary>
+    /// Повертає кисть поточної теми за ключем ресурсу (для використання в code-behind і моделях).
+    /// Замінює захардкоджені hex-кольори та автоматично оновлюється разом із темою.
+    /// </summary>
+    public static Brush Brush(string key)
+    {
+        try
+        {
+            if (Application.Current?.TryFindResource(key) is Brush brush)
+            {
+                return brush;
+            }
+        }
+        catch { }
+
+        return System.Windows.Media.Brushes.White;
+    }
+
     private static string ReadSavedAppTheme()
     {
         try
@@ -252,7 +271,7 @@ public static class ThemeEngine
         ["NavBtnBorderActive"] = "#00FF9D",
         ["TextPrimary"] = "#F1F5F9",
         ["TextSecondary"] = "#94A3B8",
-        ["TextMuted"] = "#64748B",
+        ["TextMuted"] = "#8291A6",
         ["StatusBg"] = "#12141C",
         ["StatusBorder"] = "#1E2230",
         ["AccentGreen"] = "#00FF9D",
@@ -271,6 +290,15 @@ public static class ThemeEngine
         ["ChipActiveText"] = "#FFFFFF",
         ["StatusStdBg"] = "#2A2D3D",
         ["StatusStdText"] = "#94A3B8",
+        ["SuccessBrush"] = "#107C41",
+        ["WarningBrush"] = "#B45309",
+        ["DangerBrush"] = "#C42B1C",
+        ["InfoBrush"] = "#0369A1",
+        ["StatusNeutralBrush"] = "#2A2D3D",
+        ["SuccessText"] = "#4ADE80",
+        ["WarningText"] = "#FBBF24",
+        ["DangerText"] = "#F87171",
+        ["InfoText"] = "#38BDF8",
     };
 
     private static Dictionary<string, string> BaseLight() => new(StringComparer.OrdinalIgnoreCase)
@@ -309,6 +337,15 @@ public static class ThemeEngine
         ["ChipActiveText"] = "#FFFFFF",
         ["StatusStdBg"] = "#E2E8F0",
         ["StatusStdText"] = "#475569",
+        ["SuccessBrush"] = "#15803D",
+        ["WarningBrush"] = "#92400E",
+        ["DangerBrush"] = "#B91C1C",
+        ["InfoBrush"] = "#075985",
+        ["StatusNeutralBrush"] = "#475569",
+        ["SuccessText"] = "#15803D",
+        ["WarningText"] = "#B45309",
+        ["DangerText"] = "#B91C1C",
+        ["InfoText"] = "#0369A1",
     };
 
     private static Dictionary<string, string> ApplyOverrides(Dictionary<string, string> source, params (string Key, string Value)[] overrides)

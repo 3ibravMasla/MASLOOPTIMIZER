@@ -157,4 +157,72 @@ public static class SettingsManager
     }
 
     #endregion
+
+    #region Мова (Language)
+
+    public static string ReadLanguage()
+    {
+        string? code = ReadLanguageOptional();
+        if (string.IsNullOrWhiteSpace(code)) return LocalizationManager.FallbackLanguage;
+        return code;
+    }
+
+    /// <summary>Читає збережену мову або null, якщо налаштування ще немає (перший запуск).</summary>
+    public static string? ReadLanguageOptional()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.SettingsFile)) return null;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(AppPaths.SettingsFile));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("Language", out var lang) &&
+                lang.ValueKind == JsonValueKind.String)
+            {
+                string code = NormalizeLanguageCode(lang.GetString());
+                if (!string.IsNullOrWhiteSpace(code)) return code;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    public static void SaveLanguage(string code)
+    {
+        string normalized = NormalizeLanguageCode(code);
+        if (string.IsNullOrWhiteSpace(normalized)) normalized = LocalizationManager.FallbackLanguage;
+        WriteSetting("Language", JsonSerializer.SerializeToElement(normalized));
+    }
+
+    public static bool ReadLanguageLocked()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.SettingsFile)) return false;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(AppPaths.SettingsFile));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("LanguageLocked", out var el))
+            {
+                if (el.ValueKind == JsonValueKind.True) return true;
+                if (el.ValueKind == JsonValueKind.False) return false;
+                if (el.ValueKind == JsonValueKind.String && bool.TryParse(el.GetString(), out var b)) return b;
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    public static void SaveLanguageLocked(bool locked)
+        => WriteSetting("LanguageLocked", JsonSerializer.SerializeToElement(locked));
+
+    /// <summary>Нормалізує код мови (старий UK → UA).</summary>
+    private static string NormalizeLanguageCode(string? code)
+    {
+        string c = (code ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.Equals(c, "UK", StringComparison.OrdinalIgnoreCase)) return "UA";
+        return c;
+    }
+
+    #endregion
 }

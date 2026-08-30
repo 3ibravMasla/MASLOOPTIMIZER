@@ -15,6 +15,8 @@ namespace MASLOOPTIMIZER;
 
 public partial class SafetyWindow : Window
 {
+    private ModuleStrings Loc => LocalizationManager.Instance.For("BackupEngine");
+
     private bool _restoreDone = false;
     private bool _registryDone = false;
     private string _cheatBuffer = string.Empty;
@@ -25,8 +27,27 @@ public partial class SafetyWindow : Window
     public SafetyWindow()
     {
         InitializeComponent();
+        ApplyLocalizedUi();
         Loaded += SafetyWindow_Loaded;
         KeyDown += SafetyWindow_KeyDown;
+    }
+
+    private void ApplyLocalizedUi()
+    {
+        Title = Loc["SafetyTitle"];
+        TxtSafetyHeading.Text = Loc["SafetyHeading"];
+        TxtSafetySubtitle.Text = Loc["SafetySubtitle"];
+        TxtDisclaimerTitle.Text = Loc["DisclaimerTitle"];
+        TxtDisclaimerBody.Text = Loc["DisclaimerBody"];
+        TxtStepVssTitle.Text = Loc["StepVssTitle"];
+        TxtRestoreStatus.Text = Loc["StepNotDone"];
+        BtnCreateRestore.Content = Loc["BtnCreateRestore"];
+        TxtStepRegTitle.Text = Loc["StepRegTitle"];
+        TxtRegistryStatus.Text = Loc["StepNotDone"];
+        BtnCreateRegBackup.Content = Loc["BtnSaveRegistry"];
+        TxtLog.Text = Loc["TxtLogIdle"];
+        BtnExit.Content = Loc["BtnExit"];
+        BtnProceed.Content = Loc["BtnProceed"];
     }
 
     private void SafetyWindow_Loaded(object sender, RoutedEventArgs e)
@@ -77,7 +98,6 @@ public partial class SafetyWindow : Window
         return false;
     }
 
-    private static SolidColorBrush HexBrush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
 
     private void SafetyWindow_KeyDown(object sender, KeyEventArgs e)
     {
@@ -92,20 +112,20 @@ public partial class SafetyWindow : Window
                 _cheatBuffer = string.Empty;
                 try { SystemSounds.Asterisk.Play(); } catch { }
 
-                TxtRestoreStatus.Text = "✓ Пропущено (Чіт-код MASLO)";
-                TxtRestoreStatus.Foreground = HexBrush("#4ADE80");
-                BtnCreateRestore.Content = "✓ DEV";
-                BtnCreateRestore.Background = HexBrush("#107C41");
+                TxtRestoreStatus.Text = Loc["StatusCheatSkipped"];
+                TxtRestoreStatus.Foreground = ThemeEngine.Brush("SuccessText");
+                BtnCreateRestore.Content = Loc["BtnDev"];
+                BtnCreateRestore.Background = ThemeEngine.Brush("SuccessBrush");
                 BtnCreateRestore.IsEnabled = false;
 
-                TxtRegistryStatus.Text = "✓ Пропущено (Чіт-код MASLO)";
-                TxtRegistryStatus.Foreground = HexBrush("#4ADE80");
-                BtnCreateRegBackup.Content = "✓ DEV";
-                BtnCreateRegBackup.Background = HexBrush("#107C41");
+                TxtRegistryStatus.Text = Loc["StatusCheatSkipped"];
+                TxtRegistryStatus.Foreground = ThemeEngine.Brush("SuccessText");
+                BtnCreateRegBackup.Content = Loc["BtnDev"];
+                BtnCreateRegBackup.Background = ThemeEngine.Brush("SuccessBrush");
                 BtnCreateRegBackup.IsEnabled = false;
 
-                TxtLog.Text = "🔓 Чіт-код 'MASLO' активовано! Повний доступ розблоковано.";
-                TxtLog.Foreground = HexBrush("#00FF9D");
+                TxtLog.Text = Loc["CheatActivated"];
+                TxtLog.Foreground = ThemeEngine.Brush("SuccessText");
 
                 _restoreDone = true;
                 _registryDone = true;
@@ -118,25 +138,25 @@ public partial class SafetyWindow : Window
     private async void BtnCreateRestore_Click(object sender, RoutedEventArgs e)
     {
         BtnCreateRestore.IsEnabled = false;
-        TxtRestoreStatus.Text = "⏳ Створення точки відновлення... Зачекайте...";
-        TxtRestoreStatus.Foreground = HexBrush("#FBBF24");
+        TxtRestoreStatus.Text = Loc["StatusVssBusy"];
+        TxtRestoreStatus.Foreground = ThemeEngine.Brush("WarningText");
 
         var res = await BackupEngine.CreateVssRestorePointAsync("MASLOOPTIMIZER_FirstRun_SafePoint");
         _restoreDone = true;
 
         if (res.Success)
         {
-            TxtRestoreStatus.Text = "✓ Точку відновлення успішно створено";
-            TxtRestoreStatus.Foreground = HexBrush("#4ADE80");
-            BtnCreateRestore.Content = "✓ Створено";
-            BtnCreateRestore.Background = HexBrush("#107C41");
+            TxtRestoreStatus.Text = Loc["StatusVssOk"];
+            TxtRestoreStatus.Foreground = ThemeEngine.Brush("SuccessText");
+            BtnCreateRestore.Content = Loc["BtnCreated"];
+            BtnCreateRestore.Background = ThemeEngine.Brush("SuccessBrush");
         }
         else
         {
-            TxtRestoreStatus.Text = "⚠️ VSS обмежено системою. Крок зараховано.";
-            TxtRestoreStatus.Foreground = HexBrush("#FBBF24");
-            BtnCreateRestore.Content = "⚠️ Пропущено";
-            BtnCreateRestore.Background = HexBrush("#334155");
+            TxtRestoreStatus.Text = Loc["StatusVssLimited"];
+            TxtRestoreStatus.Foreground = ThemeEngine.Brush("WarningText");
+            BtnCreateRestore.Content = Loc["BtnSkipped"];
+            BtnCreateRestore.Background = ThemeEngine.Brush("StatusNeutralBrush");
         }
 
         CheckBothSteps();
@@ -145,25 +165,25 @@ public partial class SafetyWindow : Window
     private async void BtnCreateRegBackup_Click(object sender, RoutedEventArgs e)
     {
         BtnCreateRegBackup.IsEnabled = false;
-        TxtRegistryStatus.Text = "⏳ Експорт системних гілок реєстру...";
-        TxtRegistryStatus.Foreground = HexBrush("#FBBF24");
+        TxtRegistryStatus.Text = Loc["StatusRegBusy"];
+        TxtRegistryStatus.Foreground = ThemeEngine.Brush("WarningText");
 
         var res = await BackupEngine.ExportRegistryBackupAsync("FirstRun_FullBackup");
         _registryDone = true;
 
         if (res.Success)
         {
-            TxtRegistryStatus.Text = "✓ Збережено всі гілки в папку backups\\";
-            TxtRegistryStatus.Foreground = HexBrush("#4ADE80");
-            BtnCreateRegBackup.Content = "✓ Збережено";
-            BtnCreateRegBackup.Background = HexBrush("#107C41");
+            TxtRegistryStatus.Text = Loc["StatusRegOk"];
+            TxtRegistryStatus.Foreground = ThemeEngine.Brush("SuccessText");
+            BtnCreateRegBackup.Content = Loc["BtnSaved"];
+            BtnCreateRegBackup.Background = ThemeEngine.Brush("SuccessBrush");
         }
         else
         {
-            TxtRegistryStatus.Text = "⚠️ Резервну копію збережено частково.";
-            TxtRegistryStatus.Foreground = HexBrush("#FBBF24");
-            BtnCreateRegBackup.Content = "⚠️ Частково";
-            BtnCreateRegBackup.Background = HexBrush("#334155");
+            TxtRegistryStatus.Text = Loc["StatusRegPartial"];
+            TxtRegistryStatus.Foreground = ThemeEngine.Brush("WarningText");
+            BtnCreateRegBackup.Content = Loc["BtnPartial"];
+            BtnCreateRegBackup.Background = ThemeEngine.Brush("StatusNeutralBrush");
         }
 
         CheckBothSteps();
@@ -174,8 +194,8 @@ public partial class SafetyWindow : Window
         if (_restoreDone && _registryDone)
         {
             BtnProceed.IsEnabled = true;
-            TxtLog.Text = "✓ Усі захисні заходи виконано. Доступ до оптимізатора розблоковано.";
-            TxtLog.Foreground = HexBrush("#4ADE80");
+            TxtLog.Text = Loc["StatusAllDone"];
+            TxtLog.Foreground = ThemeEngine.Brush("SuccessText");
         }
     }
 

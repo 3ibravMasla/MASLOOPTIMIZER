@@ -1,0 +1,22 @@
+{
+    "Power": {
+        "Title": "⚡ POWER PROFILES",
+        "DeviceTypeDesktop": "💻 Desktop PC",
+        "DeviceTypeLaptop": "🔋 Laptop",
+        "HzLabel": "Refresh rate: {0} Hz",
+        "CardEcoTitle": "🌿 Eco Mode",
+        "CardEcoDesc": "Lowers power draw: CPU up to 60%, 60 Hz display, PCIe ASPM and power-saving GPU mode.",
+        "CardSnapshotTitle": "📸 System Snapshot",
+        "CardSnapshotDesc": "Restores the saved power plan, display refresh rate and GPU settings.",
+        "CardUltraTitle": "🚀 Ultra Performance",
+        "CardUltraDesc": "CPU up to 100%, maximum display refresh rate and power-saving limits disabled.",
+        "BtnActivate": "⚡ Activate",
+        "BtnUpdateSnapshot": "🔄 Update Snapshot",
+        "SuccessMessage": "✅ Power mode applied successfully",
+        "Applying": "⏳ Applying power mode...",
+        "ApplyError": "⚠️ Power mode application error.",
+        "SnapshotCreating": "📸 Creating system snapshot...",
+        "SnapshotDone": "📸 System snapshot updated.",
+        "SnapshotError": "⚠️ Failed to update snapshot."
+    }
+}

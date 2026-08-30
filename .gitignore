@@ -1,20 +1,40 @@
-﻿bin/
-obj/
+﻿# Складання .NET / MSBuild
+**/[Bb]in/
+**/[Oo]bj/
+**/[Pp]ublish/
 _build_release/
-backups/
-logs/
-presets/
-test_reports/
-.vs/
-.vscode/
+_build_check*/
+
+# Бінарні файли та пакети
 *.exe
 *.dll
 *.pdb
 *.zip
-*.user
-*.suo
+*.nupkg
+
+# Тимчасові файли та бекапи
+backups/
+logs/
+presets/
+test_reports/
 *.tmp
 *.log
 *.bak
-.clineignore
-.clinerules
+*.swp
+
+# IDE та налаштування користувача
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosv
+*.userprefs
+
+# Системне сміття Windows
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+
+# AI-асистенти (розкоментуйте, якщо НЕ хочете бачити їх на GitHub)
+#.clineignore
+#.clinerules

@@ -127,6 +127,7 @@ public partial class DiagnosticWindow : Window
         TxtCpuCache.Text = loc.Format("Diagnostic.L3L2Format", data.CPUL3Cache, data.CPUL2Cache);
         TxtCpuVirtual.Text = data.CPUVirtual;
 
+        TxtCpuLoad.Text = loc.Format("Diagnostic.CpuLoadFormat", data.CPULoadPercent);
         TxtCpuTemp.Text = loc.Format("Diagnostic.CpuTempFormat", data.CPUTemp);
         TxtVrmTemp.Text = loc.Format("Diagnostic.VrmTempFormat", data.VRMTemp);
         TxtBoardTemp.Text = loc.Format("Diagnostic.BoardTempFormat", data.BoardTemp);
@@ -148,6 +149,7 @@ public partial class DiagnosticWindow : Window
         TxtGpuPowerClock.Text = $"{data.GPUClock} / {data.GPUPower}";
         TxtGpuFan.Text = data.GPUFan;
 
+        TxtGpuLoad.Text = loc.Format("Diagnostic.GpuLoadFormat", data.GPULoad);
         TxtGpuCoreTemp.Text = loc.Format("Diagnostic.GpuCoreTempFormat", data.GPUTemp);
         TxtGpuHotspotTemp.Text = loc.Format("Diagnostic.GpuHotspotTempFormat", data.GPUHotspotTemp);
         TxtGpuVramTemp.Text = loc.Format("Diagnostic.GpuVramTempFormat", data.GPUVramTemp);

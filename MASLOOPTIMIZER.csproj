@@ -10,9 +10,10 @@
     <ApplicationIcon>icon\maslo.ico</ApplicationIcon>
     <StartupObject>MASLOOPTIMIZER.App</StartupObject>
     <RootNamespace>MASLOOPTIMIZER</RootNamespace>
-    <Version>0.3.3</Version>
-    <AssemblyVersion>0.3.3.0</AssemblyVersion>
-    <FileVersion>0.3.3.0</FileVersion>
+    <AssemblyName>MASLOOPTIMIZER</AssemblyName>
+    <Version>0.4.6</Version>
+    <AssemblyVersion>0.4.6</AssemblyVersion>
+    <FileVersion>0.4.6</FileVersion>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -23,7 +24,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="System.Management" Version="10.0.2" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.0" />
   </ItemGroup>
 
@@ -33,15 +35,9 @@
 
   <ItemGroup>
     <EmbeddedResource Include="tweaks.bundle.json" />
-    <!-- Автоматичне копіювання іконок та логотипу -->
-    <Content Include="icon\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-
-    <!-- Копіювання мовних файлів (Languages/) у папку білду -->
-    <Content Include="Languages\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- Іконка трею та мовні файли вшиті в exe (single-file publish) -->
+    <EmbeddedResource Include="icon\maslo.ico" />
+    <EmbeddedResource Include="Languages\**\*.json" />
   </ItemGroup>
 
 </Project>

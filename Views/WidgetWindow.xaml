@@ -87,6 +87,87 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="PowerSegment" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="segBrd" Background="Transparent" CornerRadius="6" Padding="4,6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="segBrd" Property="Background" Value="{DynamicResource ChipHoverBg}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="segBrd" Property="Background" Value="{DynamicResource ChipActiveBg}"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="GameModeSwitch" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="Background" Value="{DynamicResource ActionBtnBg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ActionBtnBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="gmBrd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8" Padding="7,5">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="🎮 Game" FontSize="10" FontWeight="Bold"
+                                           VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                                <TextBlock x:Name="gmStatus" Grid.Column="2" Text="OFF" FontSize="9" FontWeight="Black"
+                                           Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                                <Border x:Name="gmTrack" Grid.Column="3" Width="32" Height="16" CornerRadius="8"
+                                        Background="{DynamicResource ProgressTrack}" BorderBrush="{DynamicResource ActionBtnBorder}"
+                                        BorderThickness="1" VerticalAlignment="Center">
+                                    <Ellipse x:Name="gmThumb" Width="12" Height="12" Fill="{DynamicResource TextMuted}"
+                                             HorizontalAlignment="Left" Margin="2,0,0,0"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="gmBrd" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="gmStatus" Property="Text" Value="ON"/>
+                                <Setter TargetName="gmStatus" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                <Setter TargetName="gmTrack" Property="Background" Value="{DynamicResource ChipActiveBg}"/>
+                                <Setter TargetName="gmTrack" Property="BorderBrush" Value="{DynamicResource ChipActiveBg}"/>
+                                <Setter TargetName="gmThumb" Property="Fill" Value="White"/>
+                                <Setter TargetName="gmThumb" Property="HorizontalAlignment" Value="Right"/>
+                                <Setter TargetName="gmThumb" Property="Margin" Value="0,0,2,0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Viewbox Stretch="Uniform">
@@ -109,7 +190,7 @@
                     <Grid Grid.Row="0" Margin="0,2,0,8">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="10" Margin="0,-4,-2,0">
                             <Button x:Name="BtnSettings" Content="⚙️" FontSize="13" Background="Transparent" BorderThickness="0" Foreground="{DynamicResource TextSecondary}" Cursor="Hand" Padding="3,1" ToolTip="Налаштування віджета" Click="BtnSettings_Click"/>
-                            <TextBlock x:Name="BtnCloseWidget" Text="✕" FontSize="13.5" FontWeight="Black" Foreground="#64748B" Cursor="Hand" Margin="5,2,2,0" VerticalAlignment="Center" ToolTip="Приховати в трей" MouseDown="BtnCloseWidget_MouseDown"/>
+                            <TextBlock x:Name="BtnCloseWidget" Text="✕" FontSize="13.5" FontWeight="Black" Foreground="{DynamicResource TextMuted}" Cursor="Hand" Margin="5,2,2,0" VerticalAlignment="Center" ToolTip="Приховати в трей" MouseDown="BtnCloseWidget_MouseDown"/>
                         </StackPanel>
 
                         <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -215,6 +296,7 @@
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -229,6 +311,30 @@
                         <Button Grid.Row="1" Grid.Column="0" x:Name="BtnFlushRam" Style="{StaticResource WidgetActionBtn}" Content="🧹 Очистити ОЗП" ToolTip="Очистити робочі набори пам'яті процесів" Click="BtnFlushRam_Click"/>
                         <Button Grid.Row="1" Grid.Column="1" x:Name="BtnEmptyTrash" Style="{StaticResource WidgetActionBtn}" Content="🗑️ Кошик" ToolTip="Очистити кошик Windows на всіх дисках" Click="BtnEmptyTrash_Click"/>
                         <Button Grid.Row="1" Grid.Column="2" x:Name="BtnShutdown" Style="{StaticResource WidgetActionBtn}" Content="🛑 Вимкнути" ToolTip="Повне вимкнення комп'ютера (з підтвердженням)" Click="BtnShutdown_Click"/>
+
+                        <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" x:Name="PowerSegmentPanel"
+                                Background="{DynamicResource ActionBtnBg}" BorderBrush="{DynamicResource ActionBtnBorder}"
+                                BorderThickness="1" CornerRadius="8" Padding="3" Margin="2">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <RadioButton Grid.Column="0" x:Name="RbEco" Style="{StaticResource PowerSegment}"
+                                             Content="🍃 Eco" Tag="EcoPowerSaver" ToolTip="Економний профіль живлення — максимальна економія енергії"
+                                             Checked="PowerSegment_Checked"/>
+                                <RadioButton Grid.Column="1" x:Name="RbStd" Style="{StaticResource PowerSegment}"
+                                             Content="⚖️ Std" Tag="OriginalSnapshot" ToolTip="Стандартний профіль — відновити вихідні налаштування Windows"
+                                             Checked="PowerSegment_Checked"/>
+                                <RadioButton Grid.Column="2" x:Name="RbTurbo" Style="{StaticResource PowerSegment}"
+                                             Content="🚀 Turbo" Tag="UltraPerformance" ToolTip="Максимальна продуктивність — Turbo/Ultra Performance"
+                                             Checked="PowerSegment_Checked"/>
+                            </Grid>
+                        </Border>
+                        <ToggleButton Grid.Row="2" Grid.Column="2" x:Name="BtnWidgetGameMode" Style="{StaticResource GameModeSwitch}"
+                                      ToolTip="Увімкнути/вимкнути Game Mode (буст GPU/CPU для ігор)"
+                                      Click="BtnWidgetGameMode_Click"/>
 
                         <Thumb Grid.Row="1" Grid.Column="2" x:Name="ResizeThumb" Style="{StaticResource ResizeThumbStyle}" 
                                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-3,-3" 

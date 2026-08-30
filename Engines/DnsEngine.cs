@@ -7,6 +7,9 @@ using System.Linq;
 using System.Net.NetworkInformation;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 
 namespace MASLOOPTIMIZER;
 
@@ -29,11 +32,23 @@ public enum DnsGroup
     Security
 }
 
-public class DnsPreset : INotifyPropertyChanged
+public class DnsPreset : INotifyPropertyChanged, IWeakEventListener
 {
     public DnsPreset()
     {
-        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+        // Слабка підписка на зміну мови: статичний синглтон не утримує об'єкт.
+        PropertyChangedEventManager.AddListener(LocalizationManager.Instance, this, string.Empty);
+    }
+
+    bool IWeakEventListener.ReceiveWeakEvent(Type managerType, object sender, EventArgs e)
+    {
+        if (managerType == typeof(PropertyChangedEventManager))
+        {
+            OnLocalizationChanged(sender, (PropertyChangedEventArgs)e);
+            return true;
+        }
+
+        return false;
     }
 
     private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
@@ -106,7 +121,7 @@ public class DnsPreset : INotifyPropertyChanged
     public string PingText => Ping < 900
         ? $"{Ping} ms"
         : LocalizationManager.Instance["Dns.PingTimeout"];
-    public string PingColor => Ping < 30 ? "#107C41" : (Ping < 70 ? "#D87A00" : "#C42B1C");
+    public Brush PingColor => Ping < 30 ? ThemeEngine.Brush("SuccessBrush") : (Ping < 70 ? ThemeEngine.Brush("WarningBrush") : ThemeEngine.Brush("DangerBrush"));
     public string StatusText
     {
         get
@@ -116,7 +131,7 @@ public class DnsPreset : INotifyPropertyChanged
             return Ping < 900 ? loc["Dns.StatusAvailable"] : loc["Dns.StatusTimeout"];
         }
     }
-    public string StatusColor => IsActive ? "#107C41" : (Ping < 900 ? "#2A2D3D" : "#C42B1C");
+    public Brush StatusColor => IsActive ? ThemeEngine.Brush("SuccessBrush") : (Ping < 900 ? ThemeEngine.Brush("StatusNeutralBrush") : ThemeEngine.Brush("DangerBrush"));
     public string ButtonText => IsActive
         ? LocalizationManager.Instance["Dns.BtnActive"]
         : LocalizationManager.Instance["Dns.BtnApply"];
@@ -126,11 +141,16 @@ public class DnsPreset : INotifyPropertyChanged
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
-public class OriginalDnsBackup
+public class OriginalAdapterDns
 {
     public string AdapterName { get; set; } = string.Empty;
     public bool IsDhcp { get; set; } = true;
     public List<string> DnsServers { get; set; } = new();
+}
+
+public class OriginalDnsBackup
+{
+    public List<OriginalAdapterDns> Adapters { get; set; } = new();
     public DateTime BackupTime { get; set; } = DateTime.Now;
 }
 
@@ -699,8 +719,8 @@ public static class DnsEngine
         // Оновлюємо статус активності в системі
         DetectActiveDns();
 
-        // Автоматичне сортування від найменшого пінгу
-        Catalog.Sort((a, b) => a.Ping.CompareTo(b.Ping));
+        // Каталог НЕ сортуємо глобально — фільтр/сортування виконує GetFilteredAndSortedPresets
+        // (інакше інші вкладки отримали б пересортований список).
     }
 
     public static DnsPreset? GetFastestPreset()
@@ -718,24 +738,36 @@ public static class DnsEngine
 
         try
         {
-            var activeAdapter = GetPhysicalActiveAdapters().FirstOrDefault();
-            if (activeAdapter != null)
+            var adapters = GetPhysicalActiveAdapters();
+            var backup = new OriginalDnsBackup();
+
+            // Бекапимо DNS ВСІХ фізичних адаптерів, щоб відкат повертав кожен інтерфейс
+            foreach (var adapter in adapters)
             {
-                var ipProps = activeAdapter.GetIPProperties();
-                var dnsAddrs = ipProps.DnsAddresses
-                    .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-                    .Select(a => a.ToString())
-                    .ToList();
-
-                var ipv4Props = ipProps.GetIPv4Properties();
-                bool isDhcp = ipv4Props?.IsDhcpEnabled ?? true;
-
-                OriginalSettings = new OriginalDnsBackup
+                try
                 {
-                    AdapterName = activeAdapter.Name,
-                    IsDhcp = isDhcp || dnsAddrs.Count == 0,
-                    DnsServers = dnsAddrs
-                };
+                    var ipProps = adapter.GetIPProperties();
+                    var dnsAddrs = ipProps.DnsAddresses
+                        .Where(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                        .Select(a => a.ToString())
+                        .ToList();
+
+                    var ipv4Props = ipProps.GetIPv4Properties();
+                    bool isDhcp = ipv4Props?.IsDhcpEnabled ?? true;
+
+                    backup.Adapters.Add(new OriginalAdapterDns
+                    {
+                        AdapterName = adapter.Name,
+                        IsDhcp = isDhcp || dnsAddrs.Count == 0,
+                        DnsServers = dnsAddrs
+                    });
+                }
+                catch { }
+            }
+
+            if (backup.Adapters.Count > 0)
+            {
+                OriginalSettings = backup;
             }
         }
         catch { }
@@ -743,19 +775,46 @@ public static class DnsEngine
 
     public static bool RestoreOriginalDns()
     {
-        if (OriginalSettings == null)
+        if (OriginalSettings == null || OriginalSettings.Adapters.Count == 0)
         {
             return ApplyDns("DHCP", "");
         }
 
-        if (OriginalSettings.IsDhcp || OriginalSettings.DnsServers.Count == 0)
+        bool allOk = true;
+
+        foreach (var adapter in OriginalSettings.Adapters)
         {
-            return ApplyDns("DHCP", "");
+            try
+            {
+                bool ok;
+                if (adapter.IsDhcp || adapter.DnsServers.Count == 0)
+                {
+                    ok = RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.AdapterName}' -ResetServerAddresses\"");
+                }
+                else
+                {
+                    string prim = adapter.DnsServers[0];
+                    string sec = adapter.DnsServers.Count > 1 ? adapter.DnsServers[1] : "";
+                    string dnsList = string.IsNullOrWhiteSpace(sec) ? $"'{prim}'" : $"'{prim}','{sec}'";
+                    ok = RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.AdapterName}' -ServerAddresses {dnsList}\"");
+                }
+
+                if (!ok) allOk = false;
+            }
+            catch
+            {
+                allOk = false;
+            }
         }
 
-        string prim = OriginalSettings.DnsServers[0];
-        string sec = OriginalSettings.DnsServers.Count > 1 ? OriginalSettings.DnsServers[1] : "";
-        return ApplyDns(prim, sec);
+        FlushDnsCache();
+        DetectActiveDns();
+
+        // Бекап використано — наступне застосування створить свіжий
+        OriginalSettings = null;
+
+        AppLogger.Log(allOk ? "Початкові налаштування DNS успішно відновлено" : "Частину DNS-адаптерів не вдалося відновити", allOk ? "SUCCESS" : "WARN");
+        return allOk;
     }
 
     #endregion
@@ -771,17 +830,22 @@ public static class DnsEngine
             var adapters = GetPhysicalActiveAdapters();
             if (adapters.Count == 0) return false;
 
+            bool allOk = true;
+
             foreach (var adapter in adapters)
             {
+                bool ok;
                 if (string.IsNullOrWhiteSpace(primary) || primary.Equals("DHCP", StringComparison.OrdinalIgnoreCase))
                 {
-                    RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.Name}' -ResetServerAddresses\"");
+                    ok = RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.Name}' -ResetServerAddresses\"");
                 }
                 else
                 {
                     string dnsList = string.IsNullOrWhiteSpace(secondary) ? $"'{primary.Trim()}'" : $"'{primary.Trim()}','{secondary.Trim()}'";
-                    RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.Name}' -ServerAddresses {dnsList}\"");
+                    ok = RunCmd($"powershell.exe -NoProfile -Command \"Set-DnsClientServerAddress -InterfaceAlias '{adapter.Name}' -ServerAddresses {dnsList}\"");
                 }
+
+                if (!ok) allOk = false;
             }
 
             FlushDnsCache();
@@ -789,7 +853,7 @@ public static class DnsEngine
             AppLogger.Log(string.IsNullOrWhiteSpace(primary) || primary.Equals("DHCP", StringComparison.OrdinalIgnoreCase)
                 ? "DNS налаштування скинуто до автоматичних (DHCP)"
                 : $"Активовано DNS-сервер: {primary} / {secondary}", "SUCCESS");
-            return true;
+            return allOk;
         }
         catch
         {
@@ -838,7 +902,7 @@ public static class DnsEngine
         return list;
     }
 
-    private static void RunCmd(string command)
+    private static bool RunCmd(string command)
     {
         try
         {
@@ -850,9 +914,19 @@ public static class DnsEngine
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             });
-            proc?.WaitForExit(2000);
+
+            if (proc == null) return false;
+
+            // Set-DnsClientServerAddress через PowerShell може виконуватися довше 2 с
+            if (!proc.WaitForExit(15_000))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
+
+            return proc.ExitCode == 0;
         }
-        catch { }
+        catch { return false; }
     }
 
     #endregion

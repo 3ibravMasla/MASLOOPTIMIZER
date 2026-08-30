@@ -61,6 +61,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     // Стан фільтрації для Автозапуску (джерела)
     private string _currentStartupSource = "Всі";
     private List<StartupEntry>? _allStartupEntries;
+    private StartupSortMode _currentStartupSort = StartupSortMode.Default;
+
+    // Стан сортування для Очищення та MSI
+    private CleanerSortMode _currentCleanerSort = CleanerSortMode.SizeDescending;
+    private MsiSortMode _currentMsiSort = MsiSortMode.Default;
+
+    // Останній успішно застосований профіль живлення (для бейджа "АКТИВНО")
+    private SystemPowerMode? _lastPowerMode;
 
     public ObservableCollection<TweakModel> FilteredTweaks { get; set; } = new();
     public ObservableCollection<DebloatItem> FilteredDebloat { get; set; } = new();
@@ -102,6 +110,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         DnsItemsControl.ItemsSource = FilteredDns;
         CleanerItemsControl.ItemsSource = CleanerEngine.Cleaners;
         StartupItemsControl.ItemsSource = FilteredStartup;
+
+        // Оновлення бейджа активного профілю живлення при зміні режиму (подія спрацьовує з фонового потоку).
+        PowerEngine.OnPowerModeChanged += OnPowerModeChanged;
+
+        // Синхронізація перемикача Game Mode з реальним станом ядра (подія спрацьовує з фонового потоку).
+        GameModeEngine.OnGameModeStateChanged += OnGameModeStateChanged;
 
         Loaded += MainWindow_Loaded;
         Closing += (s, e) =>
@@ -169,7 +183,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         TweakEngine.Instance.LoadTweaks();
-        HwBadgeTweaksCount.Text = LocalizationManager.Instance.Format("Common.TweaksCount", TweakEngine.Instance.AllTweaks.Count);
+        HwBadgeTweaksCount.Text = LocalizationManager.Instance.Format("Header.DatabaseCount", TweakEngine.Instance.AllTweaks.Count);
 
         // Застосовуємо збережену мову до всього інтерфейсу одразу після завантаження даних.
         RefreshLocalizedChrome();
@@ -198,21 +212,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ProgressPercentText.Text = "100%";
 
         _ = CheckForUpdatesBackgroundAsync();
-
-        _ = RunHealthScoreRefreshAsync();
-    }
-
-    private async Task RunHealthScoreRefreshAsync()
-    {
-        try
-        {
-            var report = await HealthEngine.RunHealthAuditAsync();
-            Dispatcher.Invoke(() => UpdateHealthScoreBadge(report.TotalScore));
-        }
-        catch
-        {
-            // фоновий аудит не має ламати запуск програми
-        }
     }
 
     #region Фоновий модуль оновлень (GitHub Toast/Banner)
@@ -323,11 +322,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     #endregion
 
-    private void UpdateHealthScoreBadge(int score)
-    {
-        BtnHealthScore.Content = $"🏆 Health Score: {score}%";
-    }
-
     /// <summary>Застосовує та зберігає масштаб інтерфейсу (percent: 50–200).</summary>
     public void ApplyUiScale(double percent)
     {
@@ -343,6 +337,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         UpdateToolsChipsAndFilter();
         UpdateDnsChipsAndFilter();
         UpdateStartupChipsAndFilter();
+        RefreshThemeBoundColors();
+    }
+
+    /// <summary>Перераховує кольори статусів Cleaner/MSI, які не оновлюються через чіпси категорій.</summary>
+    private void RefreshThemeBoundColors()
+    {
+        foreach (var c in CleanerEngine.Cleaners) c.RefreshThemeColors();
+        foreach (var d in FilteredMsiDevices) d.RefreshThemeColors();
     }
 
     public void RefreshLocalizedChromePublic()
@@ -656,11 +658,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var filtered = StartupEngine.GetFilteredAndSortedEntries(
             allItems,
             searchQuery: _searchQuery,
+            sortMode: _currentStartupSort,
             sourceGroup: _currentStartupSource);
 
         foreach (var entry in filtered)
         {
             FilteredStartup.Add(entry);
+        }
+    }
+
+    private void StartupSortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (StartupSortComboBox?.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            _currentStartupSort = tag switch
+            {
+                "EnabledFirst" => StartupSortMode.EnabledFirst,
+                "DisabledFirst" => StartupSortMode.DisabledFirst,
+                "Name" => StartupSortMode.NameAscending,
+                "Category" => StartupSortMode.Category,
+                "Source" => StartupSortMode.Source,
+                _ => StartupSortMode.Default
+            };
+            UpdateStartupChipsAndFilter();
         }
     }
 
@@ -722,6 +742,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             ToolsView.Visibility = Visibility.Collapsed;
             GameMsiView.Visibility = Visibility.Collapsed;
             NetworkView.Visibility = Visibility.Collapsed;
+            PowerView.Visibility = Visibility.Collapsed;
 
             if (tag == "DNS")
             {
@@ -740,12 +761,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 long total = CleanerEngine.Cleaners.Sum(c => c.BytesFound);
                 CleanerTotalText.Text = LocalizationManager.Instance.Format("Cleaner.FoundTotal", FormatBytes(total));
                 StatusText.Text = LocalizationManager.Instance["Cleaner.ScanDone"];
+                UpdateCleanerList();
             }
             else if (tag == "DEBLOAT")
             {
                 DebloatView.Visibility = Visibility.Visible;
                 UpdateDebloatChipsAndFilter();
-                StatusText.Text = "Деблоат-менеджер готовий.";
+                StatusText.Text = LocalizationManager.Instance["Debloat.Ready"];
             }
             else if (tag == "STARTUP")
             {
@@ -758,7 +780,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 ToolsView.Visibility = Visibility.Visible;
                 UpdateToolsChipsAndFilter();
-                StatusText.Text = "Бібліотека софту та інструментів готова.";
+                StatusText.Text = LocalizationManager.Instance["Tools.Ready"];
             }
             else if (tag == "GAMEMSI")
             {
@@ -768,12 +790,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 {
                     await ScanMsiDevicesAsync();
                 }
-                StatusText.Text = "Game Mode & MSI готовий.";
+                StatusText.Text = LocalizationManager.Instance["GameMode.Ready"];
             }
             else if (tag == "NETWORK")
             {
                 NetworkView.Visibility = Visibility.Visible;
                 await RefreshNetworkStatusAsync();
+            }
+            else if (tag == "POWER")
+            {
+                PowerView.Visibility = Visibility.Visible;
+                await RefreshPowerUiAsync();
+                StatusText.Text = LocalizationManager.Instance["Power.Title"];
             }
             else
             {
@@ -821,15 +849,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             try
             {
-                StatusText.Text = $"Застосування: {tweak.LocalizedName}...";
+                StatusText.Text = LocalizationManager.Instance.Format("Tweak.Applying", tweak.LocalizedName);
                 AppLogger.Log($"Застосування твіка: {tweak.LocalizedName}");
                 bool res = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
-                StatusText.Text = res ? $"Успішно застосовано: {tweak.LocalizedName}" : $"Помилка виконання: {tweak.LocalizedName}";
+                StatusText.Text = res ? LocalizationManager.Instance.Format("Tweak.ApplyDone", tweak.LocalizedName) : LocalizationManager.Instance.Format("Tweak.ApplyFailed", tweak.LocalizedName);
                 AppLogger.Log($"Результат {tweak.LocalizedName}: {res}", res ? "SUCCESS" : "ERROR");
             }
             catch (Exception ex)
             {
-                StatusText.Text = $"Збій: {ex.Message}";
+                StatusText.Text = LocalizationManager.Instance.Format("Tweak.Crash", ex.Message);
                 AppLogger.Log($"Помилка при застосуванні {tweak.LocalizedName}: {ex.Message}", "ERROR");
             }
         }
@@ -841,15 +869,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             try
             {
-                StatusText.Text = $"Відновлення: {tweak.LocalizedName}...";
+                StatusText.Text = LocalizationManager.Instance.Format("Tweak.Restoring", tweak.LocalizedName);
                 AppLogger.Log($"Відновлення твіка: {tweak.LocalizedName}");
                 bool res = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: false);
-                StatusText.Text = res ? $"Відновлено: {tweak.LocalizedName}" : $"Помилка відновлення: {tweak.LocalizedName}";
+                StatusText.Text = res ? LocalizationManager.Instance.Format("Tweak.RestoreDone", tweak.LocalizedName) : LocalizationManager.Instance.Format("Tweak.RestoreFailed", tweak.LocalizedName);
                 AppLogger.Log($"Результат відновлення {tweak.LocalizedName}: {res}", res ? "SUCCESS" : "ERROR");
             }
             catch (Exception ex)
             {
-                StatusText.Text = $"Збій: {ex.Message}";
+                StatusText.Text = LocalizationManager.Instance.Format("Tweak.Crash", ex.Message);
                 AppLogger.Log($"Помилка при відновленні {tweak.LocalizedName}: {ex.Message}", "ERROR");
             }
         }
@@ -861,7 +889,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             .Where(t => string.Equals(t.Risk, "Safe", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        if (MessageBox.Show($"Застосувати всі безпечні твіки ({safeTweaks.Count} шт.)?", "1-Click Safe Pack", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        var loc = LocalizationManager.Instance;
+        if (MessageBox.Show(loc.Format("Dialogs.SafePackConfirm", safeTweaks.Count), loc["Dialogs.SafePackTitle"], MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
         {
             int i = 0;
             foreach (var tweak in safeTweaks)
@@ -870,11 +899,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 int pct = (int)((i / (double)safeTweaks.Count) * 100);
                 AppProgressBar.Value = pct;
                 ProgressPercentText.Text = $"{pct}%";
-                StatusText.Text = $"Оптимізація: {tweak.LocalizedName}";
+                StatusText.Text = loc.Format("Dialogs.Optimizing", tweak.LocalizedName);
 
                 await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
             }
-            StatusText.Text = "Усі безпечні твіки успішно застосовано!";
+            StatusText.Text = loc["Dialogs.SafePackDone"];
             AppLogger.Log("1-Click Safe Pack повністю застосовано", "SUCCESS");
             UpdateTweakChipsAndFilter();
         }
@@ -882,7 +911,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void BtnSafeMasloPack_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show("Застосувати рекомендований комплексний Maslo Pack (безпечні твіки + деблоат мотлоху)?", "1-Click Safe Maslo Pack", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        if (MessageBox.Show(LocalizationManager.Instance["Dialogs.MasloPackConfirm"], LocalizationManager.Instance["Dialogs.MasloPackTitle"], MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
         {
             var res = await PresetEngine.ApplyMasloSignaturePackAsync(
                 TweakEngine.Instance.AllTweaks,
@@ -946,6 +975,29 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     #region Cleaner
 
+    private void UpdateCleanerList()
+    {
+        if (CleanerItemsControl == null) return;
+        var filtered = CleanerEngine.GetFilteredAndSortedItems(sortMode: _currentCleanerSort);
+        CleanerItemsControl.ItemsSource = filtered.ToList();
+    }
+
+    private void CleanerSortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CleanerSortComboBox?.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            _currentCleanerSort = tag switch
+            {
+                "SizeAscending" => CleanerSortMode.SizeAscending,
+                "SafeFirst" => CleanerSortMode.SafeFirst,
+                "Name" => CleanerSortMode.NameAscending,
+                "Category" => CleanerSortMode.Category,
+                _ => CleanerSortMode.SizeDescending
+            };
+            UpdateCleanerList();
+        }
+    }
+
     private async void CleanItem_Click(object sender, RoutedEventArgs e)
     {
         if (sender is Button btn && btn.Tag is CleanerItem item)
@@ -960,6 +1012,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
                 long totalRemaining = CleanerEngine.Cleaners.Sum(c => c.BytesFound);
                 CleanerTotalText.Text = loc.Format("Cleaner.FoundSummary", FormatBytes(totalRemaining));
+                UpdateCleanerList();
             }
             catch (Exception ex)
             {
@@ -982,10 +1035,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     StatusText.Text = loc.Format("Cleaner.CleanedOne", p.Name, FormatBytes(p.Freed));
                 });
 
-                long totalFreed = await CleanerEngine.CleanAllSafeAsync(progress);
+                long totalFreed = await CleanerEngine.CleanAllAsync(progress);
                 CleanerTotalText.Text = loc["Cleaner.CleanDone"];
                 StatusText.Text = loc.Format("Cleaner.TotalFreed", FormatBytes(totalFreed));
                 AppLogger.Log($"Full clean: freed {FormatBytes(totalFreed)}", "SUCCESS");
+                UpdateCleanerList();
             }
             catch (Exception ex)
             {
@@ -1002,6 +1056,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         long total = CleanerEngine.Cleaners.Sum(c => c.BytesFound);
         CleanerTotalText.Text = loc.Format("Cleaner.FoundSummary", FormatBytes(total));
         StatusText.Text = loc["Cleaner.ScanDone"];
+        UpdateCleanerList();
     }
 
     #endregion
@@ -1012,9 +1067,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is Button btn && btn.Tag is DebloatItem item)
         {
-            StatusText.Text = $"Видалення {item.Name}...";
+            StatusText.Text = LocalizationManager.Instance.Format("Debloat.Uninstalling", item.Name);
             bool ok = await DebloatEngine.UninstallPackageAsync(item);
-            StatusText.Text = ok ? $"Видалено: {item.Name}" : $"Помилка видалення: {item.Name}";
+            StatusText.Text = ok ? LocalizationManager.Instance.Format("Debloat.Uninstalled", item.Name) : LocalizationManager.Instance.Format("Debloat.UninstallFailed", item.Name);
             AppLogger.Log($"Видалення UWP {item.Name}: {ok}", ok ? "SUCCESS" : "ERROR");
             UpdateDebloatChipsAndFilter();
         }
@@ -1024,9 +1079,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is Button btn && btn.Tag is DebloatItem item)
         {
-            StatusText.Text = $"Відновлення {item.Name}...";
+            StatusText.Text = LocalizationManager.Instance.Format("Debloat.Restoring", item.Name);
             bool ok = await DebloatEngine.RestorePackageAsync(item);
-            StatusText.Text = ok ? $"Відновлено: {item.Name}" : $"Відкрито сторінку в Store.";
+            StatusText.Text = ok ? LocalizationManager.Instance.Format("Debloat.Restored", item.Name) : LocalizationManager.Instance["Debloat.RestoreStoreOpened"];
             AppLogger.Log($"Відновлення UWP {item.Name}: {ok}", ok ? "SUCCESS" : "WARN");
             UpdateDebloatChipsAndFilter();
         }
@@ -1034,10 +1089,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void BtnRescanDebloat_Click(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "Пересканування UWP...";
+        StatusText.Text = LocalizationManager.Instance["Debloat.Rescanning"];
         await DebloatEngine.ScanInstalledPackagesAsync();
         UpdateDebloatChipsAndFilter();
-        StatusText.Text = "Статус UWP пакетів оновлено.";
+        StatusText.Text = LocalizationManager.Instance["Debloat.RescanDone"];
     }
 
     private async void ToggleStartup_Click(object sender, RoutedEventArgs e)
@@ -1072,27 +1127,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 if (tool.SpecialAction == "MAS")
                 {
                     ToolsEngine.RunMasActivation();
-                    StatusText.Text = "Запущено Microsoft Activation Scripts.";
+                    StatusText.Text = LocalizationManager.Instance["Tools.MasLaunched"];
                 }
                 else if (tool.SpecialAction == "VCREDIST")
                 {
-                    StatusText.Text = "Встановлення Visual C++ All-in-One...";
+                    StatusText.Text = LocalizationManager.Instance["Tools.VcRedistInstalling"];
                     bool ok = await ToolsEngine.InstallVcRedistAllAsync(tool);
-                    StatusText.Text = ok ? "Всі пакети Visual C++ успішно встановлено!" : "Помилка встановлення VC++.";
+                    StatusText.Text = ok ? LocalizationManager.Instance["Tools.VcRedistDone"] : LocalizationManager.Instance["Tools.VcRedistError"];
                     UpdateToolsChipsAndFilter();
                 }
                 else if (tool.SpecialAction == "DIRECTX")
                 {
-                    StatusText.Text = "Оновлення бібліотек DirectX...";
+                    StatusText.Text = LocalizationManager.Instance["Tools.DirectXUpdating"];
                     bool ok = await ToolsEngine.InstallDirectXWebAsync(tool);
-                    StatusText.Text = ok ? "Бібліотеки DirectX успішно оновлено!" : "Помилка оновлення DirectX.";
+                    StatusText.Text = ok ? LocalizationManager.Instance["Tools.DirectXDone"] : LocalizationManager.Instance["Tools.DirectXError"];
                     UpdateToolsChipsAndFilter();
                 }
                 else if (!string.IsNullOrWhiteSpace(tool.WingetId))
                 {
-                    StatusText.Text = $"Встановлення {tool.Name} через Winget...";
+                    StatusText.Text = LocalizationManager.Instance.Format("Tools.WingetInstalling", tool.Name);
                     bool ok = await ToolsEngine.InstallWingetPackageAsync(tool);
-                    StatusText.Text = ok ? $"Успішно встановлено: {tool.Name}" : $"Помилка встановлення {tool.Name}.";
+                    StatusText.Text = ok ? LocalizationManager.Instance.Format("Tools.InstallDone", tool.Name) : LocalizationManager.Instance.Format("Tools.InstallError", tool.Name);
                     UpdateToolsChipsAndFilter();
                 }
             }
@@ -1105,10 +1160,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void BtnRescanTools_Click(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "Сканування встановленого софту...";
+        StatusText.Text = LocalizationManager.Instance["Tools.Rescanning"];
         await ToolsEngine.DetectInstalledToolsAsync();
         UpdateToolsChipsAndFilter();
-        StatusText.Text = "Статуси програм оновлено.";
+        StatusText.Text = LocalizationManager.Instance["Tools.RescanDone"];
     }
 
     private void OpenToolSite_Click(object sender, RoutedEventArgs e)
@@ -1116,6 +1171,15 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (sender is Button btn && btn.Tag is ToolItem tool)
         {
             ToolsEngine.OpenUrl(tool.Url);
+        }
+    }
+
+    private void OpenTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is ToolItem tool)
+        {
+            bool ok = ToolsEngine.OpenInstalledTool(tool);
+            StatusText.Text = ok ? LocalizationManager.Instance.Format("Tools.Launched", tool.Name) : LocalizationManager.Instance.Format("Tools.LaunchError", tool.Name);
         }
     }
 
@@ -1131,21 +1195,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void BtnVssPoint_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show("Створити нову контрольну точку відновлення системи Windows (VSS)?", "Захист системи", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+        var loc = LocalizationManager.Instance.For("BackupEngine");
+        if (MessageBox.Show(loc["MainVssConfirm"], loc["MainVssTitle"], MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
         {
-            StatusText.Text = "Створення системної точки VSS...";
+            StatusText.Text = loc["MainVssBusy"];
             var res = await BackupEngine.CreateVssRestorePointAsync();
             StatusText.Text = res.Message;
-            MessageBox.Show(res.Message, "Точка відновлення", MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            MessageBox.Show(res.Message, loc["MainVssResultTitle"], MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
     }
 
     private async void BtnRegBackup_Click(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "Створення резервної копії реєстру...";
+        var loc = LocalizationManager.Instance.For("BackupEngine");
+        StatusText.Text = loc["MainBackupBusy"];
         var res = await BackupEngine.ExportRegistryBackupAsync();
         StatusText.Text = res.Message;
-        MessageBox.Show(res.Message, "Резервна копія реєстру", MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        MessageBox.Show(res.Message, loc["MainBackupResultTitle"], MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
     }
 
     private void BtnRestoreRollback_Click(object sender, RoutedEventArgs e)
@@ -1156,26 +1222,28 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async void BtnCheckUpdates_Click(object sender, RoutedEventArgs e)
     {
-        StatusText.Text = "Перевірка оновлень на GitHub...";
+        var loc = LocalizationManager.Instance;
+        StatusText.Text = loc["Update.Checking"];
         var (available, newVer, url) = await UpdateManager.CheckForUpdateAsync();
 
         if (available)
         {
-            if (MessageBox.Show($"Доступна нова версія {newVer}!\n\nОновити програму зараз автоматично?", "Оновлення MASLOOPTIMIZER", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+            if (MessageBox.Show(loc.Format("Update.Available", newVer), loc["Update.AvailableTitle"], MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
             {
-                StatusText.Text = "Завантаження та встановлення оновлення...";
+                StatusText.Text = loc["Update.Downloading"];
                 await UpdateManager.DownloadAndInstallUpdateAsync(url);
             }
         }
         else
         {
-            MessageBox.Show($"У вас встановлена остання версія ({UpdateManager.CurrentVersion})!", "Оновлення", MessageBoxButton.OK, MessageBoxImage.Information);
-            StatusText.Text = "Остання версія програми.";
+            MessageBox.Show(loc.Format("Update.UpToDate", UpdateManager.CurrentVersion), loc["Update.UpToDateTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
+            StatusText.Text = loc["Update.UpToDateStatus"];
         }
     }
 
     private async void BtnPresetMenu_Click(object sender, RoutedEventArgs e)
     {
+        var loc = LocalizationManager.Instance;
         // Контекстне меню «Пресети»: Tag = Save / Load → одразу виконуємо дію.
         if (sender is MenuItem mi && mi.Tag is string tag)
         {
@@ -1183,12 +1251,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             {
                 var saveRes = PresetEngine.ExportFullProfile(TweakEngine.Instance.AllTweaks, DebloatEngine.Catalog);
                 StatusText.Text = saveRes.Message;
-                if (saveRes.Success) MessageBox.Show(saveRes.Message, "Експорт конфігурації", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (saveRes.Success) MessageBox.Show(saveRes.Message, loc["Dialogs.ExportConfigTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (tag.Equals("Load", StringComparison.OrdinalIgnoreCase))
             {
-                StatusText.Text = "Розгортання профілю...";
+                StatusText.Text = loc["Dialogs.DeployingProfile"];
                 var loadRes = await PresetEngine.ImportAndApplyProfileAsync(
                     TweakEngine.Instance.AllTweaks,
                     DebloatEngine.Catalog,
@@ -1200,7 +1268,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                     }));
 
                 StatusText.Text = loadRes.Message;
-                MessageBox.Show(loadRes.Message, "Імпорт конфігурації", MessageBoxButton.OK, loadRes.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                MessageBox.Show(loadRes.Message, loc["Dialogs.ImportConfigTitle"], MessageBoxButton.OK, loadRes.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
                 UpdateTweakChipsAndFilter();
                 UpdateDebloatChipsAndFilter();
                 return;
@@ -1208,8 +1276,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
 
         var choice = MessageBox.Show(
-            "Натисніть [ТАК] щоб зберегти ваш поточний конфіг у файл.\nНатисніть [НІ] щоб завантажити та розгорнути існуючий пресет.",
-            "Менеджер конфігурацій (Пресетів)",
+            loc["Dialogs.PresetMenuPrompt"],
+            loc["Dialogs.PresetMenuTitle"],
             MessageBoxButton.YesNoCancel,
             MessageBoxImage.Question);
 
@@ -1217,11 +1285,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             var res = PresetEngine.ExportFullProfile(TweakEngine.Instance.AllTweaks, DebloatEngine.Catalog);
             StatusText.Text = res.Message;
-            if (res.Success) MessageBox.Show(res.Message, "Експорт конфігурації", MessageBoxButton.OK, MessageBoxImage.Information);
+            if (res.Success) MessageBox.Show(res.Message, loc["Dialogs.ExportConfigTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
         }
         else if (choice == MessageBoxResult.No)
         {
-            StatusText.Text = "Розгортання профілю...";
+            StatusText.Text = loc["Dialogs.DeployingProfile"];
             var res = await PresetEngine.ImportAndApplyProfileAsync(
                 TweakEngine.Instance.AllTweaks,
                 DebloatEngine.Catalog,
@@ -1233,7 +1301,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
                 }));
 
             StatusText.Text = res.Message;
-            MessageBox.Show(res.Message, "Імпорт конфігурації", MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            MessageBox.Show(res.Message, loc["Dialogs.ImportConfigTitle"], MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
             UpdateTweakChipsAndFilter();
             UpdateDebloatChipsAndFilter();
         }
@@ -1295,6 +1363,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             UpdateToolsChipsAndFilter();
             UpdateDnsChipsAndFilter();
             UpdateStartupChipsAndFilter();
+            RefreshThemeBoundColors();
         }
     }
 
@@ -1355,7 +1424,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         LblHwRam.Text = loc["Header.BadgeRAM"];
         LblHwDisk.Text = loc["Header.BadgeDisk"];
         LblHwDb.Text = loc["Header.BadgeTweaks"];
-        HwBadgeTweaksCount.Text = loc.Format("Common.TweaksCount", TweakEngine.Instance.AllTweaks.Count);
+        HwBadgeTweaksCount.Text = loc.Format("Header.DatabaseCount", TweakEngine.Instance.AllTweaks.Count);
 
         // Сайдбар
         LblNavUi.Text = loc["Sidebar.NavUI"];
@@ -1374,6 +1443,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         BtnPresetMenu.Content = loc["Sidebar.BtnPresets"];
         LblNavGameMode.Text = loc["Sidebar.NavGameMode"];
         LblNavNetwork.Text = loc["Sidebar.NavNetwork"];
+        LblNavPower.Text = loc["Sidebar.NavPower"];
 
         // Підказки (ToolTip) кнопок автоматизації
         TtipGameBoost.Text = loc["Sidebar.BtnGameBoostTip"];
@@ -1399,6 +1469,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         LblSortDebloat.Text = loc["Common.SortLabel"];
         LblSortTools.Text = loc["Common.SortLabel"];
         LblSortDns.Text = loc["Dns.SortLabel"];
+        LblSortStartup.Text = loc["Common.SortLabel"];
+        LblSortCleaner.Text = loc["Common.SortLabel"];
+        LblSortMsi.Text = loc["Common.SortLabel"];
         ApplyLocalizedSortItems();
         ApplyDnsSortItems();
 
@@ -1435,10 +1508,35 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         MsiTitleText.Text = loc["Msi.Title"];
         MsiStatsText.Text = loc["Msi.Scanning"];
+        MsiEducationalText.Text = loc["Msi.EducationalText"];
         BtnScanMsi.Content = loc["Msi.BtnScan"];
         BtnMsiOptimize.Content = loc["Msi.BtnOptimize"];
         BtnMsiRestore.Content = loc["Msi.BtnRestore"];
         RefreshGameModeUi();
+
+        // Профілі живлення (PowerEngine)
+        PowerTitleText.Text = loc["Power.Title"];
+        PowerEcoTitle.Text = loc["Power.CardEcoTitle"];
+        PowerEcoDesc.Text = loc["Power.CardEcoDesc"];
+        PowerSnapshotTitle.Text = loc["Power.CardSnapshotTitle"];
+        PowerSnapshotDesc.Text = loc["Power.CardSnapshotDesc"];
+        PowerUltraTitle.Text = loc["Power.CardUltraTitle"];
+        PowerUltraDesc.Text = loc["Power.CardUltraDesc"];
+        BtnPowerEco.Content = loc["Power.BtnActivate"];
+        BtnPowerSnapshot.Content = loc["Power.BtnActivate"];
+        BtnPowerUltra.Content = loc["Power.BtnActivate"];
+        BtnPowerUpdateSnapshot.Content = loc["Power.BtnUpdateSnapshot"];
+        _ = RefreshPowerUiAsync();
+
+        // Мережа (NetworkEngine)
+        NetworkTitleText.Text = loc["Network.Title"];
+        NetworkDescText.Text = loc["Network.Description"];
+        NetworkStatusText.Text = loc["Network.StatusInitial"];
+        NetworkDetailsText.Text = loc["Network.DetailsInitial"];
+        BtnNagle.Content = loc["Network.BtnNagle"];
+        BtnEee.Content = loc["Network.BtnEee"];
+        BtnQos.Content = loc["Network.BtnQos"];
+        BtnNetworkReset.Content = loc["Network.BtnReset"];
 
         // Футер
         StatusText.Text = loc["Footer.ReadyStatus"];
@@ -1472,6 +1570,39 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         ApplySortItems(SortComboBox, map);
         ApplySortItems(DebloatSortComboBox, map);
         ApplySortItems(ToolsSortComboBox, map);
+
+        var startupMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Default"] = "Common.SortDefault",
+            ["EnabledFirst"] = "Startup.SortEnabledFirst",
+            ["DisabledFirst"] = "Startup.SortDisabledFirst",
+            ["Name"] = "Common.SortName",
+            ["Category"] = "Startup.SortCategory",
+            ["Source"] = "Startup.SortSource",
+        };
+        ApplySortItems(StartupSortComboBox, startupMap);
+
+        var cleanerMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SizeDescending"] = "Cleaner.SortSizeDesc",
+            ["SizeAscending"] = "Cleaner.SortSizeAsc",
+            ["SafeFirst"] = "Cleaner.SortSafeFirst",
+            ["Name"] = "Common.SortName",
+            ["Category"] = "Cleaner.SortCategory",
+        };
+        ApplySortItems(CleanerSortComboBox, cleanerMap);
+
+        var msiMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Default"] = "Common.SortDefault",
+            ["MsiFirst"] = "Msi.SortMsiFirst",
+            ["LineBasedFirst"] = "Msi.SortLineBased",
+            ["Priority"] = "Msi.SortPriority",
+            ["Name"] = "Common.SortName",
+            ["Category"] = "Msi.SortCategory",
+            ["Vendor"] = "Msi.SortVendor",
+        };
+        ApplySortItems(MsiSortComboBox, msiMap);
     }
 
     private static void ApplySortItems(System.Windows.Controls.ComboBox combo, Dictionary<string, string> map)
@@ -1522,7 +1653,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return $"{bytes} {loc["Common.UnitBytes"]}";
     }
 
-    #region Game Mode, MSI, Мережа, Health та Налаштування
+    #region Game Mode, MSI, Мережа та Налаштування
 
     private void RefreshGameModeUi()
     {
@@ -1530,7 +1661,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         bool active = GameModeEngine.IsGameModeActive;
         TglGameMode.IsChecked = active;
         GameModeStatusText.Text = active ? loc["GameMode.StatusActive"] : loc["GameMode.StatusInactive"];
-        GameModeStatusText.Foreground = active ? HexBrush("#00FF9D") : (Brush)FindResource("TextMuted");
+        GameModeStatusText.Foreground = active ? (Brush)FindResource("AccentGreen") : (Brush)FindResource("TextMuted");
         TglGameMode.Content = active ? loc["GameMode.ToggleOn"] : loc["GameMode.ToggleOff"];
     }
 
@@ -1565,6 +1696,142 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             : loc["GameMode.PurgeFail"];
     }
 
+    #region Профілі живлення (PowerEngine)
+
+    private async void PowerActivate_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not string tag)
+            return;
+
+        var loc = LocalizationManager.Instance;
+        SystemPowerMode? mode = tag switch
+        {
+            "Eco" => SystemPowerMode.EcoPowerSaver,
+            "Snapshot" => SystemPowerMode.OriginalSnapshot,
+            "Ultra" => SystemPowerMode.UltraPerformance,
+            _ => null
+        };
+
+        if (mode is null)
+            return;
+
+        btn.IsEnabled = false;
+        StatusText.Text = loc["Power.Applying"];
+        try
+        {
+            bool ok = await PowerEngine.ApplyProfileAsync(mode.Value);
+            StatusText.Text = ok ? loc["Power.SuccessMessage"] : loc["Power.ApplyError"];
+        }
+        finally
+        {
+            btn.IsEnabled = true;
+        }
+    }
+
+    private async void BtnPowerUpdateSnapshot_Click(object sender, RoutedEventArgs e)
+    {
+        Button? btn = sender as Button;
+        if (btn is not null)
+            btn.IsEnabled = false;
+
+        StatusText.Text = LocalizationManager.Instance["Power.SnapshotCreating"];
+        try
+        {
+            bool ok = await PowerEngine.CaptureInitialSnapshotIfNeededAsync(forceRecapture: true);
+            StatusText.Text = ok ? LocalizationManager.Instance["Power.SnapshotDone"] : LocalizationManager.Instance["Power.SnapshotError"];
+        }
+        finally
+        {
+            if (btn is not null)
+                btn.IsEnabled = true;
+        }
+    }
+
+    private async void BtnPowerRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        await RefreshPowerUiAsync();
+    }
+
+    /// <summary>Підтягує з PowerEngine тип пристрою, герцовку та назву плану живлення.</summary>
+    private async Task RefreshPowerUiAsync()
+    {
+        var loc = LocalizationManager.Instance;
+
+        bool laptop = false;
+        int hz = 0;
+        string planName = "—";
+
+        await Task.Run(() =>
+        {
+            try { laptop = PowerEngine.IsLaptopDevice(); } catch { }
+            try { hz = PowerEngine.GetDisplayRefreshRates().CurrentHz; } catch { }
+            try { planName = PowerEngine.GetActivePowerPlanName(); } catch { }
+        });
+
+        PowerDeviceTypeText.Text = laptop ? loc["Power.DeviceTypeLaptop"] : loc["Power.DeviceTypeDesktop"];
+        PowerHzText.Text = loc.Format("Power.HzLabel", hz);
+        PowerPlanNameText.Text = planName;
+        UpdatePowerBadges();
+    }
+
+    private void UpdatePowerBadges()
+    {
+        PowerEcoBadge.Visibility = _lastPowerMode == SystemPowerMode.EcoPowerSaver ? Visibility.Visible : Visibility.Collapsed;
+        PowerSnapshotBadge.Visibility = _lastPowerMode == SystemPowerMode.OriginalSnapshot ? Visibility.Visible : Visibility.Collapsed;
+        PowerUltraBadge.Visibility = _lastPowerMode == SystemPowerMode.UltraPerformance ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnPowerModeChanged(SystemPowerMode mode)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => OnPowerModeChanged(mode));
+            return;
+        }
+
+        _lastPowerMode = mode;
+        UpdatePowerBadges();
+    }
+
+    private void OnGameModeStateChanged(bool isActive)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => OnGameModeStateChanged(isActive));
+            return;
+        }
+
+        RefreshGameModeUi();
+    }
+
+    #endregion
+
+    private void UpdateMsiDevices()
+    {
+        var filtered = MsiEngine.GetFilteredAndSortedDevices(sortMode: _currentMsiSort);
+        FilteredMsiDevices.Clear();
+        foreach (var d in filtered)
+            FilteredMsiDevices.Add(d);
+    }
+
+    private void MsiSortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (MsiSortComboBox?.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            _currentMsiSort = tag switch
+            {
+                "MsiFirst" => MsiSortMode.MsiFirst,
+                "LineBasedFirst" => MsiSortMode.LineBasedFirst,
+                "Priority" => MsiSortMode.PriorityDescending,
+                "Name" => MsiSortMode.NameAscending,
+                "Category" => MsiSortMode.Category,
+                "Vendor" => MsiSortMode.Vendor,
+                _ => MsiSortMode.Default
+            };
+            UpdateMsiDevices();
+        }
+    }
+
     private async Task ScanMsiDevicesAsync()
     {
         var loc = LocalizationManager.Instance;
@@ -1574,9 +1841,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             await MsiEngine.ScanPciDevicesAsync();
-            FilteredMsiDevices.Clear();
-            foreach (var d in MsiEngine.Devices)
-                FilteredMsiDevices.Add(d);
+            UpdateMsiDevices();
 
             var stats = MsiEngine.GetStatistics();
             MsiStatsText.Text = loc.Format("Msi.StatsFormat", stats.TotalDevices, stats.MsiEnabledCount, stats.MsiPercentage);
@@ -1630,56 +1895,61 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private async Task RefreshNetworkStatusAsync()
     {
-        NetworkStatusText.Text = "⏳ Зчитування стану мережі...";
+        var loc = LocalizationManager.Instance;
+        NetworkStatusText.Text = loc["Network.Reading"];
         try
         {
             var s = await NetworkEngine.GetTuningStatusAsync();
             var parts = new List<string>
             {
-                s.IsNagleDisabled ? "🟢 Nagle вимкнено" : "⚪ Nagle активний",
-                s.IsEeeDisabled ? "🟢 EEE вимкнено" : "⚪ EEE активний",
-                s.IsQosUnlocked ? "🟢 QoS 100%" : "⚪ QoS 80%",
-                s.IsDnsCacheOptimized ? "🟢 DNS кеш" : "⚪ DNS кеш"
+                s.IsNagleDisabled ? loc["Network.NagleOn"] : loc["Network.NagleOff"],
+                s.IsEeeDisabled ? loc["Network.EeeOn"] : loc["Network.EeeOff"],
+                s.IsQosUnlocked ? loc["Network.QosOn"] : loc["Network.QosOff"],
+                s.IsDnsCacheOptimized ? loc["Network.DnsCacheOn"] : loc["Network.DnsCacheOff"]
             };
-            NetworkStatusText.Text = "Статус: " + string.Join(" | ", parts);
-            NetworkDetailsText.Text = $"Активні адаптери ({s.ActiveAdaptersCount}): {string.Join(", ", s.ActiveAdaptersNames)}";
+            NetworkStatusText.Text = loc.Format("Network.StatusPrefix", string.Join(" | ", parts));
+            NetworkDetailsText.Text = loc.Format("Network.ActiveAdapters", s.ActiveAdaptersCount, string.Join(", ", s.ActiveAdaptersNames));
         }
         catch (Exception ex)
         {
-            NetworkStatusText.Text = "Помилка: " + ex.Message;
+            NetworkStatusText.Text = loc.Format("Network.Error", ex.Message);
         }
     }
 
     private async void BtnNagle_Click(object sender, RoutedEventArgs e)
     {
-        BtnNagle.Content = "⏳...";
+        var loc = LocalizationManager.Instance;
+        BtnNagle.Content = loc["Network.Busy"];
         bool ok = await NetworkEngine.OptimizeTcpLatencyAsync(true);
         await RefreshNetworkStatusAsync();
-        BtnNagle.Content = ok ? "✓ Nagle вимкнено" : "⚠️ Помилка";
+        BtnNagle.Content = ok ? loc["Network.NagleDone"] : loc["Network.ErrorShort"];
     }
 
     private async void BtnEee_Click(object sender, RoutedEventArgs e)
     {
-        BtnEee.Content = "⏳...";
+        var loc = LocalizationManager.Instance;
+        BtnEee.Content = loc["Network.Busy"];
         bool ok = await NetworkEngine.OptimizeNicPowerSavingAsync(true);
         await RefreshNetworkStatusAsync();
-        BtnEee.Content = ok ? "✓ EEE вимкнено" : "⚠️ Помилка";
+        BtnEee.Content = ok ? loc["Network.EeeDone"] : loc["Network.ErrorShort"];
     }
 
     private async void BtnQos_Click(object sender, RoutedEventArgs e)
     {
-        BtnQos.Content = "⏳...";
+        var loc = LocalizationManager.Instance;
+        BtnQos.Content = loc["Network.Busy"];
         bool ok = await NetworkEngine.OptimizeDnsAndQosAsync(true);
         await RefreshNetworkStatusAsync();
-        BtnQos.Content = ok ? "✓ QoS 100%" : "⚠️ Помилка";
+        BtnQos.Content = ok ? loc["Network.QosDone"] : loc["Network.ErrorShort"];
     }
 
     private async void BtnNetworkReset_Click(object sender, RoutedEventArgs e)
     {
-        BtnNetworkReset.Content = "⏳...";
+        var loc = LocalizationManager.Instance;
+        BtnNetworkReset.Content = loc["Network.Busy"];
         bool ok = await NetworkEngine.ResetNetworkStackAsync();
         await RefreshNetworkStatusAsync();
-        BtnNetworkReset.Content = ok ? "✓ Мережу відновлено" : "⚠️ Помилка";
+        BtnNetworkReset.Content = ok ? loc["Network.ResetDone"] : loc["Network.ErrorShort"];
     }
 
     private async void BtnGameBoost_Click(object sender, RoutedEventArgs e)
@@ -1692,24 +1962,18 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             bool activated = await GameModeEngine.ActivateGameModeAsync();
             RefreshGameModeUi();
             StatusText.Text = activated
-                ? $"🚀 Game Boost застосовано (Standby: {purge.FreedMB:N0} MB)"
-                : "Game Boost частково застосовано.";
+                ? loc.Format("Dialogs.GameBoostApplied", purge.FreedMB)
+                : loc["Dialogs.GameBoostPartial"];
 
             MessageBox.Show(
-                $"Game Boost завершено.\nЗвільнено Standby RAM: {purge.FreedMB:N0} MB\nGame Mode активний: {(activated ? "Так" : "Ні")}",
-                "1-Click Game Boost", MessageBoxButton.OK, MessageBoxImage.Information);
+                loc.Format("Dialogs.GameBoostDone", purge.FreedMB, activated ? loc["Common.Yes"] : loc["Common.No"]),
+                loc["Dialogs.GameBoostTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Помилка Game Boost: " + ex.Message, "Game Boost", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(loc.Format("Dialogs.GameBoostError", ex.Message), loc["Dialogs.GameBoostErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Error);
         }
         BtnGameBoost.Content = loc["Sidebar.BtnGameBoost"];
-    }
-
-    private void BtnHealthScore_Click(object sender, RoutedEventArgs e)
-    {
-        var health = new HealthWindow { Owner = this };
-        health.ShowDialog();
     }
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)

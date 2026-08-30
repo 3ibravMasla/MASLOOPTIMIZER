@@ -6,6 +6,9 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 using Microsoft.Win32;
 
 namespace MASLOOPTIMIZER;
@@ -33,11 +36,23 @@ public class StartupStats
     public double OptimizationPercentage => Total > 0 ? Math.Round((Disabled / (double)Total) * 100, 1) : 0;
 }
 
-public class StartupEntry : INotifyPropertyChanged
+public class StartupEntry : INotifyPropertyChanged, IWeakEventListener
 {
     public StartupEntry()
     {
-        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+        // Слабка підписка на зміну мови: статичний синглтон не утримує об'єкт.
+        PropertyChangedEventManager.AddListener(LocalizationManager.Instance, this, string.Empty);
+    }
+
+    bool IWeakEventListener.ReceiveWeakEvent(Type managerType, object sender, EventArgs e)
+    {
+        if (managerType == typeof(PropertyChangedEventManager))
+        {
+            OnLocalizationChanged(sender, (PropertyChangedEventArgs)e);
+            return true;
+        }
+
+        return false;
     }
 
     private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
@@ -145,7 +160,7 @@ public class StartupEntry : INotifyPropertyChanged
     public string StatusText => IsEnabled
         ? LocalizationManager.Instance["Startup.StatusActive"]
         : LocalizationManager.Instance["Startup.StatusPaused"];
-    public string StatusColor => IsEnabled ? "#107C41" : "#2A2D3D";
+    public Brush StatusColor => IsEnabled ? ThemeEngine.Brush("SuccessBrush") : ThemeEngine.Brush("StatusNeutralBrush");
     public string SafetyBadge => IsCritical
         ? LocalizationManager.Instance["Startup.BadgeProtected"]
         : LocalizationManager.Instance["Startup.BadgeSafe"];
@@ -166,7 +181,7 @@ public class StartupEntry : INotifyPropertyChanged
         }
     }
 
-    public string ButtonBg => IsCritical ? "#334155" : (IsEnabled ? "#C42B1C" : "#107C41");
+    public Brush ButtonBg => IsCritical ? ThemeEngine.Brush("StatusNeutralBrush") : (IsEnabled ? ThemeEngine.Brush("DangerBrush") : ThemeEngine.Brush("SuccessBrush"));
 
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -376,6 +391,7 @@ public static class StartupEngine
                 FileName = "schtasks.exe",
                 Arguments = "/query /fo CSV /v /nh",
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
@@ -384,50 +400,110 @@ public static class StartupEngine
             if (proc == null) return;
 
             string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(2500);
+            proc.WaitForExit(5000);
+
+            // Не читаємо вивід, якщо schtasks завершився з помилкою (наприклад, немає прав)
+            if (proc.ExitCode != 0) return;
 
             using var reader = new StringReader(output);
             string? line;
             while ((line = reader.ReadLine()) != null)
             {
-                if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("\"")) continue;
+                if (string.IsNullOrWhiteSpace(line)) continue;
 
-                var parts = line.Split(new[] { "\",\"" }, StringSplitOptions.None)
-                                .Select(p => p.Trim('"')).ToArray();
+                // Коректний CSV-парсинг: назви завдань та команди можуть містити коми
+                var parts = ParseCsvRow(line);
+                if (parts.Count < 9) continue;
 
-                if (parts.Length >= 9)
+                string taskName = parts[1].Trim();
+                string state = parts[3].Trim();
+                string taskToRun = parts[8].Trim();
+
+                // Захист від випадкового парсингу заголовка CSV (на будь-якій локалі)
+                if (taskName.Length == 0 ||
+                    taskName.Contains("Task Name", StringComparison.OrdinalIgnoreCase) ||
+                    taskName.Contains("Имя задачи", StringComparison.OrdinalIgnoreCase) ||
+                    taskName.Contains("Ім'я задачі", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                // Відсікаємо критичні системні завдання Windows
+                if (taskName.StartsWith(@"\Microsoft\Windows", StringComparison.OrdinalIgnoreCase) ||
+                    taskName.StartsWith(@"\Microsoft\XblGameSave", StringComparison.OrdinalIgnoreCase) ||
+                    string.IsNullOrWhiteSpace(taskToRun) ||
+                    taskToRun.Equals("N/A", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                bool isEnabled = !state.Equals("Disabled", StringComparison.OrdinalIgnoreCase) &&
+                                 !state.Equals("Отключена", StringComparison.OrdinalIgnoreCase) &&
+                                 !state.Equals("Вимкнено", StringComparison.OrdinalIgnoreCase) &&
+                                 !state.Equals("Виключено", StringComparison.OrdinalIgnoreCase);
+                string cleanName = Path.GetFileName(taskName);
+                var (cat, isCrit, pub) = ClassifyStartupItem(cleanName, taskToRun);
+
+                list.Add(new StartupEntry
                 {
-                    string taskName = parts[1].Trim();
-                    string state = parts[3].Trim();
-                    string taskToRun = parts[8].Trim();
-
-                    // Відсікаємо критичні системні завдання Windows
-                    if (taskName.StartsWith(@"\Microsoft\Windows", StringComparison.OrdinalIgnoreCase) ||
-                        taskName.StartsWith(@"\Microsoft\XblGameSave", StringComparison.OrdinalIgnoreCase) ||
-                        string.IsNullOrWhiteSpace(taskToRun) ||
-                        taskToRun.Equals("N/A", StringComparison.OrdinalIgnoreCase))
-                        continue;
-
-                    bool isEnabled = !state.Equals("Disabled", StringComparison.OrdinalIgnoreCase);
-                    string cleanName = Path.GetFileName(taskName);
-                    var (cat, isCrit, pub) = ClassifyStartupItem(cleanName, taskToRun);
-
-                    list.Add(new StartupEntry
-                    {
-                        Name = cleanName,
-                        Command = taskToRun,
-                        Publisher = pub,
-                        Source = "Планувальник завдань",
-                        Category = "Планувальник завдань",
-                        TaskPath = taskName,
-                        IsEnabled = isEnabled,
-                        IsCritical = isCrit,
-                        EntryType = "Task"
-                    });
-                }
+                    Name = cleanName,
+                    Command = taskToRun,
+                    Publisher = pub,
+                    Source = "Планувальник завдань",
+                    Category = "Планувальник завдань",
+                    TaskPath = taskName,
+                    IsEnabled = isEnabled,
+                    IsCritical = isCrit,
+                    EntryType = "Task"
+                });
             }
         }
         catch { }
+    }
+
+    /// <summary>Парсить один рядок CSV із врахуванням лапок та екранованих `""` (напр., вивід schtasks).</summary>
+    private static List<string> ParseCsvRow(string line)
+    {
+        var result = new List<string>();
+        bool inQuotes = false;
+        var sb = new System.Text.StringBuilder();
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        sb.Append('"');
+                        i++;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                    }
+                }
+                else
+                {
+                    sb.Append(c);
+                }
+            }
+            else if (c == '"')
+            {
+                inQuotes = true;
+            }
+            else if (c == ',')
+            {
+                result.Add(sb.ToString());
+                sb.Clear();
+            }
+            else
+            {
+                sb.Append(c);
+            }
+        }
+
+        result.Add(sb.ToString());
+        return result;
     }
 
     private static (string Category, bool IsCritical, string Publisher) ClassifyStartupItem(string name, string command)

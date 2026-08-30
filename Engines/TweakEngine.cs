@@ -273,7 +273,9 @@ public class TweakEngine
                 _ => 4
             };
 
-            return startType == expectedType;
+            return startType == expectedType && (action.StopOnApply
+                ? sc.Status != ServiceControllerStatus.Running
+                : true);
         }
         catch { return false; }
     }
@@ -303,30 +305,26 @@ public class TweakEngine
                 // 2. Нативне керування Службами Windows
                 if (tweak.ServiceActions != null && tweak.ServiceActions.Count > 0)
                 {
+                    bool allOk = true;
                     foreach (var svc in tweak.ServiceActions)
                     {
-                        ExecuteServiceActionNative(svc, isApply);
+                        if (!ExecuteServiceActionNative(svc, isApply)) allOk = false;
                     }
-                    return true;
+                    return allOk;
                 }
 
-                // 3. Виконання команд через cmd.exe
+                // 3. Виконання команд через cmd.exe (перевірка ExitCode)
                 if (tweak.CommandAction != null)
                 {
                     string cmd = isApply ? tweak.CommandAction.ApplyCmd : tweak.CommandAction.RestoreCmd;
-                    if (!string.IsNullOrWhiteSpace(cmd))
-                    {
-                        RunCommandQuiet(cmd);
-                        return true;
-                    }
+                    return !string.IsNullOrWhiteSpace(cmd) && RunCommandQuietChecked(cmd);
                 }
 
-                // 4. Fallback через чистий процес powershell.exe
+                // 4. Fallback через чистий процес powershell.exe (перевірка ExitCode)
                 string? script = isApply ? tweak.ApplyScript : tweak.RestoreScript;
                 if (!string.IsNullOrWhiteSpace(script))
                 {
-                    RunPowerShellQuiet(script);
-                    return true;
+                    return RunPowerShellQuietChecked(script);
                 }
             }
             catch (Exception ex)
@@ -392,7 +390,7 @@ public class TweakEngine
         }
     }
 
-    private static void ExecuteServiceActionNative(ServiceAction action, bool isApply)
+    private static bool ExecuteServiceActionNative(ServiceAction action, bool isApply)
     {
         try
         {
@@ -405,10 +403,17 @@ public class TweakEngine
                 _ => 3
             };
 
+            bool regOk = false;
             using (var key = Registry.LocalMachine.OpenSubKey($@"SYSTEM\CurrentControlSet\Services\{action.ServiceName}", true))
             {
-                key?.SetValue("Start", startType, RegistryValueKind.DWord);
+                if (key != null)
+                {
+                    key.SetValue("Start", startType, RegistryValueKind.DWord);
+                    regOk = true;
+                }
             }
+
+            if (!regOk) return false;
 
             using var sc = new ServiceController(action.ServiceName);
             if (isApply && action.StopOnApply && sc.Status == ServiceControllerStatus.Running)
@@ -419,15 +424,20 @@ public class TweakEngine
             {
                 sc.Start();
             }
+
+            return true;
         }
-        catch { }
+        catch
+        {
+            return false;
+        }
     }
 
     #endregion
 
     #region Легкі допоміжні виклики системних CLI процесів
 
-    private static void RunCommandQuiet(string command)
+    private static bool RunCommandQuietChecked(string command)
     {
         try
         {
@@ -439,9 +449,18 @@ public class TweakEngine
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             });
-            proc?.WaitForExit(4000);
+
+            if (proc == null) return false;
+
+            if (!proc.WaitForExit(30_000))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
+
+            return proc.ExitCode == 0;
         }
-        catch { }
+        catch { return false; }
     }
 
     private static string RunCommandCapture(string command)
@@ -463,7 +482,7 @@ public class TweakEngine
         catch { return string.Empty; }
     }
 
-    private static void RunPowerShellQuiet(string script)
+    private static bool RunPowerShellQuietChecked(string script)
     {
         try
         {
@@ -475,9 +494,18 @@ public class TweakEngine
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             });
-            proc?.WaitForExit(6000);
+
+            if (proc == null) return false;
+
+            if (!proc.WaitForExit(30_000))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
+
+            return proc.ExitCode == 0;
         }
-        catch { }
+        catch { return false; }
     }
 
     private static string RunPowerShellCapture(string script)

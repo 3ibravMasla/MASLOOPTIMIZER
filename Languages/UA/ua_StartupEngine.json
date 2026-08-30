@@ -1,0 +1,33 @@
+{
+    "Startup":  {
+                    "Title":  "🚀 МЕНЕДЖЕР АВТОЗАПУСКУ WINDOWS",
+                    "Description":  "Керування автозавантаженням та фоновими завданнями",
+                    "BtnRescan":  "🔄 Оновити",
+                    "BtnPause":  "⏸️ Призупинити",
+                    "BtnEnable":  "▶️ Увімкнути",
+                    "StatusActive":  "🟢 АКТИВНО",
+                    "StatusPaused":  "⚪ ПРИЗУПИНЕНО",
+                    "BtnProtected":  "🔒 Захищено",
+                    "ChipAll":  "🌟 Всі",
+                    "ChipUser":  "📝 Програми користувача (HKCU Run)",
+                    "ChipSystem":  "🖥️ Системні (HKLM Run)",
+                    "ChipTasks":  "⏰ Планувальник завдань",
+                    "ChipFolder":  "📁 Папка автозавантаження",
+                    "BadgeProtected":  "🛡️ СИСТЕМНИЙ",
+                    "BadgeSafe":  "⚡ БЕЗПЕЧНО",
+                    "StatusProtected":  "🔒 ЗАХИЩЕНО",
+                    "SourceUserRun":  "Реєстр (HKCU)",
+                    "SourceSystemRun":  "Реєстр (HKLM)",
+                    "SourceTaskScheduler":  "Планувальник завдань",
+                    "SourceStartupFolder":  "Папка автозавантаження",
+                    "ListRefreshed":  "Список автозавантаження оновлено.",
+                    "ListRescanned":  "Список автозавантаження перескановано.",
+                    "ToggleDone":  "Автозапуск для {0}: {1}",
+                    "EnabledWord":  "Увімкнено",
+                    "PausedWord":  "Призупинено",
+                    "SortEnabledFirst":  "🟢 Увімкнені спочатку",
+                    "SortDisabledFirst":  "⚪ Вимкнені спочатку",
+                    "SortCategory":  "📂 За категорією",
+                    "SortSource":  "🗂️ За джерелом"
+                }
+}

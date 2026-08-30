@@ -1,7 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
+using System.Windows;
+using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 
 namespace MASLOOPTIMIZER;
 
@@ -69,7 +73,7 @@ public class CommandAction
     public string RestoreCmd { get; set; } = string.Empty;
 }
 
-public class TweakModel : INotifyPropertyChanged
+public class TweakModel : INotifyPropertyChanged, IWeakEventListener
 {
     [JsonPropertyName("Id")]
     public string Id { get; set; } = string.Empty;
@@ -132,8 +136,20 @@ public class TweakModel : INotifyPropertyChanged
 
     public TweakModel()
     {
-        // При зміні мови інтерфейсу оновлюємо локалізовані поля в UI
-        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+        // При зміні мови інтерфейсу оновлюємо локалізовані поля в UI.
+        // Слабка підписка (weak): статичний синглтон не утримує об'єкт у пам'яті.
+        PropertyChangedEventManager.AddListener(LocalizationManager.Instance, this, string.Empty);
+    }
+
+    bool IWeakEventListener.ReceiveWeakEvent(Type managerType, object sender, EventArgs e)
+    {
+        if (managerType == typeof(PropertyChangedEventManager))
+        {
+            OnLocalizationChanged(sender, (PropertyChangedEventArgs)e);
+            return true;
+        }
+
+        return false;
     }
 
     private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
@@ -194,7 +210,7 @@ public class TweakModel : INotifyPropertyChanged
     public string StatusText => IsApplied
         ? LocalizationManager.Instance["Common.StatusOptimized"]
         : LocalizationManager.Instance["Common.StatusStandard"];
-    public string StatusColor => IsApplied ? "#107C41" : "#2A2D3D";
+    public Brush StatusColor => IsApplied ? ThemeEngine.Brush("SuccessBrush") : ThemeEngine.Brush("StatusNeutralBrush");
 
     public string ActionButtonText
     {

@@ -1,0 +1,176 @@
+{
+    "Dns":  {
+                "Title":  "🌐 DNS NETWORK LATENCY OPTIMIZER",
+                "Description":  "Parallel ping measurement and 1-Click fastest DNS activation",
+                "BtnFastest":  "⚡ Fastest DNS",
+                "BtnReset":  "🔄 Reset to DHCP",
+                "StatusActive":  "🟢 ACTIVE",
+                "StatusAvailable":  "⚪ AVAILABLE",
+                "StatusTimeout":  "🔴 TIMEOUT",
+                "BtnApply":  "⚡ Apply",
+                "BtnActive":  "✓ Active",
+                "ChipAll":  "🌟 All",
+                "ChipSpeed":  "⚡ Fast",
+                "ChipSecurity":  "🛡️ Secure / Ad-Blocking",
+                "ChipGaming":  "🎮 Gaming",
+                "SortLabel":  "Sort by:",
+                "SortFastest":  "⚡ Lowest ping first",
+                "SortName":  "🔤 By name (A-Z)",
+                "PingTimeout":  "Timeout",
+                "Measuring":  "Measuring DNS server pings...",
+                "Measured":  "DNS servers sorted by lowest ping.",
+                "SearchingFastest":  "Searching for fastest DNS...",
+                "ApplyDone":  "DNS applied: {0}",
+                "ApplyFailed":  "Failed to apply DNS.",
+                "ResetDone":  "DNS successfully restored to original state (DHCP).",
+                "ResetFailed":  "Failed to restore DNS.",
+                "FastestApplied":  "Fastest DNS applied: {0} ({1} ms)",
+                "FastestFound":  "Fastest server: {0}\nLatency (Ping): {1} ms\n\nServer activated successfully!",
+                "Preset":  {
+                               "cloudflare":  {
+                                                  "Name":  "Cloudflare DNS (1.1.1.1)",
+                                                  "Description":  "Lowest ping for online games and fast response (Anycast across 300+ cities)."
+                                              },
+                               "google":  {
+                                              "Name":  "Google Public DNS",
+                                              "Description":  "Global Google Anycast infrastructure with maximum stability."
+                                          },
+                               "gcore":  {
+                                             "Name":  "Gcore Global Anycast",
+                                             "Description":  "Fast European Anycast network with direct backbone routes."
+                                         },
+                               "opendns_home":  {
+                                                    "Name":  "OpenDNS Home (Cisco)",
+                                                    "Description":  "Cloud DNS resolution platform by Cisco."
+                                                },
+                               "controld_speed":  {
+                                                      "Name":  "Control D (Speed Anycast)",
+                                                      "Description":  "Modern Anycast DNS with BGP optimization and no filtering."
+                                                  },
+                               "level3":  {
+                                              "Name":  "Level 3 / Lumen Backbone",
+                                              "Description":  "Tier-1 backbone provider with direct transit peering."
+                                          },
+                               "level3_alt":  {
+                                                  "Name":  "Level 3 Alternate",
+                                                  "Description":  "Backup Tier-1 Level 3 pool."
+                                              },
+                               "verisign":  {
+                                                "Name":  "Verisign Public DNS",
+                                                "Description":  "Stable DNS from the official .com and .net zone operator."
+                                            },
+                               "dnssb":  {
+                                             "Name":  "DNS.SB (Anycast Speed)",
+                                             "Description":  "European Anycast DNS with route optimization and DNSSEC."
+                                         },
+                               "ultradns":  {
+                                                "Name":  "UltraDNS (Neustar 1)",
+                                                "Description":  "High-speed enterprise UltraDNS resolvers."
+                                            },
+                               "alidns":  {
+                                              "Name":  "AliDNS Global",
+                                              "Description":  "Optimized routes to Asian and European gaming clusters."
+                                          },
+                               "adguard":  {
+                                               "Name":  "AdGuard DNS (Ad blocking)",
+                                               "Description":  "Blocks banners, analytics, pop-ups and telemetry at the OS level."
+                                           },
+                               "mullvad_adblock":  {
+                                                       "Name":  "Mullvad DNS (AdBlock + Malware)",
+                                                       "Description":  "Cuts ads, tracking and phishing on Swedish Mullvad servers."
+                                                   },
+                               "controld_ad":  {
+                                                   "Name":  "Control D (Ad \u0026 Tracker Block)",
+                                                   "Description":  "Blocks ads, spy scripts and background telemetry."
+                                               },
+                               "mullvad_extended":  {
+                                                        "Name":  "Mullvad Extended (Ad + Social)",
+                                                        "Description":  "Full ad, tracker and social widget blocking."
+                                                    },
+                               "alternate_dns":  {
+                                                     "Name":  "Alternate DNS (AdBlock)",
+                                                     "Description":  "Cloud ad blocking, spam bots and unwanted redirects."
+                                                 },
+                               "quad9":  {
+                                             "Name":  "Quad9 (Security \u0026 Protection)",
+                                             "Description":  "Blocks phishing, exploits and botnets using 20+ security labs."
+                                         },
+                               "cloudflare_security":  {
+                                                           "Name":  "Cloudflare Security (Anti-Malware)",
+                                                           "Description":  "Cloudflare speed with automatic virus and phishing isolation."
+                                                       },
+                               "controld_malware":  {
+                                                        "Name":  "Control D (Malware Shield)",
+                                                        "Description":  "Blocks dangerous domains, phishing forms and cryptomining sources."
+                                                    },
+                               "cleanbrowsing_security":  {
+                                                              "Name":  "CleanBrowsing Security",
+                                                              "Description":  "Filters phishing, clone sites and virus distribution spam servers."
+                                                          },
+                               "comodo":  {
+                                              "Name":  "Comodo Secure DNS",
+                                              "Description":  "Cloud heuristic filter of dangerous web resources by Comodo."
+                                          },
+                               "neustar_threat":  {
+                                                      "Name":  "Neustar Threat Protection",
+                                                      "Description":  "Enterprise protection against cyberattacks, DNS spoofing and malicious nodes."
+                                                  },
+                               "cira":  {
+                                            "Name":  "CIRA Canadian Shield",
+                                            "Description":  "High-level protection against credential theft and phishing."
+                                        },
+                               "mullvad_zero":  {
+                                                    "Name":  "Mullvad DNS (Zero-Logs)",
+                                                    "Description":  "Privacy: Swedish RAM-only servers with no logging."
+                                                },
+                               "dnswatch":  {
+                                                "Name":  "DNS.WATCH (Germany)",
+                                                "Description":  "Fast German servers with no censorship or logging."
+                                            },
+                               "digitale_gesellschaft":  {
+                                                             "Name":  "Digitale Gesellschaft (Switzerland)",
+                                                             "Description":  "Non-profit Swiss DNS with privacy protection and DNSSEC."
+                                                         },
+                               "applied_privacy":  {
+                                                       "Name":  "Applied Privacy (Austria / EU)",
+                                                       "Description":  "Independent Austrian servers to protect against ISP surveillance."
+                                                   },
+                               "quad9_uncensored":  {
+                                                        "Name":  "Quad9 Uncensored (No filtering)",
+                                                        "Description":  "Original Quad9 without blocklists and with DNSSEC support."
+                                                    },
+                               "censurfridns":  {
+                                                    "Name":  "Censurfridns (Denmark)",
+                                                    "Description":  "Non-profit project directly connected to EU traffic exchange points."
+                                                },
+                               "freedns":  {
+                                               "Name":  "FreeDNS (Austria)",
+                                               "Description":  "Austrian non-commercial DNS with no request logging."
+                                           },
+                               "fdn":  {
+                                           "Name":  "FDN (France)",
+                                           "Description":  "Public FDN association servers for free network access."
+                                       },
+                               "cloudflare_family":  {
+                                                         "Name":  "Cloudflare Family (Family protection)",
+                                                         "Description":  "Blocks malicious sites and 18+ content (SafeSearch) on Cloudflare."
+                                                     },
+                               "adguard_family":  {
+                                                      "Name":  "AdGuard Family (Safe search)",
+                                                      "Description":  "Ad blocking plus safe search in Google, Bing and YouTube."
+                                                  },
+                               "cleanbrowsing_family":  {
+                                                            "Name":  "CleanBrowsing Family Filter",
+                                                            "Description":  "Strict family filter of adult content, proxies, torrents and SafeSearch."
+                                                        },
+                               "opendns_familyshield":  {
+                                                            "Name":  "OpenDNS FamilyShield (Cisco)",
+                                                            "Description":  "Forced blocking of 18+, phishing and dangerous domains by Cisco."
+                                                        },
+                               "neustar_family":  {
+                                                      "Name":  "Neustar Family Secure",
+                                                      "Description":  "Filters adult content and malicious links."
+                                                  }
+                           }
+            }
+}

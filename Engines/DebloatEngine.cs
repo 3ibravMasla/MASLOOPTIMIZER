@@ -6,6 +6,9 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 using Microsoft.Win32;
 
 namespace MASLOOPTIMIZER;
@@ -28,11 +31,23 @@ public class DebloatStats
     public double CleanPercentage => Total > 0 ? Math.Round((Removed / (double)Total) * 100, 1) : 0;
 }
 
-public class DebloatItem : INotifyPropertyChanged
+public class DebloatItem : INotifyPropertyChanged, IWeakEventListener
 {
     public DebloatItem()
     {
-        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+        // Слабка підписка на зміну мови: статичний синглтон не утримує об'єкт.
+        PropertyChangedEventManager.AddListener(LocalizationManager.Instance, this, string.Empty);
+    }
+
+    bool IWeakEventListener.ReceiveWeakEvent(Type managerType, object sender, EventArgs e)
+    {
+        if (managerType == typeof(PropertyChangedEventManager))
+        {
+            OnLocalizationChanged(sender, (PropertyChangedEventArgs)e);
+            return true;
+        }
+
+        return false;
     }
 
     private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
@@ -41,13 +56,14 @@ public class DebloatItem : INotifyPropertyChanged
         OnPropertyChanged(nameof(ActionButtonText));
         OnPropertyChanged(nameof(UninstallButtonText));
         OnPropertyChanged(nameof(RestoreButtonText));
+        OnPropertyChanged(nameof(LocalizedDescription));
     }
 
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Category { get; set; } = "ШІ & Телеметрія";
     public string PackageMatch { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
+    public string LocalizedDescription => LocalizationManager.Instance.T($"Debloat.Desc.{Id}");
     public string StoreId { get; set; } = string.Empty;
     public bool IsSpecialService { get; set; } = false;
 
@@ -85,8 +101,8 @@ public class DebloatItem : INotifyPropertyChanged
 
     public string StatusText => IsInstalled
         ? LocalizationManager.Instance["Debloat.StatusInstalled"]
-        : LocalizationManager.Instance["Debloat.StatusNotInstalled"];
-    public string StatusColor => IsInstalled ? "#107C41" : "#2A2D3D";
+        : LocalizationManager.Instance["Debloat.NotInSystem"];
+    public Brush StatusColor => IsInstalled ? ThemeEngine.Brush("SuccessBrush") : ThemeEngine.Brush("StatusNeutralBrush");
 
     public string ActionButtonText
     {
@@ -124,7 +140,6 @@ public static class DebloatEngine
             Name = "Microsoft Copilot & Bing Chat",
             Category = "ШІ & Телеметрія",
             PackageMatch = "*Microsoft.Copilot*|*Microsoft.BingChat*|*Windows.Copilot*",
-            Description = "Штучний інтелект Copilot, бічні панелі Bing та інтегрований веб-пошук.",
             StoreId = "9NBLGGH516XP"
         },
         new()
@@ -133,7 +148,6 @@ public static class DebloatEngine
             Name = "Cortana",
             Category = "ШІ & Телеметрія",
             PackageMatch = "*Microsoft.549981C3F5F10*",
-            Description = "Застарілий голосовий асистент Microsoft.",
             StoreId = "9NBLGGH4VSM8"
         },
         new()
@@ -142,7 +156,6 @@ public static class DebloatEngine
             Name = "Центр відгуків (Feedback Hub)",
             Category = "ШІ & Телеметрія",
             PackageMatch = "*WindowsFeedbackHub*",
-            Description = "Служба збору діагностичних даних, звітів про роботу та опитувань користувача.",
             StoreId = "9NBLGGH4R32N"
         },
         new()
@@ -151,7 +164,6 @@ public static class DebloatEngine
             Name = "Power Automate Desktop",
             Category = "ШІ & Телеметрія",
             PackageMatch = "*PowerAutomateDesktop*",
-            Description = "Вбудований засіб автоматизації фонових макросів.",
             StoreId = "9NBLGGH5158M"
         },
         new()
@@ -160,7 +172,6 @@ public static class DebloatEngine
             Name = "Microsoft Dev Home",
             Category = "ШІ & Телеметрія",
             PackageMatch = "*Windows.DevHome*",
-            Description = "Панель управління для розробників, яка за замовчуванням встановлюється у Windows 11.",
             StoreId = "9N8MHTPHNGVV"
         },
 
@@ -173,7 +184,6 @@ public static class DebloatEngine
             Name = "Clipchamp Video Editor",
             Category = "Ігри & Медіа",
             PackageMatch = "*Clipchamp.Clipchamp*",
-            Description = "Хмарний відеоредактор із вбудованими платними підписками.",
             StoreId = "9P1J8S7CCWWT"
         },
         new()
@@ -182,7 +192,6 @@ public static class DebloatEngine
             Name = "Microsoft Solitaire Collection",
             Category = "Ігри & Медіа",
             PackageMatch = "*MicrosoftSolitaireCollection*",
-            Description = "Колекція пасьянсів із рекламою та фоновими повідомленнями Xbox Live.",
             StoreId = "9WZDNCRFHWD2"
         },
         new()
@@ -191,7 +200,6 @@ public static class DebloatEngine
             Name = "Xbox Game Bar & Gaming Suite",
             Category = "Ігри & Медіа",
             PackageMatch = "*XboxGamingOverlay*|*XboxApp*|*XboxSpeech*|*XboxTCUI*|*XboxIdentityProvider*",
-            Description = "Оверлей запису екрана Game Bar, соціальні служби Xbox та голосовий зв'язок.",
             StoreId = "9NZKPSTSNW4P"
         },
         new()
@@ -200,7 +208,6 @@ public static class DebloatEngine
             Name = "Кіно й ТБ (Movies & TV / ZuneVideo)",
             Category = "Ігри & Медіа",
             PackageMatch = "*ZuneVideo*",
-            Description = "Стандартний відеоплеєр Windows із магазином прокату фільмів.",
             StoreId = "9WZDNCRFJ3P2"
         },
         new()
@@ -209,7 +216,6 @@ public static class DebloatEngine
             Name = "Groove Music (Media Player / ZuneMusic)",
             Category = "Ігри & Медіа",
             PackageMatch = "*ZuneMusic*|*WindowsMediaPlayer*",
-            Description = "Стандартний мультимедійний плеєр Windows.",
             StoreId = "9WZDNCRFJ4PT"
         },
         new()
@@ -218,7 +224,6 @@ public static class DebloatEngine
             Name = "Звукозапис (Sound Recorder)",
             Category = "Ігри & Медіа",
             PackageMatch = "*WindowsSoundRecorder*|*SoundRecorder*",
-            Description = "Базова системна утиліта запису аудіо з мікрофона.",
             StoreId = "9WZDNCRFHWKN"
         },
 
@@ -231,7 +236,6 @@ public static class DebloatEngine
             Name = "3D Viewer & Print 3D",
             Category = "3D & Інструменти",
             PackageMatch = "*Microsoft3DViewer*|*Print3D*",
-            Description = "Переглядач 3D-моделей та підготовка об'єктів до 3D-друку.",
             StoreId = "9NBLGGH42THS"
         },
         new()
@@ -240,7 +244,6 @@ public static class DebloatEngine
             Name = "Paint 3D",
             Category = "3D & Інструменти",
             PackageMatch = "*Microsoft.Paint3D*|*Paint3D*",
-            Description = "Редактор тривимірної графіки (не зачіпає класичний Paint).",
             StoreId = "9NBLGGH5FV99"
         },
         new()
@@ -249,7 +252,6 @@ public static class DebloatEngine
             Name = "Портал змішаної реальності (Mixed Reality)",
             Category = "3D & Інструменти",
             PackageMatch = "*MixedReality.Portal*",
-            Description = "Середовище та фонова служба для шоломів VR/MR.",
             StoreId = "9NBLGGH63NW5"
         },
 
@@ -262,7 +264,6 @@ public static class DebloatEngine
             Name = "Новини (MSN News)",
             Category = "Новини & Віджети",
             PackageMatch = "*BingNews*",
-            Description = "Фонова стрічка новин MSN на панелі завдань та у віджетах.",
             StoreId = "9WZDNCRFHVFW"
         },
         new()
@@ -271,7 +272,6 @@ public static class DebloatEngine
             Name = "Погода (MSN Weather)",
             Category = "Новини & Віджети",
             PackageMatch = "*BingWeather*",
-            Description = "Прогноз погоди MSN із фоновою синхронізацією геолокації.",
             StoreId = "9WZDNCRFJ3Q2"
         },
         new()
@@ -280,7 +280,6 @@ public static class DebloatEngine
             Name = "Фінанси та Спорт (MSN Finance & Sports)",
             Category = "Новини & Віджети",
             PackageMatch = "*BingFinance*|*BingSports*",
-            Description = "Котирування валют, акцій та спортивні новини MSN.",
             StoreId = "9WZDNCRFHV4V"
         },
         new()
@@ -289,7 +288,6 @@ public static class DebloatEngine
             Name = "Windows Web Experience Pack (Віджети)",
             Category = "Новини & Віджети",
             PackageMatch = "*WebExperience*",
-            Description = "Фоновий веб-рушій віджетів панелі завдань Windows 11.",
             StoreId = "9MSSGKG3SNGE"
         },
         new()
@@ -298,7 +296,6 @@ public static class DebloatEngine
             Name = "Спонсорські промо-заглушки (TikTok, Spotify, Disney+)",
             Category = "Новини & Віджети",
             PackageMatch = "*Spotify*|*TikTok*|*Disney*|*Facebook*|*Instagram*|*Amazon*",
-            Description = "Автоматично встановлювані рекламні ярлики сторонніх сервісів."
         },
 
         // =========================================================================
@@ -310,7 +307,6 @@ public static class DebloatEngine
             Name = "Зв'язок зі смартфоном (Phone Link)",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*YourPhone*",
-            Description = "Фонова синхронізація повідомлень, дзвінків та фото з телефоном.",
             StoreId = "9NBLGGH4NNS1"
         },
         new()
@@ -319,7 +315,6 @@ public static class DebloatEngine
             Name = "Люди та Контакти (Microsoft People)",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*Microsoft.People*",
-            Description = "Вбудована адресна книга та синхронізація контактів.",
             StoreId = "9NBLGGH10PG8"
         },
         new()
@@ -328,7 +323,6 @@ public static class DebloatEngine
             Name = "Карти Windows (Windows Maps)",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*WindowsMaps*",
-            Description = "Офлайн-карти та навігаційний сервіс Microsoft.",
             StoreId = "9WZDNCRBXB69"
         },
         new()
@@ -337,7 +331,6 @@ public static class DebloatEngine
             Name = "Пошта та Календар (Mail & Calendar)",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*windowscommunicationsapps*",
-            Description = "Класичні клієнти Пошти та Календаря Windows.",
             StoreId = "9WZDNCRFHVQM"
         },
         new()
@@ -346,7 +339,6 @@ public static class DebloatEngine
             Name = "Новий Outlook для Windows",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*OutlookForWindows*",
-            Description = "Веб-поштовик Outlook на рушії Edge WebView з рекламою.",
             StoreId = "9NRXF420CLMW"
         },
         new()
@@ -355,7 +347,6 @@ public static class DebloatEngine
             Name = "Skype",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*SkypeApp*",
-            Description = "Вбудований UWP-додаток відеодзвінків та чату Skype.",
             StoreId = "9WZDNCRFJ364"
         },
         new()
@@ -364,7 +355,6 @@ public static class DebloatEngine
             Name = "OneNote для Windows 10",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*Office.OneNote*",
-            Description = "Базовий UWP-блокнот заміток OneNote.",
             StoreId = "9WZDNCRD29V9"
         },
         new()
@@ -373,7 +363,6 @@ public static class DebloatEngine
             Name = "Отримати допомогу (Get Help)",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*GetHelp*",
-            Description = "Вбудований онлайн-довідник та бот підтримки Microsoft.",
             StoreId = "9PK2ZG8443M9"
         },
         new()
@@ -382,7 +371,6 @@ public static class DebloatEngine
             Name = "Поради Windows (Tips & QuickAssist)",
             Category = "Зв'язок & Пошта",
             PackageMatch = "*Getstarted*|*QuickAssist*",
-            Description = "Спливаючі рекламні підказки та засіб швидкої віддаленої допомоги.",
             StoreId = "9WZDNCRFJ0MP"
         },
 
@@ -395,7 +383,6 @@ public static class DebloatEngine
             Name = "Microsoft OneDrive",
             Category = "Хмара & OneDrive",
             IsSpecialService = true,
-            Description = "Хмарна синхронізація Windows. Видалення знімає процеси, деінсталює програму та очищає іконку з Провідника.",
             StoreId = ""
         }
     };
@@ -419,7 +406,7 @@ public static class DebloatEngine
             string q = searchQuery.Trim();
             query = query.Where(d =>
                 d.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                d.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                d.LocalizedDescription.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                 d.Id.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                 d.PackageMatch.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                 d.StoreId.Contains(q, StringComparison.OrdinalIgnoreCase));
@@ -507,7 +494,7 @@ public static class DebloatEngine
         });
 
         // Оновлення UI-залежних властивостей — лише на UI-потоці (D-11)
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        RunOnUi(() =>
         {
             foreach (var kv in status)
                 kv.Key.IsInstalled = kv.Value;
@@ -520,7 +507,7 @@ public static class DebloatEngine
 
     public static async Task<bool> UninstallPackageAsync(DebloatItem item)
     {
-        item.IsBusy = true;
+        RunOnUi(() => item.IsBusy = true);
         bool result = await Task.Run(() =>
         {
             try
@@ -539,22 +526,28 @@ public static class DebloatEngine
                     .Where(p => patterns.Any(pat => p.Id.Name.Contains(pat, StringComparison.OrdinalIgnoreCase) && !p.Id.Name.Contains("ExperienceHost", StringComparison.OrdinalIgnoreCase)))
                     .ToList();
 
+                bool removedAny = false;
                 foreach (var p in userPkgs)
                 {
                     try
                     {
                         pkgManager.RemovePackageAsync(p.Id.FullName, Windows.Management.Deployment.RemovalOptions.RemoveForAllUsers).GetResults();
+                        removedAny = true;
                     }
                     catch { }
                 }
 
+                bool provisionedOk = true;
                 foreach (var pat in patterns)
                 {
-                    RunPowerShellQuiet($"Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -like '*{pat}*' -and $_.DisplayName -notlike '*ExperienceHost*' }} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue");
+                    if (!RunPowerShellQuiet($"Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -like '*{pat}*' -and $_.DisplayName -notlike '*ExperienceHost*' }} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue"))
+                    {
+                        provisionedOk = false;
+                    }
                 }
 
                 AppLogger.Log($"Видалено UWP додаток: {item.Name}", "SUCCESS");
-                return true;
+                return removedAny || provisionedOk;
             }
             catch
             {
@@ -566,10 +559,10 @@ public static class DebloatEngine
         if (result)
         {
             // Оновлення UI-залежної властивості — лише на UI-потоці (D-11)
-            System.Windows.Application.Current?.Dispatcher.Invoke(() => { item.IsInstalled = false; });
+            RunOnUi(() => { item.IsInstalled = false; });
         }
 
-        item.IsBusy = false;
+        RunOnUi(() => item.IsBusy = false);
         return result;
     }
 
@@ -579,7 +572,7 @@ public static class DebloatEngine
 
     public static async Task<bool> RestorePackageAsync(DebloatItem item)
     {
-        item.IsBusy = true;
+        RunOnUi(() => item.IsBusy = true);
         bool result = await Task.Run(() =>
         {
             if (item.IsSpecialService)
@@ -619,7 +612,6 @@ public static class DebloatEngine
                 RestoreViaStore(item);
             }
 
-            item.IsInstalled = restoredLocally;
             AppLogger.Log(restoredLocally
                 ? $"Відновлено UWP додаток: {item.Name}"
                 : $"Відкрито сторінку встановлення у Store: {item.Name}",
@@ -627,7 +619,8 @@ public static class DebloatEngine
             return restoredLocally;
         });
 
-        item.IsBusy = false;
+        RunOnUi(() => item.IsInstalled = result);
+        RunOnUi(() => item.IsBusy = false);
         return result;
     }
 
@@ -657,8 +650,12 @@ public static class DebloatEngine
                 $m = Join-Path $_.InstallLocation 'AppxManifest.xml'
                 if (Test-Path $m) { Add-AppxPackage -DisableDevelopmentMode -Register $m -ErrorAction SilentlyContinue }
             }";
-            RunPowerShellQuiet(script);
-            progress?.Report((100, "Усі системні UWP-додатки відновлено."));
+
+            // Реєстрація всіх пакетів може тривати довго — даємо до 2 хвилин і чесно звітуємо про результат
+            bool ok = RunPowerShellQuiet(script, timeoutMs: 120_000);
+            progress?.Report((100, ok
+                ? "Усі системні UWP-додатки відновлено."
+                : "Перереєстрацію не вдалося завершити (таймаут або відсутні права адміністратора)."));
         });
     }
 
@@ -756,7 +753,8 @@ public static class DebloatEngine
 
     #region Допоміжний метод CLI
 
-    private static void RunPowerShellQuiet(string command)
+    /// <summary>Виконання PowerShell-команди з перевіркою ExitCode та таймаутом.</summary>
+    private static bool RunPowerShellQuiet(string command, int timeoutMs = 60_000)
     {
         try
         {
@@ -768,9 +766,30 @@ public static class DebloatEngine
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden
             });
-            proc?.WaitForExit(10000);
+
+            if (proc == null) return false;
+
+            if (!proc.WaitForExit(timeoutMs))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
+
+            return proc.ExitCode == 0;
         }
-        catch { }
+        catch { return false; }
+    }
+
+    /// <summary>Виконання на UI-потоці; в тестах/CLI (без Application) — інлайн.</summary>
+    private static void RunOnUi(Action action)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+        dispatcher.Invoke(action);
     }
 
     #endregion

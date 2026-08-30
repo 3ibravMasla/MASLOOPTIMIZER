@@ -3,12 +3,14 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Diagnostics.Eventing.Reader;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 
 namespace MASLOOPTIMIZER;
 
@@ -32,18 +34,31 @@ public class CleanerStats
 
     private static string FormatBytes(long bytes)
     {
-        if (bytes >= 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024 * 1024):N2} ГБ";
-        if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):N2} МБ";
-        if (bytes >= 1024) return $"{bytes / 1024.0:N2} КБ";
-        return $"{bytes} Байт";
+        var loc = LocalizationManager.Instance;
+        if (bytes >= 1024 * 1024 * 1024) return $"{bytes / (1024.0 * 1024 * 1024):N2} {loc["Common.UnitGB"]}";
+        if (bytes >= 1024 * 1024) return $"{bytes / (1024.0 * 1024):N2} {loc["Common.UnitMB"]}";
+        if (bytes >= 1024) return $"{bytes / 1024.0:N2} {loc["Common.UnitKB"]}";
+        return $"{bytes} {loc["Common.UnitBytes"]}";
     }
 }
 
-public class CleanerItem : INotifyPropertyChanged
+public class CleanerItem : INotifyPropertyChanged, IWeakEventListener
 {
     public CleanerItem()
     {
-        LocalizationManager.Instance.PropertyChanged += OnLocalizationChanged;
+        // Слабка підписка на зміну мови: статичний синглтон не утримує об'єкт.
+        PropertyChangedEventManager.AddListener(LocalizationManager.Instance, this, string.Empty);
+    }
+
+    bool IWeakEventListener.ReceiveWeakEvent(Type managerType, object sender, EventArgs e)
+    {
+        if (managerType == typeof(PropertyChangedEventManager))
+        {
+            OnLocalizationChanged(sender, (PropertyChangedEventArgs)e);
+            return true;
+        }
+
+        return false;
     }
 
     private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
@@ -145,7 +160,7 @@ public class CleanerItem : INotifyPropertyChanged
         }
     }
 
-    public string StatusColor => BytesFound > 0 ? "#38BDF8" : "#64748B";
+    public Brush StatusColor => BytesFound > 0 ? ThemeEngine.Brush("InfoBrush") : ThemeEngine.Brush("StatusNeutralBrush");
     public string SafetyBadge => IsSafeBatch ? "🟢 БЕЗПЕЧНО" : "🟡 РУЧНИЙ РЕЖИМ";
     public string ActionButtonText => IsBusy
         ? LocalizationManager.Instance["Common.Cleaning"]
@@ -154,6 +169,10 @@ public class CleanerItem : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+    /// <summary>Сповіщає UI про зміну теми, щоб перерахувати кольорові кисті статусу.</summary>
+    public void RefreshThemeColors()
+        => OnPropertyChanged(nameof(StatusColor));
 }
 
 public static class CleanerEngine
@@ -374,44 +393,82 @@ public static class CleanerEngine
         },
 
         // =========================================================================
-        // 4. ДАМПИ, ЖУРНАЛИ ТА ДІАГНОСТИКА (РУЧНИЙ РЕЖИМ)
+        // 3.5 ДОДАТКОВІ БЕЗПЕЧНІ КЕШІ (100% БЕЗПЕЧНО)
         // =========================================================================
         new()
         {
-            Id = "clean_crash_dumps",
-            Name = "Дампи збоїв пам'яті (BSoD Minidump & Memory.dmp)",
-            Category = "Дампи & Логи (Manual)",
-            IsSafeBatch = false,
-            Description = "Аварійні знімки пам'яті після Синіх екранів (BSoD) та звіти про падіння програм.",
-            Benefits = "Звільняє великі файли дампів від 1 до 16+ ГБ.",
-            SideEffects = "Аналіз причин минулих збоїв утилітою WinDbg стане неможливим.",
+            Id = "clean_firefox_cache",
+            Name = "Кеш Firefox (cache2 / startupCache / shader-cache)",
+            Category = "Браузери & Додатки",
+            IsSafeBatch = true,
+            Description = "Очищає тимчасовий кеш веб-сторінок, шейдерів та запуску браузера Firefox. Зберігає паролі, закладки й історію.",
+            Benefits = "Звільняє від 200 МБ до 2+ ГБ та прискорює роботу браузера.",
+            SideEffects = "Перший запуск після очищення може бути трохи повільнішим.",
+            CustomSizeCalculator = async () => await Task.Run(GetFirefoxCacheSize),
+            CustomCleaner = async () => await Task.Run(CleanFirefoxCache)
+        },
+        new()
+        {
+            Id = "clean_inetcache",
+            Name = "Кеш Internet Explorer / Legacy Edge (INetCache)",
+            Category = "Браузери & Додатки",
+            IsSafeBatch = true,
+            Description = "Тимчасові інтернет-файли застарілого браузера та веб-кешу оболонки Windows.",
+            Benefits = "Звільняє застарілі тимчасові веб-дані.",
+            SideEffects = "Сторінки в IE/legacy-компонентах підвантажуватимуться заново.",
             TargetPaths = new()
             {
-                Path.Combine(LocalAppData, "CrashDumps"),
-                Path.Combine(WinDir, "Minidump"),
-                Path.Combine(WinDir, "MEMORY.DMP"),
-                Path.Combine(ProgramData, @"Microsoft\Windows\WER\ReportArchive"),
-                Path.Combine(ProgramData, @"Microsoft\Windows\WER\Temp"),
-                Path.Combine(LocalAppData, @"Microsoft\Windows\WER\ReportArchive")
+                Path.Combine(LocalAppData, @"Microsoft\Windows\INetCache")
             }
         },
         new()
         {
-            Id = "clean_event_logs",
-            Name = "Системні журнали подій Windows (Event Logs)",
-            Category = "Дампи & Логи (Manual)",
+            Id = "clean_prefetch",
+            Name = "Prefetch (файли попереднього завантаження Windows)",
+            Category = "Безпечний кеш",
+            IsSafeBatch = true,
+            Description = "Видаляє старі .pf-файли Prefetch, які Windows використовує для прискореного запуску програм.",
+            Benefits = "Звільняє від 100 МБ до 1+ ГБ та усуває застарілі записи.",
+            SideEffects = "Перший запуск програм після очищення може бути на частку секунди повільнішим.",
+            TargetPaths = new() { Path.Combine(WinDir, "Prefetch") }
+        },
+        new()
+        {
+            Id = "clean_dev_pkg_caches",
+            Name = "Кеші пакетних менеджерів (pip / npm / NuGet)",
+            Category = "Безпечний кеш",
+            IsSafeBatch = true,
+            Description = "Тимчасові завантажені пакети Python (pip), Node (npm) та .NET (NuGet), які можна повторно завантажити.",
+            Benefits = "Звільняє від 500 МБ до 5+ ГБ прихованого кешу розробника.",
+            SideEffects = "Повторна збірка проєктів може вимагати повторного завантаження залежностей.",
+            TargetPaths = new()
+            {
+                Path.Combine(LocalAppData, @"pip\cache"),
+                Path.Combine(LocalAppData, "npm-cache"),
+                Path.Combine(AppData, "npm-cache"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), @".nuget\packages")
+            }
+        },
+
+        // =========================================================================
+        // 4. РУЧНИЙ РЕЖИМ (ПОТРЕБУЄ ОБЕРЕЖНОСТІ)
+        // =========================================================================
+        new()
+        {
+            Id = "clean_windows_old",
+            Name = "Папка Windows.old (залишки оновлень Windows)",
+            Category = "Ручний режим",
             IsSafeBatch = false,
-            Description = "Очищення системних журналів подій через нативний API (крім журналу безпеки Security).",
-            Benefits = "Конфіденційність дій та скидання накопичених логів помилок.",
-            SideEffects = "Історія в «Переглядачі подій» (Event Viewer) буде очищена; журнал безпеки (Security) зберігається для аудиту.",
-            TargetPaths = new() { Path.Combine(WinDir, @"System32\winevt\Logs") },
-            CustomCleaner = async () => await Task.Run(ClearAllEventLogsNative)
+            Description = "Резервна копія попередньої версії Windows після великого оновлення.",
+            Benefits = "Звільняє від 10 до 30+ ГБ на системному диску.",
+            SideEffects = "Після видалення відкат до попередньої версії Windows стане неможливим.",
+            TargetPaths = new() { Path.Combine(SysDrive, "Windows.old") }
         },
         new()
         {
             Id = "clean_explorer_thumbs",
             Name = "Кеш ескізів Провідника (Thumbnails Cache)",
-            Category = "Дампи & Логи (Manual)",
+            Category = "Ручний режим",
             IsSafeBatch = false,
             Description = "Бази даних збережених мініатюр та значків (thumbcache_*.db, iconcache_*.db).",
             Benefits = "Звільняє місце на SSD та виправляє відображення пошкоджених значків.",
@@ -631,19 +688,21 @@ public static class CleanerEngine
         return true;
     }
 
-    public static async Task<long> CleanAllSafeAsync(IProgress<(int Percent, string Name, long Freed)>? progress = null)
+    public static async Task<long> CleanAllAsync(IProgress<(int Percent, string Name, long Freed)>? progress = null)
     {
-        var safeItems = Cleaners.Where(c => c.IsSafeBatch).ToList();
+        // «Очистити все» видаляє ВСІ пункти, крім DISM WinSxS — той лишається
+        // окремим/ручним, бо потребує прав адміністратора та триває 1–3 хвилини.
+        var items = Cleaners.Where(c => !c.IsDism).ToList();
         long totalFreed = 0;
         int idx = 0;
 
-        foreach (var item in safeItems)
+        foreach (var item in items)
         {
             idx++;
-            int pct = (int)((idx / (double)safeItems.Count) * 100);
+            int pct = items.Count == 0 ? 0 : (int)((idx / (double)items.Count) * 100);
             long freed = await CleanItemAsync(item);
             totalFreed += freed;
-            progress?.Report((pct, item.Name, freed));
+            progress?.Report((pct, item.NameLocalized, freed));
             await Task.Delay(20);
         }
 
@@ -769,7 +828,7 @@ public static class CleanerEngine
 
     #endregion
 
-    #region Нативні обробники (Recycle Bin, EventLog, DISM, Thumbs)
+    #region Нативні обробники (Recycle Bin, DISM, Thumbs, Firefox)
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct SHQUERYRBINFO
@@ -831,34 +890,6 @@ public static class CleanerEngine
         return freed;
     }
 
-    private static long ClearAllEventLogsNative()
-    {
-        string logsDir = Path.Combine(WinDir, @"System32\winevt\Logs");
-        long initialSize = FastGetDirectorySize(logsDir);
-        int cleared = 0, skipped = 0;
-
-        try
-        {
-            using var session = new EventLogSession();
-            foreach (var name in session.GetLogNames())
-            {
-                if (name.Equals("Security", StringComparison.OrdinalIgnoreCase))
-                {
-                    skipped++; // D-40: не знищуємо аудит-трейл безпеки
-                    continue;
-                }
-
-                try { session.ClearLog(name); cleared++; } catch { }
-            }
-        }
-        catch { }
-
-        long finalSize = FastGetDirectorySize(logsDir);
-        long freed = Math.Max(0, initialSize - finalSize);
-        AppLogger.Log($"Журнали подій: очищено {cleared}, пропущено {skipped} (Security)", "INFO");
-        return freed;
-    }
-
     private static long GetThumbnailCacheSize()
     {
         string dir = Path.Combine(LocalAppData, @"Microsoft\Windows\Explorer");
@@ -909,6 +940,47 @@ public static class CleanerEngine
         }
         catch { }
 
+        return freed;
+    }
+
+    private static List<string> GetFirefoxCacheDirs()
+    {
+        var dirs = new List<string>();
+        string baseProfiles = Path.Combine(LocalAppData, @"Mozilla\Firefox\Profiles");
+        try
+        {
+            if (Directory.Exists(baseProfiles))
+            {
+                foreach (var profile in Directory.EnumerateDirectories(baseProfiles))
+                {
+                    dirs.Add(Path.Combine(profile, "cache2"));
+                    dirs.Add(Path.Combine(profile, "startupCache"));
+                    dirs.Add(Path.Combine(profile, "shader-cache"));
+                }
+            }
+        }
+        catch { }
+
+        return dirs;
+    }
+
+    private static long GetFirefoxCacheSize()
+    {
+        long total = 0;
+        foreach (var dir in GetFirefoxCacheDirs())
+        {
+            total += FastGetDirectorySize(dir);
+        }
+        return total;
+    }
+
+    private static long CleanFirefoxCache()
+    {
+        long freed = 0;
+        foreach (var dir in GetFirefoxCacheDirs())
+        {
+            freed += FastDeleteDirectoryContents(dir);
+        }
         return freed;
     }
 

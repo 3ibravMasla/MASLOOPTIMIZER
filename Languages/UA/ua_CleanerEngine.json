@@ -1,0 +1,124 @@
+{
+    "Cleaner":  {
+                    "Title":  "🧹 ГЛИБОКЕ ОЧИЩЕННЯ ТА ЗВІЛЬНЕННЯ SSD",
+                    "Description":  "Безпечне очищення кешів, тимчасових файлів та звільнення місця на системному диску",
+                    "Calculating":  "Підрахунок зайнятого простору...",
+                    "FoundTotal":  "Виявлено для очищення: {0}",
+                    "BtnCleanAll":  "⚡ 1-Click Очистити все",
+                    "BtnRescan":  "🔄 Пересканувати",
+                    "BtnClean":  "🧹 Очистити",
+                    "SafeBadge":  "🟢 БЕЗПЕЧНО",
+                    "ManualBadge":  "🟡 РУЧНИЙ РЕЖИМ",
+                    "Scanning":  "Сканування дискового простору...",
+                    "ScanDone":  "Аналіз кешів завершено.",
+                    "CleaningItem":  "Очищення: {0}...",
+                    "Freed":  "Звільнено: {0}",
+                    "FoundSummary":  "Виявлено для очищення: {0}",
+                    "CleanedOne":  "Очищено: {0} (+{1})",
+                    "CleanDone":  "Очищення завершено!",
+                    "TotalFreed":  "Успішно звільнено: {0}",
+                    "ConfirmAll":  "Очистити всі виявлені кеші, тимчасові файли та застарілі дані (включно з Windows.old)? Глибоке стиснення WinSxS (DISM) виконується окремо.",
+                    "ConfirmAllTitle":  "1-Click Очищення",
+                    "SortSizeDesc":  "📦 За розміром (спад.)",
+                    "SortSizeAsc":  "📦 За розміром (зрост.)",
+                    "SortSafeFirst":  "🟢 Безпечні спочатку",
+                    "SortCategory":  "📂 За категорією",
+                    "Item":  {
+                                 "clean_gpu_shaders":  {
+                                                           "Name":  "Кеш шейдерів GPU (DirectX / NVIDIA / AMD / Intel / Vulkan)",
+                                                           "Description":  "Очищає скомпільований кеш шейдерів графічного драйвера. Усуває мікрофризи та артефакти після оновлень драйверів.",
+                                                           "Category":  "Ігри \u0026 GPU"
+                                                       },
+                                 "clean_gpu_driver_installers":  {
+                                                                     "Name":  "Залишки інсталяторів драйверів NVIDIA / AMD",
+                                                                     "Description":  "Видаляє тимчасові розпаковані пакети встановлення відеодрайверів GPU.",
+                                                                     "Category":  "Ігри \u0026 GPU"
+                                                                 },
+                                 "clean_game_launchers_cache":  {
+                                                                    "Name":  "Веб-кеш лаунчерів (Steam / Epic Games / Battle.net / EA / Ubisoft)",
+                                                                    "Description":  "Очищає тимчасовий веб-кеш вбудованих браузерів у лаунчерах.",
+                                                                    "Category":  "Ігри \u0026 GPU"
+                                                                },
+                                 "clean_user_temp":  {
+                                                         "Name":  "Тимчасові файли користувача (%TEMP%)",
+                                                         "Description":  "Залишкові файли інсталяторів, тимчасові розпаковані архіви та кеш сеансу користувача.",
+                                                         "Category":  "Безпечний кеш"
+                                                     },
+                                 "clean_win_temp":  {
+                                                        "Name":  "Системний кеш Windows (C:\\Windows\\Temp)",
+                                                        "Description":  "Тимчасові системні файли фонових служб Windows.",
+                                                        "Category":  "Безпечний кеш"
+                                                    },
+                                 "clean_wu_cache":  {
+                                                        "Name":  "Кеш завантажених оновлень (SoftwareDistribution)",
+                                                        "Description":  "Завантажені пакети Windows Update, які вже були успішно інстальовані в систему.",
+                                                        "Category":  "Безпечний кеш"
+                                                    },
+                                 "clean_cbs_logs":  {
+                                                        "Name":  "Журнали обслуговування компонентів (CBS \u0026 Setup Logs)",
+                                                        "Description":  "Застарілі журнали обслуговування компонентів після роботи SFC/DISM та установки апдейтів.",
+                                                        "Category":  "Безпечний кеш"
+                                                    },
+                                 "clean_delivery_opt":  {
+                                                            "Name":  "Кеш оптимізації доставки (Delivery Optimization)",
+                                                            "Description":  "Кеш служби фонової роздачі файлів оновлень Windows по локальній мережі.",
+                                                            "Category":  "Безпечний кеш"
+                                                        },
+                                 "clean_recycle_bin":  {
+                                                           "Name":  "Кошик Windows (Recycle Bin на всіх дисках)",
+                                                           "Description":  "Остаточне очищення Кошика на всіх підключених дисках.",
+                                                           "Category":  "Безпечний кеш"
+                                                       },
+                                 "clean_browser_cache":  {
+                                                             "Name":  "Кеш Chromium-браузерів (Chrome / Edge / Brave / Opera / Opera GX)",
+                                                             "Description":  "Очищає виключно тимчасовий кеш медіа, скриптів та GPU. Зберігає всі паролі, історію та активні сесії.",
+                                                             "Category":  "Браузери \u0026 Додатки"
+                                                         },
+                                 "clean_messengers_media":  {
+                                                                "Name":  "Кеш месенджерів (Discord / Telegram / Spotify)",
+                                                                "Description":  "Очищає тимчасові кеші аудіо, зображень та потокового відео.",
+                                                                "Category":  "Браузери \u0026 Додатки"
+                                                            },
+                                 "clean_store_winget":  {
+                                                            "Name":  "Кеш Microsoft Store та WinGet",
+                                                            "Description":  "Очищає завантажені інсталяційні пакети та тимчасові каталоги магазину і пакетного менеджера.",
+                                                            "Category":  "Браузери \u0026 Додатки"
+                                                        },
+                                 "clean_explorer_thumbs":  {
+                                                               "Name":  "Кеш ескізів Провідника (Thumbnails Cache)",
+                                                               "Description":  "Бази даних збережених мініатюр та значків (thumbcache_*.db, iconcache_*.db).",
+                                                               "Category":  "Ручний режим"
+                                                           },
+                                 "clean_dism_winsxs":  {
+                                                           "Name":  "Глибоке стиснення WinSxS (DISM Component Cleanup)",
+                                                           "Description":  "Стиснення та видалення застарілих версій системних компонентів у сховищі WinSxS.",
+                                                           "Category":  "Системне стиснення"
+                                                       },
+                                 "clean_firefox_cache":  {
+                                                             "Name":  "Кеш Firefox (cache2 / startupCache / shader-cache)",
+                                                             "Description":  "Очищає тимчасовий кеш веб-сторінок, шейдерів та запуску браузера Firefox. Зберігає паролі, закладки й історію.",
+                                                             "Category":  "Браузери \u0026 Додатки"
+                                                         },
+                                 "clean_inetcache":  {
+                                                         "Name":  "Кеш Internet Explorer / Legacy Edge (INetCache)",
+                                                         "Description":  "Тимчасові інтернет-файли застарілого браузера та веб-кешу оболонки Windows.",
+                                                         "Category":  "Браузери \u0026 Додатки"
+                                                     },
+                                 "clean_prefetch":  {
+                                                        "Name":  "Prefetch (файли попереднього завантаження Windows)",
+                                                        "Description":  "Видаляє старі .pf-файли Prefetch, які Windows використовує для прискореного запуску програм.",
+                                                        "Category":  "Безпечний кеш"
+                                                    },
+                                 "clean_dev_pkg_caches":  {
+                                                              "Name":  "Кеші пакетних менеджерів (pip / npm / NuGet)",
+                                                              "Description":  "Тимчасові завантажені пакети Python (pip), Node (npm) та .NET (NuGet), які можна повторно завантажити.",
+                                                              "Category":  "Безпечний кеш"
+                                                          },
+                                 "clean_windows_old":  {
+                                                           "Name":  "Папка Windows.old (залишки оновлень Windows)",
+                                                           "Description":  "Резервна копія попередньої версії Windows після великого оновлення.",
+                                                           "Category":  "Ручний режим"
+                                                       }
+                             }
+                }
+}

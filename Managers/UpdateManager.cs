@@ -12,7 +12,7 @@ namespace MASLOOPTIMIZER;
 
 public static class UpdateManager
 {
-    public const string CurrentVersion = "0.3.3";
+    public const string CurrentVersion = "0.4.6";
     private const string RepoOwner = "3ibravMasla";
     private const string RepoName = "MASLOOPTIMIZER";
 
@@ -95,30 +95,32 @@ public static class UpdateManager
             }
 
             // Заміна timeout на ping для стабільності у NoWindow фоновому режимі
+            string escapedExePath = EscapeBatchVariable(currentExePath);
+            string escapedNewFile = EscapeBatchVariable(tempNewExePath);
+
             string batContent = $@"@echo off
 chcp 65001 > nul
-setlocal enabledelayedexpansion
 
-set ""TARGET={currentExePath}""
-set ""NEWFILE={tempNewExePath}""
+set ""TARGET={escapedExePath}""
+set ""NEWFILE={escapedNewFile}""
 set RETRIES=0
 
 :loop
 ping 127.0.0.1 -n 2 > nul
-del /f /q ""!TARGET!"" > nul 2>&1
-if not exist ""!TARGET!"" goto replace
+del /f /q ""%TARGET%"" > nul 2>&1
+if not exist ""%TARGET%"" goto replace
 
 set /a RETRIES+=1
-if !RETRIES! leq 15 goto loop
+if %RETRIES% leq 15 goto loop
 goto cleanup
 
 :replace
-move /y ""!NEWFILE!"" ""!TARGET!"" > nul 2>&1
-start """" ""!TARGET!""
+move /y ""%NEWFILE%"" ""%TARGET%"" > nul 2>&1
+start """" ""%TARGET%""
 
 :cleanup
-del ""!NEWFILE!"" > nul 2>&1
-del ""%~f0"" > nul 2>&1
+del /f /q ""%NEWFILE%"" > nul 2>&1
+del /f /q ""%~f0"" > nul 2>&1
 ";
             await File.WriteAllTextAsync(updaterBatPath, batContent);
 
@@ -130,13 +132,26 @@ del ""%~f0"" > nul 2>&1
                 WindowStyle = ProcessWindowStyle.Hidden
             };
 
-            Process.Start(psi);
+            var updaterProcess = Process.Start(psi);
+            if (updaterProcess == null)
+            {
+                AppLogger.Log("Не вдалося запустити скрипт автооновлення.", "ERROR");
+                return;
+            }
+
             Environment.Exit(0);
         }
         catch (Exception ex)
         {
             AppLogger.Log($"Помилка процесу автооновлення: {ex.Message}", "ERROR");
         }
+    }
+
+    private static string EscapeBatchVariable(string value)
+    {
+        return value
+            .Replace("%", "%%")
+            .Replace("^", "^^");
     }
 
     private static bool TryParseSemanticVersion(string verStr, out Version version)

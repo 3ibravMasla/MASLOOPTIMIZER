@@ -1,0 +1,25 @@
+{
+    "GameMode":  {
+                     "Title":  "🎮 ІГРОВИЙ РЕЖИМ",
+                     "Description":  "Пріоритет GPU/CPU, зупинка фонових служб та звільнення пам\u0027яті для максимального FPS",
+                     "BtnActivate":  "⚡ Активувати",
+                     "BtnDeactivate":  "🔄 Деактивувати",
+                     "StatusActive":  "🟢 АКТИВНИЙ",
+                     "StatusInactive":  "⚪ НЕАКТИВНИЙ",
+                     "Ready":  "🎮 Game Mode & MSI готовий.",
+                     "ToggleOn":  "🎮 Game Mode: ON",
+                     "ToggleOff":  "🎮 Game Mode: OFF",
+                     "Activating":  "⏳ Активація Game Mode...",
+                     "Deactivating":  "⏳ Деактивація Game Mode...",
+                     "BtnPurge":  "🧹 Очистити Standby RAM",
+                     "HowItWorksTitle":  "📖 ЯК ЦЕ ПРАЦЮЄ",
+                     "HowItWorks":  "Game Mode зупиняє некритичні фонові служби (Windows Search, SysMain/Superfetch, телеметрія, апдейтери), піднімає пріоритет активного процесу до 100% (Realtime-клас) та перемикає систему на схему живлення Ultimate Performance (або High Performance) для мінімальних фризів і максимального FPS.",
+                     "StandbyTitle":  "🧹 STAND BY RAM PURGE",
+                     "StandbyDesc":  "Викликає нативний системний виклик NtSetSystemInformation (SystemMemoryListInformation → MemoryPurgeStandbyList), який скидає модифіковані та резервні (standby) сторінки пам\u0027яті. Це усуває мікрофризи та звільняє оперативну пам\u0027ять без перезавантаження.",
+                     "PurgeBusy":  "⏳...",
+                     "PurgeFreed":  "✓ {0:N0} MB",
+                     "PurgeError":  "⚠️ Не вдалося",
+                     "PurgeOk":  "Standby RAM очищено: {0:N0} MB",
+                     "PurgeFail":  "Очищення Standby RAM не вдалося (потрібні права адміністратора)."
+                 }
+}

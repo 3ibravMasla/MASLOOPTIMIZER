@@ -1,5 +1,12 @@
 # UNIVERSAL AI AGENT & TOKEN-SHIELD DIRECTIVES
 
+## 0. MANDATORY NAVIGATION & TOKEN-SHIELD PROTOCOLS
+- REPO MAP FIRST: Always read `REPO_MAP.md` before starting any task to understand type/member signatures, instead of scanning directories via `read_file`.
+- STRICT LINE RANGES: Never read a file in full if it exceeds 50 lines. Read strictly targeted line ranges (`line_range` / `start_line`+`end_line`).
+- DISK SCRIPT DELEGATION: For bulk JSON edits or regex replacements, write a standalone script to `Tools/_task.ps1`, execute it, and return only the ExitCode.
+- SILENT CLI: Always run build/test commands strictly with quiet flags (`dotnet build --nologo -v q`).
+
+
 ## 1. TOKEN ECONOMY & CONTEXT HYGIENE (P0)
 - NO VERBOSE CHATTER: Never write conversational setup sentences, filler, or post-action summaries. Jump directly into tool calls, diffs, or code execution.
 - NO FULL-FILE DUMPS: Never call `read_file` on entire files longer than 50 lines. Always specify a precise `line_range` to inspect only the required method or block.

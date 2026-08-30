@@ -1,0 +1,30 @@
+{
+    "Tools":  {
+                  "Title":  "🛠️ ESSENTIAL SOFTWARE \u0026 DIAGNOSTICS",
+                  "Description":  "Silent installation of official utilities via Winget and direct sources",
+                  "BtnRescan":  "🔄 Update Status",
+                  "BtnInstall":  "⬇️ Install",
+                  "BtnInstalled":  "✓ Installed",
+                  "BtnSite":  "🌐 Website",
+                  "StatsSummary":  "Detected in system: {0} | Available: {1} of {2} tools",
+                  "BtnActivate":  "⚡ Activate",
+                  "BtnInstallAll":  "⚡ Install all",
+                  "BtnUpdateDx":  "⚡ Update DirectX",
+                  "BtnOpen":  "▶️ Open",
+                  "Ready":  "🛠️ Software & tools library ready.",
+                  "MasLaunched":  "Microsoft Activation Scripts launched.",
+                  "VcRedistInstalling":  "Installing Visual C++ All-in-One...",
+                  "VcRedistDone":  "All Visual C++ packages installed successfully!",
+                  "VcRedistError":  "VC++ installation error.",
+                  "DirectXUpdating":  "Updating DirectX libraries...",
+                  "DirectXDone":  "DirectX libraries updated successfully!",
+                  "DirectXError":  "DirectX update error.",
+                  "WingetInstalling":  "Installing {0} via Winget...",
+                  "InstallDone":  "Installed successfully: {0}",
+                  "InstallError":  "Installation error: {0}",
+                  "Rescanning":  "Scanning installed software...",
+                  "RescanDone":  "Software statuses updated.",
+                  "Launched":  "▶️ Launched: {0}",
+                  "LaunchError":  "Launch error: {0}"
+              }
+}

@@ -13,7 +13,7 @@ namespace MASLOOPTIMIZER;
 public class MasloProfileConfig
 {
     [JsonPropertyName("Version")]
-    public string Version { get; set; } = "0.3.3";
+    public string Version { get; set; } = "0.4.6";
 
     [JsonPropertyName("Name")]
     public string Name { get; set; } = "Мій профіль";
@@ -143,16 +143,16 @@ public static class PresetEngine
                 int removedApps = config.DebloatUninstalledIds.Count;
 
                 AppLogger.Log($"Експортовано пресет: {Path.GetFileName(dlg.FileName)} ({appliedTweaks} твіків)", "SUCCESS");
-                return (true, $"Конфігурацію збережено ({appliedTweaks} активних твіків, {removedApps} видалених UWP)!");
+                return (true, LocalizationManager.Instance.Format("Dialogs.PresetSaveDone", appliedTweaks, removedApps));
             }
             catch (Exception ex)
             {
                 AppLogger.Log($"Помилка експорту конфігурації: {ex.Message}", "ERROR");
-                return (false, $"Помилка збереження: {ex.Message}");
+                return (false, LocalizationManager.Instance.Format("Dialogs.PresetSaveError", ex.Message));
             }
         }
 
-        return (false, "Експорт скасовано.");
+        return (false, LocalizationManager.Instance["Dialogs.PresetExportCancelled"]);
     }
 
     public static async Task<(bool Success, string Message)> ImportAndApplyProfileAsync(
@@ -171,7 +171,7 @@ public static class PresetEngine
             return await ApplyProfileFromFileAsync(dlg.FileName, tweaks, debloatItems, progressCallback);
         }
 
-        return (false, "Імпорт скасовано.");
+        return (false, LocalizationManager.Instance["Dialogs.PresetImportCancelled"]);
     }
 
     public static async Task<(bool Success, string Message)> ApplyProfileFromFileAsync(
@@ -182,14 +182,14 @@ public static class PresetEngine
     {
         try
         {
-            if (!File.Exists(filePath)) return (false, "Файл пресету не знайдено.");
+            if (!File.Exists(filePath)) return (false, LocalizationManager.Instance["Dialogs.PresetFileNotFound"]);
 
             string json = await File.ReadAllTextAsync(filePath);
             var config = JsonSerializer.Deserialize<MasloProfileConfig>(json);
 
             if (config == null || config.TweakStates == null)
             {
-                return (false, "Файл конфігурації пошкоджений або має невірну структуру.");
+                return (false, LocalizationManager.Instance["Dialogs.PresetCorrupted"]);
             }
 
             return await ApplyConfigObjectAsync(config, tweaks, debloatItems, progressCallback);
@@ -197,7 +197,7 @@ public static class PresetEngine
         catch (Exception ex)
         {
             AppLogger.Log($"Помилка читання пресету: {ex.Message}", "ERROR");
-            return (false, $"Помилка імпорту: {ex.Message}");
+            return (false, LocalizationManager.Instance.Format("Dialogs.PresetImportError", ex.Message));
         }
     }
 
@@ -209,7 +209,11 @@ public static class PresetEngine
     {
         var tweakList = tweaks.ToList();
         var debloatList = debloatItems.ToList();
-        int totalOperations = tweakList.Count + (config.DebloatUninstalledIds?.Count ?? 0);
+
+        // Лічильник реальних операцій: лише ті твіки, де конфігурація відрізняється від поточного стану
+        int pendingTweaks = tweakList.Count(t =>
+            config.TweakStates.TryGetValue(t.Id, out bool shouldApply) && shouldApply != t.IsApplied);
+        int totalOperations = pendingTweaks + (config.DebloatUninstalledIds?.Count ?? 0);
         int currentOp = 0;
 
         int appliedCount = 0;
@@ -218,23 +222,23 @@ public static class PresetEngine
 
         foreach (var tweak in tweakList)
         {
-            currentOp++;
-            int pct = totalOperations > 0 ? (int)((currentOp / (double)totalOperations) * 100) : 100;
+            if (!config.TweakStates.TryGetValue(tweak.Id, out bool shouldBeApplied)) continue;
 
-            if (config.TweakStates.TryGetValue(tweak.Id, out bool shouldBeApplied))
+            if (shouldBeApplied && !tweak.IsApplied)
             {
-                if (shouldBeApplied && !tweak.IsApplied)
-                {
-                    progressCallback?.Invoke(pct, $"Оптимізація: {tweak.LocalizedName}");
-                    bool ok = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
-                    if (ok) appliedCount++;
-                }
-                else if (!shouldBeApplied && tweak.IsApplied)
-                {
-                    progressCallback?.Invoke(pct, $"Відновлення: {tweak.LocalizedName}");
-                    bool ok = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: false);
-                    if (ok) restoredCount++;
-                }
+                currentOp++;
+                int pct = totalOperations > 0 ? (int)((currentOp / (double)totalOperations) * 100) : 100;
+                progressCallback?.Invoke(pct, LocalizationManager.Instance.Format("Dialogs.Optimizing", tweak.LocalizedName));
+                bool ok = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
+                if (ok) appliedCount++;
+            }
+            else if (!shouldBeApplied && tweak.IsApplied)
+            {
+                currentOp++;
+                int pct = totalOperations > 0 ? (int)((currentOp / (double)totalOperations) * 100) : 100;
+                progressCallback?.Invoke(pct, LocalizationManager.Instance.Format("Tweak.Restoring", tweak.LocalizedName));
+                bool ok = await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: false);
+                if (ok) restoredCount++;
             }
         }
 
@@ -242,24 +246,23 @@ public static class PresetEngine
         {
             foreach (var debloatId in config.DebloatUninstalledIds)
             {
-                currentOp++;
-                int pct = totalOperations > 0 ? (int)((currentOp / (double)totalOperations) * 100) : 100;
-
                 var targetApp = debloatList.FirstOrDefault(d =>
                     (!string.IsNullOrWhiteSpace(d.Id) && d.Id.Equals(debloatId, StringComparison.OrdinalIgnoreCase)) ||
                     d.Name.Equals(debloatId, StringComparison.OrdinalIgnoreCase));
 
                 if (targetApp != null && targetApp.IsInstalled)
                 {
-                    progressCallback?.Invoke(pct, $"Деблоат: {targetApp.Name}...");
+                    currentOp++;
+                    int pct = totalOperations > 0 ? (int)((currentOp / (double)totalOperations) * 100) : 100;
+                    progressCallback?.Invoke(pct, LocalizationManager.Instance.Format("Dialogs.DebloatingItem", targetApp.Name));
                     bool ok = await DebloatEngine.UninstallPackageAsync(targetApp);
                     if (ok) debloatedCount++;
                 }
             }
         }
 
-        progressCallback?.Invoke(100, "Конфігурацію розгорнуто!");
-        string resMsg = $"Профіль '{config.Name}' застосовано! (+{appliedCount} оптимізовано, -{restoredCount} відновлено, {debloatedCount} UWP видалено).";
+        progressCallback?.Invoke(100, LocalizationManager.Instance["Dialogs.ConfigDeployed"]);
+        string resMsg = LocalizationManager.Instance.Format("Dialogs.ProfileApplied", config.Name, appliedCount, restoredCount, debloatedCount);
         AppLogger.Log(resMsg, "SUCCESS");
         return (true, resMsg);
     }
@@ -296,7 +299,7 @@ public static class PresetEngine
             {
                 current++;
                 int pct = (int)((current / (double)total) * 100);
-                progressCallback?.Invoke(pct, $"Maslo Pack: {tweak.LocalizedName}");
+                progressCallback?.Invoke(pct, LocalizationManager.Instance.Format("Dialogs.MasloPackProgress", tweak.LocalizedName));
 
                 if (!tweak.IsApplied)
                 {
@@ -309,21 +312,21 @@ public static class PresetEngine
             {
                 current++;
                 int pct = (int)((current / (double)total) * 100);
-                progressCallback?.Invoke(pct, $"Деблоат: {bloat.Name}...");
+                progressCallback?.Invoke(pct, LocalizationManager.Instance.Format("Dialogs.DebloatingItem", bloat.Name));
 
                 bool ok = await DebloatEngine.UninstallPackageAsync(bloat);
                 if (ok) removedApps++;
             }
 
-            progressCallback?.Invoke(100, "1-Click Safe Maslo Pack успішно застосовано!");
-            string msg = $"Maslo Pack активовано! (+{appliedTweaks} твіків, -{removedApps} додатків).";
+            progressCallback?.Invoke(100, LocalizationManager.Instance["Dialogs.MasloPackDone"]);
+            string msg = LocalizationManager.Instance.Format("Dialogs.MasloPackResult", appliedTweaks, removedApps);
             AppLogger.Log(msg, "SUCCESS");
             return (true, msg);
         }
         catch (Exception ex)
         {
             AppLogger.Log($"Помилка Maslo Pack: {ex.Message}", "ERROR");
-            return (false, $"Помилка: {ex.Message}");
+            return (false, LocalizationManager.Instance.Format("Dialogs.PresetError", ex.Message));
         }
     }
 }

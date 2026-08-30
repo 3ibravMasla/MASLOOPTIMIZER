@@ -1,0 +1,33 @@
+{
+    "Startup":  {
+                    "Title":  "🚀 WINDOWS STARTUP MANAGER",
+                    "Description":  "Manage autostart apps and scheduled tasks",
+                    "BtnRescan":  "🔄 Refresh",
+                    "BtnPause":  "⏸️ Pause",
+                    "BtnEnable":  "▶️ Enable",
+                    "StatusActive":  "🟢 ACTIVE",
+                    "StatusPaused":  "⚪ PAUSED",
+                    "BtnProtected":  "🔒 Protected",
+                    "ChipAll":  "🌟 All",
+                    "ChipUser":  "📝 User Apps (HKCU Run)",
+                    "ChipSystem":  "🖥️ System (HKLM Run)",
+                    "ChipTasks":  "⏰ Task Scheduler",
+                    "ChipFolder":  "📁 Startup Folder",
+                    "BadgeProtected":  "🛡️ SYSTEM",
+                    "BadgeSafe":  "⚡ SAFE",
+                    "StatusProtected":  "🔒 PROTECTED",
+                    "SourceUserRun":  "Registry (HKCU)",
+                    "SourceSystemRun":  "Registry (HKLM)",
+                    "SourceTaskScheduler":  "Task Scheduler",
+                    "SourceStartupFolder":  "Startup Folder",
+                    "ListRefreshed":  "Startup list refreshed.",
+                    "ListRescanned":  "Startup list rescanned.",
+                    "ToggleDone":  "Autostart for {0}: {1}",
+                    "EnabledWord":  "Enabled",
+                    "PausedWord":  "Paused",
+                    "SortEnabledFirst":  "🟢 Enabled first",
+                    "SortDisabledFirst":  "⚪ Disabled first",
+                    "SortCategory":  "📂 By category",
+                    "SortSource":  "🗂️ By source"
+                }
+}

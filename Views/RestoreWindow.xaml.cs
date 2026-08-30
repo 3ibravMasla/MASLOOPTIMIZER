@@ -15,10 +15,63 @@ namespace MASLOOPTIMIZER;
 
 public partial class RestoreWindow : Window
 {
+    private ModuleStrings Loc => LocalizationManager.Instance.For("BackupEngine");
+
+    private BackupSortMode _currentBackupSort = BackupSortMode.DateDescending;
+
+    /// <summary>Localized labels for buttons inside the DataTemplate (bound against the window).</summary>
+    public string RestoreButtonLabel => Loc["BtnRestore"];
+    public string DeleteButtonLabel => Loc["BtnDelete"];
+
     public RestoreWindow()
     {
         InitializeComponent();
+        DataContext = this;
+        ApplyLocalizedUi();
         Loaded += async (s, e) => await RefreshBackupsListAsync();
+    }
+
+    private void ApplyLocalizedUi()
+    {
+        Title = Loc["Title"];
+        TitleText.Text = Loc["RestoreTitle"];
+        SubtitleText.Text = Loc["RestoreSubtitle"];
+        EmptyBackupsNotice.Text = Loc["EmptyNotice"];
+        BtnSystemRestore.Content = Loc["BtnSystemRestore"];
+        BtnOpenFolder.Content = Loc["BtnOpenFolder"];
+        BtnClose.Content = Loc["BtnClose"];
+
+        LblSortBackup.Text = LocalizationManager.Instance["Common.SortLabel"];
+        foreach (var item in BackupSortComboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag is string tag)
+            {
+                item.Content = tag switch
+                {
+                    "DateAscending" => Loc["SortDateAsc"],
+                    "SizeDescending" => Loc["SortSizeDesc"],
+                    "KeyCountDescending" => Loc["SortKeyCount"],
+                    "NameAscending" => Loc["SortName"],
+                    _ => Loc["SortDateDesc"]
+                };
+            }
+        }
+    }
+
+    private async void BackupSortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (BackupSortComboBox?.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            _currentBackupSort = tag switch
+            {
+                "DateAscending" => BackupSortMode.DateAscending,
+                "SizeDescending" => BackupSortMode.SizeDescending,
+                "KeyCountDescending" => BackupSortMode.KeyCountDescending,
+                "NameAscending" => BackupSortMode.NameAscending,
+                _ => BackupSortMode.DateDescending
+            };
+            await RefreshBackupsListAsync();
+        }
     }
 
     private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -31,15 +84,16 @@ public partial class RestoreWindow : Window
 
     private async Task RefreshBackupsListAsync()
     {
+        if (BackupItemsControl == null) return;
         try
         {
-            var backups = await BackupEngine.GetAvailableBackupsAsync();
+            var backups = await BackupEngine.GetAvailableBackupsAsync(_currentBackupSort);
             BackupItemsControl.ItemsSource = backups;
             EmptyBackupsNotice.Visibility = (backups != null && backups.Count > 0) ? Visibility.Collapsed : Visibility.Visible;
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Помилка завантаження списку бекапів: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Loc.Format("LoadError", ex.Message), Loc["ErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -47,8 +101,8 @@ public partial class RestoreWindow : Window
     {
         if (sender is not Button btn || btn.Tag is not BackupEntry item) return;
 
-        if (MessageBox.Show($"Відновити всі параметри реєстру з вибраного бекапу?\n\nПапка: {item.Name}\nКлючів: {item.KeyCount}",
-            "Підтвердження відновлення", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (MessageBox.Show(Loc.Format("ConfirmRestoreMessage", item.Name, item.KeyCount),
+            Loc["ConfirmRestoreTitle"], MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             return;
         }
@@ -57,12 +111,12 @@ public partial class RestoreWindow : Window
         try
         {
             var res = await BackupEngine.RestoreRegistryFromFolderAsync(item.FolderPath);
-            MessageBox.Show(res.Message, "Відновлення реєстру", MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            MessageBox.Show(res.Message, Loc["RestoreDoneTitle"], MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
             Close();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Не вдалося відновити реєстр: {ex.Message}", "Критична помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Loc.Format("RestoreFail", ex.Message), Loc["RestoreFailTitle"], MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -74,8 +128,8 @@ public partial class RestoreWindow : Window
     {
         if (sender is not Button btn || btn.Tag is not BackupEntry item) return;
 
-        if (MessageBox.Show($"Видалити цю копію реєстру ({item.Name})?",
-            "Видалення бекапу", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        if (MessageBox.Show(Loc.Format("ConfirmDeleteMessage", item.Name),
+            Loc["ConfirmDeleteTitle"], MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
         {
             return;
         }
@@ -88,7 +142,7 @@ public partial class RestoreWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Помилка видалення бекапу: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Loc.Format("DeleteError", ex.Message), Loc["ErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -104,7 +158,7 @@ public partial class RestoreWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Не вдалося запустити відновлення системи: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Loc.Format("SystemRestoreFail", ex.Message), Loc["ErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 
@@ -116,7 +170,7 @@ public partial class RestoreWindow : Window
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Не вдалося відкрити папку: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(Loc.Format("OpenFolderFail", ex.Message), Loc["ErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

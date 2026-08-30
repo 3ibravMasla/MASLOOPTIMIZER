@@ -1,0 +1,30 @@
+{
+    "Network": {
+        "Title": "⚡ NETWORK & TCP OPTIMIZATION",
+        "Description": "Reduce latency, disable adapter power saving and unlock the reserved 20% QoS",
+        "StatusInitial": "Status: —",
+        "Reading": "⏳ Reading network status...",
+        "StatusPrefix": "Status: {0}",
+        "Error": "Error: {0}",
+        "DetailsInitial": "Click a button to apply network optimization.",
+        "ActiveAdapters": "Active adapters ({0}): {1}",
+        "NagleOn": "🟢 Nagle disabled",
+        "NagleOff": "⚪ Nagle active",
+        "EeeOn": "🟢 EEE disabled",
+        "EeeOff": "⚪ EEE active",
+        "QosOn": "🟢 QoS 100%",
+        "QosOff": "⚪ QoS 80%",
+        "DnsCacheOn": "🟢 DNS cache",
+        "DnsCacheOff": "⚪ DNS cache",
+        "BtnNagle": "🔌 1-Click Disable Nagle (TCP NoDelay)",
+        "BtnEee": "🌿 Disable EEE/Green Ethernet",
+        "BtnQos": "📶 Unlock 20% QoS",
+        "BtnReset": "🛟 Emergency network recovery",
+        "Busy": "⏳...",
+        "NagleDone": "✓ Nagle disabled",
+        "EeeDone": "✓ EEE disabled",
+        "QosDone": "✓ QoS 100%",
+        "ResetDone": "✓ Network restored",
+        "ErrorShort": "⚠️ Error"
+    }
+}

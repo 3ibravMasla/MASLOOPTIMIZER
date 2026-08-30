@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
@@ -13,6 +15,7 @@ namespace MASLOOPTIMIZER;
 public static class TrayManager
 {
     private static NotifyIcon? _notifyIcon;
+    private static ToolStripMenuItem? _gameModeItem;
     public static WidgetWindow? Widget { get; private set; }
 
     #region Win32 API
@@ -37,18 +40,7 @@ public static class TrayManager
 
         try
         {
-            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon", "maslo.ico");
-            if (File.Exists(iconPath))
-            {
-                _notifyIcon.Icon = new Icon(iconPath);
-            }
-            else
-            {
-                string? exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
-                _notifyIcon.Icon = !string.IsNullOrEmpty(exePath)
-                    ? Icon.ExtractAssociatedIcon(exePath) ?? SystemIcons.Application
-                    : SystemIcons.Application;
-            }
+            _notifyIcon.Icon = LoadTrayIcon() ?? SystemIcons.Application;
         }
         catch
         {
@@ -68,6 +60,8 @@ public static class TrayManager
         mOpenApp.Font = new Font("Segoe UI", 9.5f, System.Drawing.FontStyle.Bold);
 
         var mToggleWidget = new ToolStripMenuItem("📌 Віджет моніторингу", null, (s, e) => ToggleWidget());
+        var mGameMode = new ToolStripMenuItem("🎮 Game Mode: Вимкнено", null, OnGameModeTrayClicked);
+        _gameModeItem = mGameMode;
         var mFlushRam = new ToolStripMenuItem("🧹 Очистити пам'ять ОЗП", null, async (s, e) => await FlushRamQuickAsync());
         var mEmptyTrash = new ToolStripMenuItem("🗑️ Очистити весь кошик", null, (s, e) => EmptyTrashQuick());
         var mExit = new ToolStripMenuItem("🛑 Повний вихід", null, (s, e) => FullExit());
@@ -75,6 +69,7 @@ public static class TrayManager
 
         contextMenu.Items.Add(mOpenApp);
         contextMenu.Items.Add(mToggleWidget);
+        contextMenu.Items.Add(mGameMode);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(mFlushRam);
         contextMenu.Items.Add(mEmptyTrash);
@@ -83,6 +78,42 @@ public static class TrayManager
 
         _notifyIcon.ContextMenuStrip = contextMenu;
         _notifyIcon.DoubleClick += (s, e) => ShowMainWindow();
+
+        // Синхронізація пункту трею з реальним станом Game Mode (подія спрацьовує з фонового потоку).
+        GameModeEngine.OnGameModeStateChanged += OnGameModeStateChanged;
+        UpdateGameModeTrayItem(GameModeEngine.IsGameModeActive);
+    }
+
+    private static Icon? LoadTrayIcon()
+    {
+        try
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            var resourceName = assembly.GetManifestResourceNames()
+                .FirstOrDefault(r => r.EndsWith("icon.maslo.ico", StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(resourceName))
+            {
+                using var stream = assembly.GetManifestResourceStream(resourceName);
+                if (stream != null) return new Icon(stream);
+            }
+        }
+        catch { }
+
+        try
+        {
+            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon", "maslo.ico");
+            if (File.Exists(iconPath)) return new Icon(iconPath);
+        }
+        catch { }
+
+        try
+        {
+            string? exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(exePath)) return Icon.ExtractAssociatedIcon(exePath);
+        }
+        catch { }
+
+        return null;
     }
 
     public static void ShowMainWindow()
@@ -179,6 +210,46 @@ public static class TrayManager
         {
             Application.Current.Shutdown();
         });
+    }
+
+    private static async void OnGameModeTrayClicked(object? sender, EventArgs e)
+    {
+        if (_gameModeItem != null)
+            _gameModeItem.Text = "⏳ Game Mode...";
+
+        try
+        {
+            await GameModeEngine.ToggleGameModeAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка перемикання Game Mode з трею: {ex.Message}", "ERROR");
+        }
+        finally
+        {
+            UpdateGameModeTrayItem(GameModeEngine.IsGameModeActive);
+        }
+    }
+
+    private static void OnGameModeStateChanged(bool isActive)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null)
+            return;
+
+        if (!dispatcher.CheckAccess())
+        {
+            dispatcher.Invoke(() => OnGameModeStateChanged(isActive));
+            return;
+        }
+
+        UpdateGameModeTrayItem(isActive);
+    }
+
+    private static void UpdateGameModeTrayItem(bool isActive)
+    {
+        if (_gameModeItem != null)
+            _gameModeItem.Text = isActive ? "🎮 Game Mode: Увімкнено" : "🎮 Game Mode: Вимкнено";
     }
 
     #region Кастомний рендерер темного меню трею
