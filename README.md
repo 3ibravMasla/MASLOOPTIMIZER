@@ -10,9 +10,9 @@
 
 Один дашборд, який замінює пачку окремих тулів: кіберспортивний Game Mode, перемикач апаратних переривань **MSI**, 224 системні твіки, мережевий та DNS-оптимізатор, деблоат UWP, чистильник диска, менеджер автозапуску, бібліотека софту через `winget`, профілі живлення, бекап (VSS + реєстр) та глибока апаратна діагностика. Все це — на C# / WPF / .NET 8.
 
-<img width="1072" height="896" alt="image_2026-08-31_02-01-46" src="https://github.com/user-attachments/assets/b2324b95-8103-4078-a200-18f7d4596d4f" />
-<img width="998" height="721" alt="image_2026-08-31_02-01-14" src="https://github.com/user-attachments/assets/60cddf51-1363-4c4b-b5b6-fcaec13f3742" />
 <img width="1919" height="1025" alt="image_2026-08-31_02-00-53" src="https://github.com/user-attachments/assets/eb83c0c7-13fb-4c25-a68c-dced7e049e71" />
+<img width="998" height="721" alt="image_2026-08-31_02-01-14" src="https://github.com/user-attachments/assets/60cddf51-1363-4c4b-b5b6-fcaec13f3742" />
+<img width="1072" height="896" alt="image_2026-08-31_02-01-46" src="https://github.com/user-attachments/assets/b2324b95-8103-4078-a200-18f7d4596d4f" />
 
 
 ---
