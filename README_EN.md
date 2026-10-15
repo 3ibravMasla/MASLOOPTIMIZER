@@ -243,7 +243,7 @@ The project is under active development. Here is an honest technical status for 
 
 7. **The disk analyzer runs on demand.** Heavy scans (`ScanDriveHeavyItemsAsync`) walk the whole file system — on an HDD this can take minutes and noticeably load the disk.
 
-8. **Other trade-offs.** Modular publishing yields ~200 files in the release folder (mitigated by a ZIP with a single root folder); `--silent`/`--widget` do not surface activation errors in the UI; MAS activation depends on a third-party project and may be flagged by antivirus.
+8. **Other trade-offs.** Modular publishing yields ~250 files in the release folder root (mitigated by a ZIP with a single root folder); `--silent`/`--widget` do not surface activation errors in the UI; MAS activation depends on a third-party project and may be flagged by antivirus.
 
 ---
 
