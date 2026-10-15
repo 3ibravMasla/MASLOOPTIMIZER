@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,8 +28,6 @@ namespace MASLOOPTIMIZER;
 public partial class WidgetWindow : Window
 {
     private readonly DispatcherTimer _timer = new();
-    private readonly DispatcherTimer _rgbTimer = new();
-    private readonly DispatcherTimer _pulseTimer = new();
     private readonly DispatcherTimer _rebootCancelTimer = new();
     private readonly DispatcherTimer _shutdownCancelTimer = new();
 
@@ -40,19 +39,47 @@ public partial class WidgetWindow : Window
     private string? _widgetUpdateUrl;
 
     private PerformanceCounter? _cpuCounter;
-    private double _rgbHue = 0;
-    private double _pulseAngle = 0;
+
+    // Кешовані GPU PerformanceCounter'и ("GPU Engine" / "Utilization Percentage").
+    // Фаза 3.4: кеш періодично перебудовується (30 с), мертві інстанси звільняються, нові
+    // (гра, браузер) потрапляють у список — за зразком DiagnosticEngine.RefreshGpuEngineCountersLocked.
+    private List<PerformanceCounter>? _gpuCounters;
+    private string[] _gpuInstances = Array.Empty<string>();
+    private bool _gpuCountersReady;
+    private long _gpuLastRefreshTick;
+    private const long GpuRefreshIntervalMs = 30000;
+    private const int GpuCounterLimit = 32;
+    private readonly object _gpuSync = new();
+
+    // Захист від накладання (overlapping) тіків DispatcherTimer.
+    private bool _isUpdatingTelemetry;
+
+    // Фаза 3.2: безпечний тік — CTS із таймаутом і watchdog-розблокування «завислого» тіку.
+    private CancellationTokenSource? _tickCts;
+    private long _tickStartedTick;
+    private const int TickTimeoutMs = 1000;
+
     private string _currentTheme = "Emerald";
 
-    // Поточний профіль живлення сегментного перемикача віджета (Eco → Std → Turbo).
-    private SystemPowerMode _widgetPowerMode = SystemPowerMode.OriginalSnapshot;
+    // Кешовані глобальні лічильники мережі ("Network Interface" / "_Total").
+    // PerformanceCounter створюється один раз, тому на кожному тіку немає аллокацій
+    // ітерації GetAllNetworkInterfaces() і пов'язаного GC-навантаження.
+    private PerformanceCounter? _netRecvCounter;
+    private PerformanceCounter? _netSentCounter;
 
-    // Захист від повторного застосування під час програмної синхронізації сегментів.
-    private bool _syncingPowerUi;
+    // Кешований DriveInfo для диска C:, щоб не викликати DriveInfo.GetDrives() щосекунди (GC Spikes).
+    private readonly DriveInfo _cachedDrive = new("C");
 
-    private long _lastBytesReceived = 0;
-    private long _lastBytesSent = 0;
-    private DateTime _lastNetCheck = DateTime.Now;
+    // Фаза 3.7: кеш останніх значень — форматування рядків лише коли значення реально змінилось.
+    private int _lastCpuVal = -1;
+    private int _lastRamPct = -1;
+    private long _lastDiskRefreshTick;
+    private long _lastUptimeRefreshTick;
+
+    // Фаза 3.5: «зменшені ефекти» — вибір користувача + автовизначення слабкого/інтегрованого GPU.
+    private bool _reduceEffectsUser;
+    private bool _lowEndGpu;
+    private bool ReduceEffects => _reduceEffectsUser || _lowEndGpu;
 
     private bool _rebootConfirm = false;
     private bool _shutdownConfirm = false;
@@ -82,9 +109,6 @@ public partial class WidgetWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX lpBuffer);
 
-    [DllImport("psapi.dll")]
-    private static extern int EmptyWorkingSet(IntPtr hwProc);
-
     [DllImport("Shell32.dll", CharSet = CharSet.Unicode)]
     private static extern uint SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
 
@@ -99,52 +123,20 @@ public partial class WidgetWindow : Window
         // Синхронізація теми віджета з темою головної програми
         ThemeEngine.WidgetThemeRequired += OnWidgetThemeRequired;
 
-        // Синхронізація кнопки Game Mode з реальним станом ядра (подія спрацьовує з фонового потоку).
-        GameModeEngine.OnGameModeStateChanged += OnGameModeStateChanged;
+        // Фаза 2.3: таймер телеметрії та анімації керуються центральним координатором активності.
+        AppActivityCoordinator.ModeChanged += OnActivityModeChanged;
 
-        Closed += (s, e) =>
-        {
-            ThemeEngine.WidgetThemeRequired -= OnWidgetThemeRequired;
-            GameModeEngine.OnGameModeStateChanged -= OnGameModeStateChanged;
+        // Видимість віджета — джерело прапорця Visible/Hidden для координатора (Show/Hide з трею).
+        // Фаза 3.1: тут же миттєво зупиняємо тіки/анімації при прихованні та робимо разовий рефреш при показі.
+        IsVisibleChanged += OnWidgetVisibilityChanged;
 
-            // Зупиняємо всі таймери та звільняємо PerformanceCounter,
-            // щоб не лишати фонові оновлення/дескриптори після закриття.
-            _timer.Stop();
-            _rgbTimer.Stop();
-            _pulseTimer.Stop();
-            _rebootCancelTimer.Stop();
-            _shutdownCancelTimer.Stop();
-            _updateCheckTimer.Stop();
+        // Єдина точка звільнення ресурсів. Closing лише ховає вікно, тому Closed може
+        // не спрацювати при виході через трей — TrayManager.Shutdown() викликає цей самий метод.
+        Closed += (s, e) => DisposeResources();
 
-            try { _cpuCounter?.Dispose(); } catch { }
-            _cpuCounter = null;
-        };
-
+        // Стартовий інтервал — fallback; робочий інтервал завжди задає координатор.
         _timer.Interval = TimeSpan.FromMilliseconds(1500);
         _timer.Tick += Timer_Tick;
-
-        _rgbTimer.Interval = TimeSpan.FromMilliseconds(35);
-        _rgbTimer.Tick += (s, e) =>
-        {
-            _rgbHue = (_rgbHue + 2.5) % 360;
-            var color = HsvToRgb(_rgbHue, 1.0, 1.0);
-            var brush = new SolidColorBrush(color);
-            MainWidgetBorder.BorderBrush = brush;
-            MainGlow.Color = color;
-            LogoBorder.BorderBrush = brush;
-            LogoGlow.Color = color;
-            TxtBrandLeft.Foreground = brush;
-            ProgressRam.Foreground = brush;
-        };
-
-        _pulseTimer.Interval = TimeSpan.FromMilliseconds(40);
-        _pulseTimer.Tick += (s, e) =>
-        {
-            _pulseAngle += 0.08;
-            double val = (Math.Sin(_pulseAngle) + 1) / 2.0;
-            MainGlow.Opacity = 0.15 + (val * 0.55);
-            LogoGlow.Opacity = 0.25 + (val * 0.65);
-        };
 
         _rebootCancelTimer.Interval = TimeSpan.FromSeconds(4);
         _rebootCancelTimer.Tick += (s, e) =>
@@ -168,41 +160,130 @@ public partial class WidgetWindow : Window
 
         Closing += (s, e) =>
         {
+            // Фаза 3.1: закриття = приховання у трей — без тіків телеметрії та анімацій.
             e.Cancel = true;
+            _timer.Stop();
+            StopWidgetAnimations();
             Hide();
         };
+    }
+
+    private bool _resourcesDisposed;
+
+    /// <summary>
+    /// Ідемпотентна точка звільнення ресурсів віджета: таймери, анімації,
+    /// PerformanceCounter та підписки на статичні події. Викликається з Closed
+    /// (реальне закриття) і з TrayManager.Shutdown() під час виходу з програми.
+    /// </summary>
+    public void DisposeResources()
+    {
+        if (_resourcesDisposed) return;
+        _resourcesDisposed = true;
+
+        ThemeEngine.WidgetThemeRequired -= OnWidgetThemeRequired;
+        AppActivityCoordinator.ModeChanged -= OnActivityModeChanged;
+        AppActivityCoordinator.SetWidgetVisible(false);
+
+        _timer.Stop();
+        StopWidgetAnimations();
+        try { _tickCts?.Cancel(); } catch { }
+        try { _tickCts?.Dispose(); } catch { }
+        _tickCts = null;
+        _rebootCancelTimer.Stop();
+        _shutdownCancelTimer.Stop();
+        _updateCheckTimer.Stop();
+
+        try { _cpuCounter?.Dispose(); } catch { }
+        _cpuCounter = null;
+
+        try { _netRecvCounter?.Dispose(); } catch { }
+        try { _netSentCounter?.Dispose(); } catch { }
+        _netRecvCounter = null;
+        _netSentCounter = null;
+
+        lock (_gpuSync)
+        {
+            if (_gpuCounters != null)
+            {
+                foreach (var c in _gpuCounters) { try { c.Dispose(); } catch { } }
+                _gpuCounters = null;
+            }
+            _gpuInstances = Array.Empty<string>();
+            _gpuLastRefreshTick = 0;
+            _gpuCountersReady = false;
+        }
     }
 
     private async void WidgetWindow_Loaded(object sender, RoutedEventArgs e)
     {
         LoadEmbeddedLogo();
 
-        try
-        {
-            _cpuCounter = new PerformanceCounter("Processor", "% Processor Time", "_Total");
-            _cpuCounter.NextValue();
-        }
-        catch { }
+        // Фаза 3.3: лічильники створюються у фоні з повторною спробою — UI-потік не фризиться.
+        _ = InitializeCountersAsync();
 
         try
         {
             var hw = await DiagnosticEngine.GetQuickHardwareInfoAsync();
             TxtCpuModel.Text = hw.CPU;
             TxtGpuModel.Text = hw.GPU;
+            // Фаза 3.5: автовизначення слабкого/інтегрованого GPU для зменшених ефектів.
+            _lowEndGpu = IsLowEndGpuName(hw.GPU);
         }
         catch { }
 
         RestoreStateFromRegistry();
-        UpdatePowerCycleControl();
-        RefreshWidgetGameModeToggle();
-        UpdateNetworkBaseline();
-        _timer.Start();
+        ApplyEffectsProfile();
 
-        // Періодична перевірка оновлень (раз на 30 хвилин) + перевірка при старті.
+        // Фаза 2.3: реєструємо видимість і застосовуємо режим координатора
+        // (таймер/анімації стартують лише у видимому звичайному режимі).
+        AppActivityCoordinator.SetWidgetVisible(IsVisible);
+        ApplyActivityState();
+
+        // Фаза 5.4: періодична перевірка (30 хв) + відкладена стартова (N хвилин + jitter),
+        // щоб --widget на логіні не бив по мережі одразу.
         _updateCheckTimer.Interval = TimeSpan.FromMinutes(30);
         _updateCheckTimer.Tick += (s, e) => _ = CheckForWidgetUpdatesAsync();
         _updateCheckTimer.Start();
-        _ = CheckForWidgetUpdatesAsync();
+        _ = DeferredStartupUpdateCheckAsync();
+    }
+
+    /// <summary>
+    /// Фаза 3.3: створення PerformanceCounter'ів (CPU, мережа) у фоні з повторною спробою —
+    /// важка ініціалізація PDH більше не блокує UI-потік при холодному старті віджета.
+    /// </summary>
+    private async Task InitializeCountersAsync()
+    {
+        for (int attempt = 1; attempt <= 3 && !_resourcesDisposed; attempt++)
+        {
+            bool ok = await Task.Run(() =>
+            {
+                try
+                {
+                    if (_cpuCounter == null)
+                    {
+                        var cpu = new PerformanceCounter("Processor", "% Processor Time", "_Total");
+                        _ = cpu.NextValue(); // прогрів: перше значення завжди 0
+                        _cpuCounter = cpu;
+                    }
+
+                    if (_netRecvCounter == null || _netSentCounter == null)
+                    {
+                        var recv = new PerformanceCounter("Network Interface", "Bytes Received/sec", "_Total");
+                        var sent = new PerformanceCounter("Network Interface", "Bytes Sent/sec", "_Total");
+                        _ = recv.NextValue();
+                        _ = sent.NextValue();
+                        _netRecvCounter = recv;
+                        _netSentCounter = sent;
+                    }
+
+                    return true;
+                }
+                catch { return false; }
+            });
+
+            if (ok) return;
+            await Task.Delay(2000);
+        }
     }
 
     #region Фонова перевірка оновлень (GitHub Toast)
@@ -222,6 +303,14 @@ public partial class WidgetWindow : Window
             Dispatcher.Invoke(ShowWidgetUpdateToast);
         }
         catch { }
+    }
+
+    /// <summary>Фаза 5.4: відкладена стартова перевірка для --widget на логіні (N хвилин + jitter).</summary>
+    private async Task DeferredStartupUpdateCheckAsync()
+    {
+        await UpdateManager.WaitStartupJitterAsync().ConfigureAwait(false);
+        if (_resourcesDisposed) return;
+        await CheckForWidgetUpdatesAsync();
     }
 
     private void ShowWidgetUpdateToast()
@@ -325,128 +414,222 @@ public partial class WidgetWindow : Window
 
     #region Телеметрія
 
-    private void Timer_Tick(object? sender, EventArgs e)
+    private async void Timer_Tick(object? sender, EventArgs e)
     {
+        // Гонка планування: якщо режим уже тихий/прихований — жодного виклику NextValue.
+        if (AppActivityCoordinator.IsQuietMode || !AppActivityCoordinator.WidgetVisible)
+        {
+            AppActivityCoordinator.RegisterSuppressedTick(); // Фаза 9.4: діагностика пригнічень
+            return;
+        }
+
+        // Фаза 3.2: попередній тік ще виконується — пропускаємо, але лише в межах таймауту;
+        // «зависший» тік примусово розблоковується, щоб телеметрія не померла назавжди.
+        if (_isUpdatingTelemetry)
+        {
+            if (Environment.TickCount64 - _tickStartedTick < TickTimeoutMs)
+            {
+                AppActivityCoordinator.RegisterSuppressedTick(); // Фаза 9.4
+                return;
+            }
+
+            AppLogger.Log($"Віджет: тік перевищив таймаут {TickTimeoutMs} мс — примусове розблокування", "WARN");
+            AppActivityCoordinator.RegisterSuppressedTick(); // Фаза 9.4: попередній тік скасовано
+            try { _tickCts?.Cancel(); } catch { }
+            try { _tickCts?.Dispose(); } catch { }
+            _tickCts = null;
+        }
+
+        _isUpdatingTelemetry = true;
+        _tickStartedTick = Environment.TickCount64;
+        AppActivityCoordinator.RegisterTelemetryTick(); // Фаза 9.4: фактичний тік телеметрії
+
+        using var cts = new CancellationTokenSource(TickTimeoutMs);
+        _tickCts = cts;
+        var token = cts.Token;
+
         try
         {
             if (_cpuCounter != null)
             {
                 int cpuVal = (int)_cpuCounter.NextValue();
-                TxtCpuLoad.Text = $"{cpuVal}%";
+                if (cpuVal != _lastCpuVal)
+                {
+                    _lastCpuVal = cpuVal;
+                    TxtCpuLoad.Text = $"{cpuVal}%";
+                }
             }
 
             var mem = new MEMORYSTATUSEX();
             if (GlobalMemoryStatusEx(mem))
             {
-                double totalGb = Math.Round(mem.ullTotalPhys / (1024.0 * 1024 * 1024), 1);
-                double freeGb = Math.Round(mem.ullAvailPhys / (1024.0 * 1024 * 1024), 1);
-                double usedGb = Math.Round(totalGb - freeGb, 1);
                 int pct = (int)mem.dwMemoryLoad;
+                if (pct != _lastRamPct)
+                {
+                    _lastRamPct = pct;
+                    double totalGb = Math.Round(mem.ullTotalPhys / (1024.0 * 1024 * 1024), 1);
+                    double freeGb = Math.Round(mem.ullAvailPhys / (1024.0 * 1024 * 1024), 1);
+                    double usedGb = Math.Round(totalGb - freeGb, 1);
 
-                TxtRamUsage.Text = $"{usedGb:N1} / {totalGb:N0} ГБ (Вільно: {freeGb:N1} ГБ)";
-                TxtRamPercent.Text = $"{pct}%";
-                ProgressRam.Value = pct;
+                    TxtRamUsage.Text = $"{usedGb:N1} / {totalGb:N0} ГБ (Вільно: {freeGb:N1} ГБ)";
+                    TxtRamPercent.Text = $"{pct}%";
+                    ProgressRam.Value = pct;
+                }
             }
 
-            UpdateGpuTelemetry();
+            await UpdateGpuTelemetryAsync(token);
+            if (token.IsCancellationRequested) return;
 
-            var cDrive = DriveInfo.GetDrives().FirstOrDefault(d => d.Name.StartsWith("C", StringComparison.OrdinalIgnoreCase) && d.IsReady);
-            if (cDrive != null)
+            long nowTick = Environment.TickCount64;
+
+            // Фаза 3.7: дисковий рядок — не частіше ніж раз на 10 с.
+            if (_cachedDrive.IsReady && nowTick - _lastDiskRefreshTick >= 10000)
             {
-                double cFreeGb = Math.Round(cDrive.TotalFreeSpace / (1024.0 * 1024 * 1024), 0);
-                double cTotalGb = Math.Round(cDrive.TotalSize / (1024.0 * 1024 * 1024), 0);
-                TxtDiskUsage.Text = $"{cFreeGb:N0} / {cTotalGb:N0} ГБ";
+                _lastDiskRefreshTick = nowTick;
+                double cFreeGb = Math.Round(_cachedDrive.TotalFreeSpace / (1024.0 * 1024 * 1024), 0);
+                double cTotalGb = Math.Round(_cachedDrive.TotalSize / (1024.0 * 1024 * 1024), 0);
+                SetTextIfChanged(TxtDiskUsage, $"{cFreeGb:N0} / {cTotalGb:N0} ГБ");
             }
 
             UpdateNetworkTraffic();
 
-            var uptime = TimeSpan.FromMilliseconds(Environment.TickCount64);
-            TxtUptime.Text = uptime.Days > 0
-                ? $"{uptime.Days}д {uptime.Hours}г {uptime.Minutes}хв"
-                : $"{uptime.Hours}г {uptime.Minutes}хв";
+            // Фаза 3.7: uptime — не частіше ніж раз на 5 с.
+            if (nowTick - _lastUptimeRefreshTick >= 5000)
+            {
+                _lastUptimeRefreshTick = nowTick;
+                var uptime = TimeSpan.FromMilliseconds(nowTick);
+                SetTextIfChanged(TxtUptime, uptime.Days > 0
+                    ? $"{uptime.Days}д {uptime.Hours}г {uptime.Minutes}хв"
+                    : $"{uptime.Hours}г {uptime.Minutes}хв");
+            }
         }
         catch { }
-    }
-
-    private void UpdateGpuTelemetry()
-    {
-        Task.Run(() =>
+        finally
         {
-            try
+            // Розблоковуємо лише якщо це все ще «наш» тік (watchdog міг уже запустити новий).
+            if (ReferenceEquals(_tickCts, cts))
             {
-                string nvsmi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"NVIDIA Corporation\NVSMI\nvidia-smi.exe");
-                if (!File.Exists(nvsmi)) nvsmi = "nvidia-smi";
-
-                var psi = new ProcessStartInfo
-                {
-                    FileName = nvsmi,
-                    Arguments = "--query-gpu=utilization.gpu,temperature.gpu --format=csv,noheader,nounits",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using var proc = Process.Start(psi);
-                if (proc != null)
-                {
-                    string outStr = proc.StandardOutput.ReadToEnd();
-                    proc.WaitForExit(800);
-                    if (!string.IsNullOrWhiteSpace(outStr))
-                    {
-                        var parts = outStr.Split(',');
-                        if (parts.Length >= 2)
-                        {
-                            string load = parts[0].Trim();
-                            string temp = parts[1].Trim();
-                            Dispatcher.Invoke(() => TxtGpuLoad.Text = $"{load}% • {temp}°C");
-                            return;
-                        }
-                    }
-                }
+                _tickCts = null;
+                _isUpdatingTelemetry = false;
             }
-            catch { }
-
-            Dispatcher.Invoke(() => TxtGpuLoad.Text = "Активна");
-        });
+        }
     }
 
-    private void UpdateNetworkBaseline()
+    private async Task UpdateGpuTelemetryAsync(CancellationToken token)
     {
+        double? load;
         try
         {
-            var nics = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback);
-
-            _lastBytesReceived = nics.Sum(n => n.GetIPv4Statistics().BytesReceived);
-            _lastBytesSent = nics.Sum(n => n.GetIPv4Statistics().BytesSent);
-            _lastNetCheck = DateTime.Now;
+            load = await Task.Run(() => ReadGpuEngineLoadPercent(), token);
         }
-        catch { }
+        catch
+        {
+            load = null;
+        }
+
+        if (token.IsCancellationRequested) return;
+        SetTextIfChanged(TxtGpuLoad, load.HasValue ? $"{load.Value:0.#}%" : "Активна");
+    }
+
+    /// <summary>
+    /// Загальне 3D/Compute-навантаження GPU через Performance Counter "GPU Engine" (Win10+)
+    /// без запуску зовнішніх процесів. Фаза 3.4: кеш оновлюється періодично (30 с) або примусово
+    /// після зниклих інстансів — список живих лічильників не «застигає» на стартовому наборі.
+    /// </summary>
+    private double? ReadGpuEngineLoadPercent()
+    {
+        lock (_gpuSync)
+        {
+            RefreshGpuCountersLocked();
+            if (_gpuCounters == null || _gpuCounters.Count == 0) return null;
+
+            // Перше значення лічильника завжди 0 — прогріваємо його один раз після (пере)будови.
+            if (!_gpuCountersReady)
+            {
+                foreach (var c in _gpuCounters) { try { _ = c.NextValue(); } catch { } }
+                _gpuCountersReady = true;
+                return null;
+            }
+
+            double total = 0;
+            bool anyStale = false;
+            foreach (var c in _gpuCounters)
+            {
+                try { total += c.NextValue(); }
+                catch { anyStale = true; }
+            }
+
+            // Інстанс зник (процес завершився) — примусова перебудова кеша наступного разу.
+            if (anyStale)
+            {
+                _gpuLastRefreshTick = 0;
+                _gpuCountersReady = false;
+            }
+
+            return Math.Clamp(Math.Round(total, 1), 0.0, 100.0);
+        }
+    }
+
+    /// <summary>Фаза 3.4: періодична перебудова кеша GPU-лічильників (під _gpuSync).</summary>
+    private void RefreshGpuCountersLocked()
+    {
+        long now = Environment.TickCount64;
+        bool due = _gpuCounters == null || _gpuCounters.Count == 0 ||
+                   (now - _gpuLastRefreshTick) > GpuRefreshIntervalMs;
+
+        if (!due) return;
+
+        _gpuLastRefreshTick = now;
+        RebuildGpuCountersLocked();
+    }
+
+    /// <summary>Перелік render-інстансів змінився → звільняємо старі лічильники й створюємо нові.</summary>
+    private void RebuildGpuCountersLocked()
+    {
+        string[] currentInstances;
+        try
+        {
+            var category = new PerformanceCounterCategory("GPU Engine");
+            currentInstances = category.GetInstanceNames()
+                .Where(static n => n.IndexOf("engtype_3D", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                   n.IndexOf("engtype_Compute", StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderBy(static n => n, StringComparer.OrdinalIgnoreCase)
+                .Take(GpuCounterLimit)
+                .ToArray();
+        }
+        catch { currentInstances = Array.Empty<string>(); }
+
+        if (_gpuCounters != null && currentInstances.SequenceEqual(_gpuInstances, StringComparer.OrdinalIgnoreCase))
+            return; // Набір не змінився — існуючі лічильники лишаються валідними.
+
+        if (_gpuCounters != null)
+        {
+            foreach (var old in _gpuCounters) { try { old.Dispose(); } catch { } }
+        }
+
+        var rebuilt = new List<PerformanceCounter>(currentInstances.Length);
+        foreach (string instance in currentInstances)
+        {
+            try { rebuilt.Add(new PerformanceCounter("GPU Engine", "Utilization Percentage", instance, true)); }
+            catch { }
+        }
+
+        _gpuCounters = rebuilt;
+        _gpuInstances = currentInstances;
+        _gpuCountersReady = false; // новий набір — знову прогріваємо
     }
 
     private void UpdateNetworkTraffic()
     {
         try
         {
-            var nics = NetworkInterface.GetAllNetworkInterfaces()
-                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback).ToList();
+            // Глобальні лічильники-швидкості рівня ядра ("_Total") — без ітерації по інтерфейсах.
+            if (_netRecvCounter is null || _netSentCounter is null) return;
 
-            long curRecv = nics.Sum(n => n.GetIPv4Statistics().BytesReceived);
-            long curSent = nics.Sum(n => n.GetIPv4Statistics().BytesSent);
-            var now = DateTime.Now;
-            double seconds = (now - _lastNetCheck).TotalSeconds;
+            double downSpeed = _netRecvCounter.NextValue();
+            double upSpeed = _netSentCounter.NextValue();
 
-            if (seconds > 0.5)
-            {
-                double downSpeed = (curRecv - _lastBytesReceived) / seconds;
-                double upSpeed = (curSent - _lastBytesSent) / seconds;
-
-                _lastBytesReceived = curRecv;
-                _lastBytesSent = curSent;
-                _lastNetCheck = now;
-
-                TxtNetSpeed.Text = $"↓ {FormatSpeed(downSpeed)}  ↑ {FormatSpeed(upSpeed)}";
-            }
+            SetTextIfChanged(TxtNetSpeed, $"↓ {FormatSpeed(downSpeed)}  ↑ {FormatSpeed(upSpeed)}");
         }
         catch { }
     }
@@ -456,6 +639,12 @@ public partial class WidgetWindow : Window
         if (bytesPerSec >= 1024 * 1024) return $"{bytesPerSec / (1024.0 * 1024.0):N1} MB/s";
         if (bytesPerSec >= 1024) return $"{bytesPerSec / 1024.0:N0} KB/s";
         return $"{bytesPerSec:N0} B/s";
+    }
+
+    /// <summary>Фаза 3.7: оновлення тексту лише коли рядок реально змінився (без зайвих інвалідацій).</summary>
+    private static void SetTextIfChanged(TextBlock target, string text)
+    {
+        if (!string.Equals(target.Text, text, StringComparison.Ordinal)) target.Text = text;
     }
 
     #endregion
@@ -468,8 +657,7 @@ public partial class WidgetWindow : Window
         _currentTheme = theme.Key;
         SaveStateToRegistry();
 
-        _rgbTimer.Stop();
-        _pulseTimer.Stop();
+        StopWidgetAnimations();
 
         MainWidgetBorder.Background = HexBrush(theme.Background ?? "#F00B0E17");
         MainWidgetBorder.BorderThickness = new Thickness(1.8);
@@ -484,8 +672,127 @@ public partial class WidgetWindow : Window
         MainGlow.Opacity = theme.GlowOpacity;
         LogoGlow.Opacity = theme.LogoGlowOpacity;
 
-        if (theme.Animation == "Rainbow") _rgbTimer.Start();
-        else if (theme.Animation == "Pulse") _pulseTimer.Start();
+        // Анімації — лише коли віджет видимий і не в quiet-режимі (Фаза 2.3).
+        StartThemeAnimationIfAllowed();
+    }
+
+    private void StopWidgetAnimations()
+    {
+        try { if (FindResource("RainbowStoryboard") is Storyboard rainbow) rainbow.Stop(this); } catch { }
+        try { if (FindResource("PulseStoryboard") is Storyboard pulse) pulse.Stop(this); } catch { }
+    }
+
+    /// <summary>
+    /// Фаза 3.1: Show/Hide з трею або кнопки закриття. Приховання зупиняє таймер і анімації
+    /// безпосередньо; показ одразу робить разовий рефреш і рестарт за режимом координатора.
+    /// </summary>
+    private void OnWidgetVisibilityChanged(object? sender, DependencyPropertyChangedEventArgs e)
+    {
+        bool visible = IsVisible;
+
+        if (!visible)
+        {
+            _timer.Stop();
+            StopWidgetAnimations();
+        }
+
+        AppActivityCoordinator.SetWidgetVisible(visible);
+
+        if (visible)
+        {
+            ApplyActivityState();
+            Timer_Tick(null, EventArgs.Empty); // разовий рефреш, не чекаючи тіку таймера
+        }
+    }
+
+    /// <summary>
+    /// Реакція на зміну режиму координатора активності (Фаза 2.3).
+    /// Викликається з UI-диспетчера; CheckAccess — додатковий захист.
+    /// </summary>
+    private void OnActivityModeChanged()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnActivityModeChanged));
+            return;
+        }
+
+        ApplyActivityState();
+    }
+
+    /// <summary>
+    /// Застосовує поточний режим: у quiet-режимі/прихованому стані зупиняє телеметрію
+    /// та постійні анімації; у видимому звичайному — запускає з інтервалом координатора.
+    /// </summary>
+    private void ApplyActivityState()
+    {
+        var interval = AppActivityCoordinator.TelemetryInterval;
+        bool active = AppActivityCoordinator.WidgetVisible
+                      && !AppActivityCoordinator.IsQuietMode
+                      && interval > TimeSpan.Zero;
+
+        StopWidgetAnimations();
+
+        if (!active)
+        {
+            _timer.Stop();
+            return;
+        }
+
+        _timer.Interval = interval;
+        _timer.Start();
+        StartThemeAnimationIfAllowed();
+    }
+
+    /// <summary>Сторіборд теми віджета запускається лише у видимому звичайному режимі.</summary>
+    private void StartThemeAnimationIfAllowed()
+    {
+        if (!AppActivityCoordinator.WidgetVisible || AppActivityCoordinator.IsQuietMode) return;
+
+        var theme = ThemeEngine.GetWidgetTheme(_currentTheme);
+        string? animation = theme?.Animation;
+
+        // Фаза 3.5: «зменшені ефекти» — без постійного пульсу (Rainbow лишається з нижчим BlurRadius).
+        if (ReduceEffects && animation == "Pulse") return;
+
+        if (animation == "Rainbow") StartWidgetAnimation("RainbowStoryboard");
+        else if (animation == "Pulse") StartWidgetAnimation("PulseStoryboard");
+    }
+
+    private void StartWidgetAnimation(string key)
+    {
+        if (FindResource(key) is Storyboard storyboard) storyboard.Begin(this, true);
+    }
+
+    /// <summary>
+    /// Фаза 3.5: застосовує «зменшені ефекти» (нижчий BlurRadius тіні, без пульсу) для слабких/
+    /// інтегрованих GPU або коли користувач увімкнув опцію в налаштуваннях віджета.
+    /// </summary>
+    private void ApplyEffectsProfile()
+    {
+        try { MainGlow.BlurRadius = ReduceEffects ? 8 : 20; } catch { }
+        try { LogoGlow.BlurRadius = ReduceEffects ? 6 : 18; } catch { }
+
+        // Перезапуск анімацій за новим профілем (у quiet/прихованому стані нічого не стартує).
+        StopWidgetAnimations();
+        ApplyActivityState();
+    }
+
+    /// <summary>Фаза 3.5: евристика слабкого/інтегрованого GPU за назвою з кешу DiagnosticEngine.</summary>
+    private static bool IsLowEndGpuName(string? gpuName)
+    {
+        if (string.IsNullOrWhiteSpace(gpuName)) return false;
+        string n = gpuName.ToLowerInvariant();
+
+        if (n.Contains("microsoft basic")) return true;
+        if (n.Contains("intel") &&
+            (n.Contains("hd graphics") || n.Contains("uhd") || n.Contains("iris") || n.Contains("gma")))
+            return true;
+        if (n.Contains("radeon graphics") || n.Contains("radeon(tm) graphics") ||
+            n.Contains("vega 8") || n.Contains("vega 7"))
+            return true;
+
+        return false;
     }
 
     private void BuildThemeChips()
@@ -505,26 +812,6 @@ public partial class WidgetWindow : Window
         }
     }
 
-    private static Color HsvToRgb(double h, double s, double v)
-    {
-        int hi = (int)Math.Floor(h / 60) % 6;
-        double f = (h / 60) - Math.Floor(h / 60);
-        double p = v * (1 - s);
-        double q = v * (1 - f * s);
-        double t = v * (1 - (1 - f) * s);
-        double r = 0, g = 0, b = 0;
-        switch (hi)
-        {
-            case 0: r = v; g = t; b = p; break;
-            case 1: r = q; g = v; b = p; break;
-            case 2: r = p; g = v; b = t; break;
-            case 3: r = p; g = q; b = v; break;
-            case 4: r = t; g = p; b = v; break;
-            case 5: r = v; g = p; b = q; break;
-        }
-        return Color.FromRgb((byte)(r * 255), (byte)(g * 255), (byte)(b * 255));
-    }
-
     private void SaveStateToRegistry()
     {
         try
@@ -536,6 +823,7 @@ public partial class WidgetWindow : Window
             key?.SetValue("Width", (int)Width);
             key?.SetValue("Height", (int)Height);
             key?.SetValue("Topmost", Topmost ? 1 : 0);
+            key?.SetValue("ReduceEffects", _reduceEffectsUser ? 1 : 0);
         }
         catch { }
     }
@@ -559,12 +847,14 @@ public partial class WidgetWindow : Window
                 if (h >= 200) Height = h;
 
                 Topmost = (int)(key.GetValue("Topmost") ?? 1) == 1;
+                _reduceEffectsUser = (int)(key.GetValue("ReduceEffects") ?? 0) == 1;
             }
         }
         catch { }
 
         ChkTopMost.IsChecked = Topmost;
         ChkAutostart.IsChecked = IsAutostartEnabled();
+        ChkReduceEffects.IsChecked = _reduceEffectsUser;
         ApplyTheme(_currentTheme);
     }
 
@@ -695,6 +985,14 @@ public partial class WidgetWindow : Window
         SaveStateToRegistry();
     }
 
+    private void ChkReduceEffects_Click(object sender, RoutedEventArgs e)
+    {
+        // Фаза 3.5: ручний вибір зменшених ефектів; автовизначення слабкого GPU лишається активним.
+        _reduceEffectsUser = ChkReduceEffects.IsChecked == true;
+        SaveStateToRegistry();
+        ApplyEffectsProfile();
+    }
+
     #endregion
 
     #region Кнопки дій
@@ -711,31 +1009,27 @@ public partial class WidgetWindow : Window
 
     private async void BtnFlushRam_Click(object sender, RoutedEventArgs e)
     {
-        BtnFlushRam.Content = "⏳...";
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-
-        await Task.Run(() =>
+        // Фаза 3.6: під час гри/Game Mode блокуючий GC.Collect недопустимий (stutter) — дія відкладається.
+        if (AppActivityCoordinator.IsQuietMode)
         {
-            foreach (var proc in Process.GetProcesses())
-            {
-                try
-                {
-                    if (!proc.HasExited && proc.Id > 4 && !proc.ProcessName.Equals("System", StringComparison.OrdinalIgnoreCase))
-                    {
-                        EmptyWorkingSet(proc.Handle);
-                    }
-                }
-                catch { }
-                finally
-                {
-                    proc.Dispose();
-                }
-            }
-        });
+            BtnFlushRam.Content = "⏳ Після гри";
+            var tq = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1200) };
+            tq.Tick += (s, ev) => { tq.Stop(); BtnFlushRam.Content = "🧹 Очистити ОЗП"; };
+            tq.Start();
+            return;
+        }
 
-        BtnFlushRam.Content = "✓ Звільнено";
-        var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        BtnFlushRam.Content = "⏳...";
+
+        // Фаза 6: standalone-очистка Standby RAM (EmptyWorkingSet усіх процесів +
+        // NtSetSystemInformation), незалежна від GameModeEngine; показуємо фактично звільнені МБ.
+        long freedBytes = 0;
+        try { freedBytes = await MonitorEngine.PurgeStandbyMemoryAsync(); } catch { }
+
+        double freedMb = freedBytes / (1024.0 * 1024.0);
+        BtnFlushRam.Content = freedMb >= 1 ? $"✓ Звільнено {freedMb:N0} МБ" : "✓ ОЗП очищено";
+
+        var t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1600) };
         t.Tick += (s, ev) => { t.Stop(); BtnFlushRam.Content = "🧹 Очистити ОЗП"; };
         t.Start();
     }
@@ -784,82 +1078,6 @@ public partial class WidgetWindow : Window
             BtnShutdown.Content = "⏳ Вимикання...";
             Process.Start(new ProcessStartInfo { FileName = "shutdown.exe", Arguments = "/s /f /t 0", CreateNoWindow = true, UseShellExecute = false });
         }
-    }
-
-    private async void PowerSegment_Checked(object sender, RoutedEventArgs e)
-    {
-        if (_syncingPowerUi) return;
-        if (sender is not System.Windows.Controls.RadioButton rb || rb.Tag is not string tag) return;
-        if (!Enum.TryParse(tag, out SystemPowerMode mode)) return;
-        if (mode == _widgetPowerMode) return;
-
-        _widgetPowerMode = mode;
-        PowerSegmentPanel.IsEnabled = false;
-        try
-        {
-            // Перед відновленням зліпка переконуємось, що він існує (інакше Std нічого не відновить).
-            if (mode == SystemPowerMode.OriginalSnapshot)
-                await PowerEngine.CaptureInitialSnapshotIfNeededAsync();
-
-            await PowerEngine.ApplyProfileAsync(mode);
-        }
-        finally
-        {
-            PowerSegmentPanel.IsEnabled = true;
-        }
-    }
-
-    private void UpdatePowerCycleControl()
-    {
-        _syncingPowerUi = true;
-        try
-        {
-            RbEco.IsChecked = _widgetPowerMode == SystemPowerMode.EcoPowerSaver;
-            RbStd.IsChecked = _widgetPowerMode == SystemPowerMode.OriginalSnapshot;
-            RbTurbo.IsChecked = _widgetPowerMode == SystemPowerMode.UltraPerformance;
-        }
-        finally
-        {
-            _syncingPowerUi = false;
-        }
-    }
-
-    private async void BtnWidgetGameMode_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleButton? btn = sender as ToggleButton;
-        if (btn is not null)
-            btn.IsEnabled = false;
-
-        try
-        {
-            await GameModeEngine.ToggleGameModeAsync();
-        }
-        finally
-        {
-            RefreshWidgetGameModeToggle();
-            if (btn is not null)
-                btn.IsEnabled = true;
-        }
-    }
-
-    private void RefreshWidgetGameModeToggle()
-    {
-        bool active = GameModeEngine.IsGameModeActive;
-        BtnWidgetGameMode.IsChecked = active;
-        BtnWidgetGameMode.ToolTip = active
-            ? "Game Mode увімкнено — натисніть, щоб вимкнути"
-            : "Game Mode вимкнено — натисніть, щоб увімкнути";
-    }
-
-    private void OnGameModeStateChanged(bool isActive)
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.Invoke(() => OnGameModeStateChanged(isActive));
-            return;
-        }
-
-        RefreshWidgetGameModeToggle();
     }
 
     private static SolidColorBrush HexBrush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;

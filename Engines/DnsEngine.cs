@@ -277,6 +277,15 @@ public static class DnsEngine
         },
         new()
         {
+            Name = "NextDNS (Anycast)",
+            Category = "Блокування реклами",
+            Primary = "45.90.28.0",
+            Secondary = "45.90.30.0",
+            PingHost = "45.90.28.0",
+            Description = "Хмарний резолвер NextDNS із блокуванням реклами та налаштуванням профілів."
+        },
+        new()
+        {
             Name = "Mullvad DNS (AdBlock + Malware)",
             Category = "Блокування реклами",
             Primary = "194.242.2.3",
@@ -537,6 +546,7 @@ public static class DnsEngine
         ["UltraDNS (Neustar 1)"] = "ultradns",
         ["AliDNS Global"] = "alidns",
         ["AdGuard DNS (Блокування реклами)"] = "adguard",
+        ["NextDNS (Anycast)"] = "nextdns",
         ["Mullvad DNS (AdBlock + Malware)"] = "mullvad_adblock",
         ["Control D (Ad & Tracker Block)"] = "controld_ad",
         ["Mullvad Extended (Ad + Social)"] = "mullvad_extended",
@@ -687,6 +697,11 @@ public static class DnsEngine
 
     #region Замір Ping та Сортування
 
+    // Фаза 6: 3 швидкі проби на провайдера (ICMP + TCP-fallback 53/443) — стабільна метрика без сплесків.
+    private const int PingProbesPerHost = 3;
+    private const int PingProbeTimeoutMs = 400;
+    private const int TcpProbeTimeoutMs = 800;
+
     public static async Task MeasureAllPingsAsync()
     {
         var hosts = Catalog.Select(c => c.PingHost).Distinct().ToList();
@@ -694,16 +709,7 @@ public static class DnsEngine
 
         var tasks = hosts.Select(async host =>
         {
-            try
-            {
-                using var pinger = new Ping();
-                var reply = await pinger.SendPingAsync(host, 500);
-                results[host] = (reply.Status == IPStatus.Success) ? (int)reply.RoundtripTime : 999;
-            }
-            catch
-            {
-                results[host] = 999;
-            }
+            results[host] = await MeasureHostLatencyAsync(host).ConfigureAwait(false);
         });
 
         await Task.WhenAll(tasks);
@@ -721,6 +727,71 @@ public static class DnsEngine
 
         // Каталог НЕ сортуємо глобально — фільтр/сортування виконує GetFilteredAndSortedPresets
         // (інакше інші вкладки отримали б пересортований список).
+    }
+
+    /// <summary>
+    /// Фаза 6: 3 швидкі ICMP-проби на хост (агрегуємо середнє з відсіканням сплесків).
+    /// Якщо ICMP фільтрується — TCP-fallback на порт 53, потім 443. Повертає мс або 999 (таймаут).
+    /// </summary>
+    private static async Task<int> MeasureHostLatencyAsync(string host)
+    {
+        var samples = new List<long>(PingProbesPerHost);
+        for (int i = 0; i < PingProbesPerHost; i++)
+        {
+            long ms = await ProbeIcmpOnceAsync(host).ConfigureAwait(false);
+            if (ms >= 0) samples.Add(ms);
+        }
+
+        if (samples.Count > 0) return AggregateLatency(samples);
+
+        // ICMP заблоковано провайдером/фаєрволом — TCP-fallback.
+        int tcp = await ProbeTcpOnceAsync(host, 53).ConfigureAwait(false);
+        if (tcp >= 0) return tcp;
+        tcp = await ProbeTcpOnceAsync(host, 443).ConfigureAwait(false);
+        return tcp >= 0 ? tcp : 999;
+    }
+
+    private static async Task<long> ProbeIcmpOnceAsync(string host)
+    {
+        try
+        {
+            using var pinger = new Ping();
+            var reply = await pinger.SendPingAsync(host, PingProbeTimeoutMs).ConfigureAwait(false);
+            return reply.Status == IPStatus.Success ? reply.RoundtripTime : -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    /// <summary>TCP-з'єднання як метрика затримки (мс) — фолбек, коли ICMP недоступний.</summary>
+    private static async Task<int> ProbeTcpOnceAsync(string host, int port)
+    {
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            using var client = new System.Net.Sockets.TcpClient();
+            var connectTask = client.ConnectAsync(host, port);
+            if (await Task.WhenAny(connectTask, Task.Delay(TcpProbeTimeoutMs)).ConfigureAwait(false) != connectTask)
+                return -1;
+
+            await connectTask.ConfigureAwait(false);
+            return client.Connected ? (int)sw.ElapsedMilliseconds : -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    /// <summary>Середнє успішних проб із відсіканням аномальних сплесків (> 3× мінімуму), щоб результат не стрибав.</summary>
+    private static int AggregateLatency(List<long> samples)
+    {
+        long min = samples.Min();
+        var clean = samples.Where(s => s <= min * 3).ToList();
+        if (clean.Count == 0) clean.Add(min);
+        return (int)Math.Round(clean.Average());
     }
 
     public static DnsPreset? GetFastestPreset()
@@ -850,7 +921,15 @@ public static class DnsEngine
 
             FlushDnsCache();
             DetectActiveDns();
-            AppLogger.Log(string.IsNullOrWhiteSpace(primary) || primary.Equals("DHCP", StringComparison.OrdinalIgnoreCase)
+
+            bool isDhcpReset = string.IsNullOrWhiteSpace(primary) || primary.Equals("DHCP", StringComparison.OrdinalIgnoreCase);
+            if (!isDhcpReset)
+            {
+                // Фаза 6: вмикаємо шифрування DoH для провайдерів із нативною підтримкою Windows 11.
+                TryEnableDoh(primary.Trim());
+            }
+
+            AppLogger.Log(isDhcpReset
                 ? "DNS налаштування скинуто до автоматичних (DHCP)"
                 : $"Активовано DNS-сервер: {primary} / {secondary}", "SUCCESS");
             return allOk;
@@ -870,6 +949,67 @@ public static class DnsEngine
             RunCmd("nbtstat -R");
         }
         catch { }
+    }
+
+    /// <summary>Фаза 6: асинхронне очищення DNS-кешу (ipconfig /flushdns) для кнопки в DnsView.</summary>
+    public static Task<bool> FlushDnsCacheAsync() => Task.Run(() =>
+    {
+        try
+        {
+            bool ok = RunCmd("ipconfig /flushdns");
+            RunCmd("nbtstat -R");
+            AppLogger.Log(ok ? "DNS-кеш очищено (ipconfig /flushdns)" : "Не вдалося очистити DNS-кеш", ok ? "SUCCESS" : "WARN");
+            return ok;
+        }
+        catch
+        {
+            return false;
+        }
+    });
+
+    /// <summary>Фаза 6: шаблони DoH (DNS-over-HTTPS) для провайдерів із нативною підтримкою Windows 11.</summary>
+    private static readonly Dictionary<string, string> DohTemplates = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["1.1.1.1"] = "https://cloudflare-dns.com/dns-query",
+        ["1.0.0.1"] = "https://cloudflare-dns.com/dns-query",
+        ["1.1.1.2"] = "https://security.cloudflare-dns.com/dns-query",
+        ["1.0.0.2"] = "https://security.cloudflare-dns.com/dns-query",
+        ["1.1.1.3"] = "https://family.cloudflare-dns.com/dns-query",
+        ["1.0.0.3"] = "https://family.cloudflare-dns.com/dns-query",
+        ["8.8.8.8"] = "https://dns.google/dns-query",
+        ["8.8.4.4"] = "https://dns.google/dns-query",
+        ["9.9.9.9"] = "https://dns.quad9.net/dns-query",
+        ["149.112.112.112"] = "https://dns.quad9.net/dns-query",
+        ["94.140.14.14"] = "https://dns.adguard-dns.com/dns-query",
+        ["94.140.15.15"] = "https://dns.adguard-dns.com/dns-query"
+    };
+
+    /// <summary>
+    /// Фаза 6: вмикає автоматичне шифрування DoH для відомого провайдера.
+    /// Windows 11 (build 22000+) — через `netsh dns add encryption`; на старіших збірках помилки ігноруються.
+    /// </summary>
+    public static bool TryEnableDoh(string primary)
+    {
+        if (string.IsNullOrWhiteSpace(primary)) return false;
+        if (!DohTemplates.TryGetValue(primary.Trim(), out var template)) return false;
+
+        try
+        {
+            // Windows 10 не має нативного DoH у DNS-клієнті — тихо виходимо.
+            if (Environment.OSVersion.Version.Build < 22000) return false;
+
+            bool ok = RunCmd(
+                $"netsh dns add encryption server={primary.Trim()} dohtemplate={template} autoupgrade=yes udpfallback=no");
+
+            AppLogger.Log(ok
+                ? $"DoH увімкнено для {primary}"
+                : $"DoH недоступний для {primary} (старіша збірка/політика)", ok ? "SUCCESS" : "WARN");
+            return ok;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static List<NetworkInterface> GetPhysicalActiveAdapters()

@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -57,6 +58,7 @@ public class ToolItem : INotifyPropertyChanged, IWeakEventListener
         OnPropertyChanged(nameof(StatusText));
         OnPropertyChanged(nameof(SiteButtonText));
         OnPropertyChanged(nameof(OpenButtonText));
+        OnPropertyChanged(nameof(ShortcutButtonText));
     }
 
     public string Id { get; set; } = string.Empty;
@@ -65,6 +67,8 @@ public class ToolItem : INotifyPropertyChanged, IWeakEventListener
     public string Description { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string WingetId { get; set; } = string.Empty;
+    /// <summary>Прямий офіційний лінк на інсталятор — резервний шлях, якщо winget недоступний.</summary>
+    public string DownloadUrl { get; set; } = string.Empty;
     public string SpecialAction { get; set; } = string.Empty;
     public string ExeCheckName { get; set; } = string.Empty;
 
@@ -81,6 +85,7 @@ public class ToolItem : INotifyPropertyChanged, IWeakEventListener
                 OnPropertyChanged(nameof(StatusText));
                 OnPropertyChanged(nameof(StatusColor));
                 OnPropertyChanged(nameof(IsOpenVisible));
+                OnPropertyChanged(nameof(IsShortcutVisible));
             }
         }
     }
@@ -130,8 +135,14 @@ public class ToolItem : INotifyPropertyChanged, IWeakEventListener
 
     public string OpenButtonText => LocalizationManager.Instance["Tools.BtnOpen"];
 
+    /// <summary>Підпис кнопки створення ярлика на Робочому столі.</summary>
+    public string ShortcutButtonText => LocalizationManager.Instance["Tools.BtnShortcut"];
+
     /// <summary>Кнопка «Відкрити» показується лише для встановлених програм з відомим шляхом до EXE.</summary>
     public bool IsOpenVisible => IsInstalled && !string.IsNullOrWhiteSpace(ExePath);
+
+    /// <summary>Кнопка «Ярлик» показується для будь-якої встановленої утиліти.</summary>
+    public bool IsShortcutVisible => IsInstalled;
 
     private string _exePath = string.Empty;
     public string ExePath
@@ -167,6 +178,7 @@ public static class ToolsEngine
             Description = "Глибокий моніторинг датчиків: напруги, температури VRM, споживання (PPT/TDC/EDC), троттлінг та таймінги.",
             Url = "https://www.hwinfo.com/download/",
             WingetId = "REALiX.HWiNFO",
+            DownloadUrl = "https://www.hwinfo.com/download/",
             ExeCheckName = "HWiNFO64.exe"
         },
         new()
@@ -177,6 +189,7 @@ public static class ToolsEngine
             Description = "Детальні специфікації CPU, степінг ядра, ревізія материнської плати, SPD та реальна частота пам'яті.",
             Url = "https://www.cpuid.com/softwares/cpu-z.html",
             WingetId = "CPUID.CPU-Z",
+            DownloadUrl = "https://www.cpuid.com/softwares/cpu-z.html",
             ExeCheckName = "cpuz.exe"
         },
         new()
@@ -187,6 +200,7 @@ public static class ToolsEngine
             Description = "Повна діагностика відеокарт: версія vBIOS, лінії PCIe, напруги, Hotspot, Memory Temp та тип чіпів VRAM.",
             Url = "https://www.techpowerup.com/download/techpowerup-gpu-z/",
             WingetId = "TechPowerUp.GPU-Z",
+            DownloadUrl = "https://www.techpowerup.com/download/techpowerup-gpu-z/",
             ExeCheckName = "GPU-Z.exe"
         },
         new()
@@ -207,6 +221,7 @@ public static class ToolsEngine
             Description = "Найкраще відкрите керування вентиляторами: створення змішаних температурних кривих (CPU+GPU) та безшумний режим.",
             Url = "https://getfancontrol.com/",
             WingetId = "Rem0o.FanControl",
+            DownloadUrl = "https://getfancontrol.com/",
             ExeCheckName = "FanControl.exe"
         },
         new()
@@ -217,6 +232,7 @@ public static class ToolsEngine
             Description = "Розгін та андервольтинг відеокарт NVIDIA/AMD через криву вольт-частоти (Curve Editor) та екранний оверлей RTSS.",
             Url = "https://www.msi.com/Landing/afterburner/graphics-cards",
             WingetId = "Guru3D.Afterburner",
+            DownloadUrl = "https://www.msi.com/Landing/afterburner/graphics-cards",
             ExeCheckName = "MSIAfterburner.exe"
         },
         new()
@@ -367,6 +383,7 @@ public static class ToolsEngine
             Description = "Платформа голосового зв'язку, чатів та трансляцій для геймерів із мінімальною затримкою передачі звуку.",
             Url = "https://discord.com/",
             WingetId = "Discord.Discord",
+            DownloadUrl = "https://discord.com/api/downloads/distributions/app/installers/latest?channel=stable&platform=win&arch=x64",
             ExeCheckName = "Discord.exe"
         },
         new()
@@ -407,6 +424,7 @@ public static class ToolsEngine
             Description = "Моніторинг здоров'я SSD/HDD, параметрів S.M.A.R.T., поточної температури контролера та зносу (TBW).",
             Url = "https://crystalmark.info/en/software/crystaldiskinfo/",
             WingetId = "CrystalDewWorld.CrystalDiskInfo",
+            DownloadUrl = "https://crystalmark.info/en/download/",
             ExeCheckName = "DiskInfo64.exe"
         },
         new()
@@ -417,6 +435,7 @@ public static class ToolsEngine
             Description = "Тестування швидкості лінійного та випадкового читання/запису (RND4K) для швидкісних NVMe SSD.",
             Url = "https://crystalmark.info/en/software/crystaldiskmark/",
             WingetId = "CrystalDewWorld.CrystalDiskMark",
+            DownloadUrl = "https://crystalmark.info/en/download/",
             ExeCheckName = "DiskMark64.exe"
         },
         new()
@@ -427,6 +446,7 @@ public static class ToolsEngine
             Description = "Надшвидкий аналізатор зайнятого дискового простору через пряме читання таблиці MFT NTFS за 1 секунду.",
             Url = "https://diskanalyzer.com/download",
             WingetId = "AntibodySoftware.WizTree",
+            DownloadUrl = "https://diskanalyzer.com/download",
             ExeCheckName = "WizTree64.exe"
         },
         new()
@@ -437,6 +457,7 @@ public static class ToolsEngine
             Description = "Миттєвий індексатор та пошуковик файлів на всіх накопичувачах за мілісекунди без навантаження на CPU.",
             Url = "https://www.voidtools.com/",
             WingetId = "voidtools.Everything",
+            DownloadUrl = "https://www.voidtools.com/downloads/",
             ExeCheckName = "Everything.exe"
         },
         new()
@@ -467,6 +488,7 @@ public static class ToolsEngine
             Description = "Швидкий відкритий архіватор із високим рівнем стиснення 7z, шифруванням AES-256 та розпакуванням усіх форматів.",
             Url = "https://www.7-zip.org/",
             WingetId = "7zip.7zip",
+            DownloadUrl = "https://www.7-zip.org/download.html",
             ExeCheckName = "7zFM.exe"
         },
         new()
@@ -517,6 +539,7 @@ public static class ToolsEngine
             Description = "Повне очищення системи від залишків відеодрайверів NVIDIA, AMD та Intel у безпечному режимі.",
             Url = "https://www.wagnardsoft.com/display-driver-uninstaller-ddu-",
             WingetId = "Wagnardsoft.DisplayDriverUninstaller",
+            DownloadUrl = "https://www.wagnardsoft.com/display-driver-uninstaller-ddu-",
             ExeCheckName = "Display Driver Uninstaller.exe"
         },
         new()
@@ -527,6 +550,7 @@ public static class ToolsEngine
             Description = "Кастомізація інсталятора NVIDIA: видалення телеметрії, Shield, звукових служб та фонових трекерів.",
             Url = "https://www.techpowerup.com/download/techpowerup-nvcleanstall/",
             WingetId = "TechPowerUp.NVCleanstall",
+            DownloadUrl = "https://www.techpowerup.com/download/techpowerup-nvcleanstall/",
             ExeCheckName = "NVCleanstall.exe"
         },
         new()
@@ -627,6 +651,7 @@ public static class ToolsEngine
             Description = "Універсальний відеоплеєр із вбудованими кодеками, підтримкою апаратного декодування GPU та всіх форматів.",
             Url = "https://www.videolan.org/vlc/",
             WingetId = "VideoLAN.VLC",
+            DownloadUrl = "https://www.videolan.org/vlc/download-windows.html",
             ExeCheckName = "vlc.exe"
         },
         new()
@@ -657,6 +682,7 @@ public static class ToolsEngine
             Description = "Офіційний клієнт найбільшої ігрової платформи Steam для завантаження, оновлення та запуску ігор.",
             Url = "https://store.steampowered.com/about/",
             WingetId = "Valve.Steam",
+            DownloadUrl = "https://cdn.akamai.steamstatic.com/client/installer/SteamSetup.exe",
             ExeCheckName = "steam.exe"
         },
         new()
@@ -807,11 +833,17 @@ public static class ToolsEngine
     {
         await Task.Run(() =>
         {
-            var entries = new Dictionary<string, UninstallEntry>(StringComparer.OrdinalIgnoreCase);
+            // 1) Одноразовий знімок усіх трьох гілок Uninstall у пам'ять (без повторних O(N*M) відкриттів реєстру).
+            var snapshot = new List<UninstallEntry>();
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", entries);
-            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", entries);
-            ScanUninstallRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Uninstall", entries);
+            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", snapshot, seenNames);
+            ScanUninstallRegistry(Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", snapshot, seenNames);
+            ScanUninstallRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Uninstall", snapshot, seenNames);
+
+            // 2) Перевірка переносимих збірок ЛИШЕ у відомих фіксованих каталогах (жодних повних сканів диска).
+            string wingetPackages = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WinGet", "Packages");
+            string portableRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Tools");
 
             foreach (var tool in Catalog)
             {
@@ -825,33 +857,89 @@ public static class ToolsEngine
                 bool found = false;
                 string exePath = string.Empty;
 
-                foreach (var kvp in entries)
+                // 2a) Реєстр: підрядковий матч по DisplayName з урахуванням аліасів.
+                foreach (var entry in snapshot)
                 {
-                    string name = kvp.Key;
-                    if (name.Contains(tool.Name, StringComparison.OrdinalIgnoreCase) ||
-                        (!string.IsNullOrEmpty(tool.Id) && name.Contains(tool.Id, StringComparison.OrdinalIgnoreCase)))
+                    if (MatchesTool(entry.DisplayName, tool))
                     {
                         found = true;
-                        exePath = ResolveExeFromRegistryEntry(kvp.Value, tool);
+                        exePath = ResolveExeFromRegistryEntry(entry, tool);
                         break;
                     }
                 }
 
-                if (!found && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
+                // 2b) Сталі папки інсталяції + WinGet Packages + portable Tools/ (лише ці каталоги).
+                if (string.IsNullOrEmpty(exePath) && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
                 {
                     exePath = FindExeInKnownFolders(tool);
-                    found = !string.IsNullOrEmpty(exePath);
+                    if (string.IsNullOrEmpty(exePath))
+                        exePath = FindExeInWingetPackages(wingetPackages, tool);
+                    if (string.IsNullOrEmpty(exePath))
+                        exePath = FindExeInFlatFolder(portableRoot, tool);
                 }
 
-                if (found && string.IsNullOrEmpty(exePath) && !string.IsNullOrWhiteSpace(tool.ExeCheckName))
-                {
-                    exePath = ResolveToolExePath(tool);
-                }
-
+                found |= !string.IsNullOrEmpty(exePath);
                 tool.IsInstalled = found;
                 tool.ExePath = exePath;
             }
         });
+    }
+
+    /// <summary>Додаткові евристики пошуку в реєстрі для утиліт зі складеними назвами.</summary>
+    private static readonly Dictionary<string, string[]> DetectionAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["zentimings"] = new[] { "zentimings" },
+        ["afterburner"] = new[] { "afterburner", "rivatuner", "rtss" },
+        ["ryzenmaster"] = new[] { "ryzen master" },
+        ["tm5"] = new[] { "testmem5", "testmem" },
+        ["cinebench"] = new[] { "cinebench" },
+        ["geekbench"] = new[] { "geekbench" },
+        ["cru"] = new[] { "custom resolution utility" },
+        ["eek"] = new[] { "emsisoft emergency kit", "emergency kit" },
+        ["hitmanpro"] = new[] { "hitmanpro" },
+        ["nanazip"] = new[] { "nanazip" },
+        ["systeminformer"] = new[] { "system informer", "process hacker" },
+        ["rustdesk"] = new[] { "rustdesk" },
+        ["eaapp"] = new[] { "ea app", "eadesktop", "electronic arts" },
+        ["javaruntime"] = new[] { "temurin", "jre" },
+        ["presentmon"] = new[] { "presentmon" },
+        ["adwcleaner"] = new[] { "adwcleaner" },
+        ["warp"] = new[] { "cloudflare warp", "warp" },
+        ["discord"] = new[] { "discord" },
+        ["brave"] = new[] { "brave" },
+        ["qbittorrent"] = new[] { "qbit" }
+    };
+
+    /// <summary>Чи відповідає DisplayName реєстру конкретній утиліті каталогу (name / id / alias).</summary>
+    private static bool MatchesTool(string displayName, ToolItem tool)
+    {
+        if (string.IsNullOrWhiteSpace(displayName)) return false;
+        string hay = displayName.Trim();
+
+        if (tool.Name.Length >= 4 && hay.Contains(tool.Name, StringComparison.OrdinalIgnoreCase)) return true;
+
+        // «System Informer (Process Hacker 3)» → «System Informer»
+        string baseName = StripParenthetical(tool.Name);
+        if (baseName.Length >= 4 && hay.Contains(baseName, StringComparison.OrdinalIgnoreCase)) return true;
+
+        if (tool.Id.Length >= 5 && hay.Contains(tool.Id, StringComparison.OrdinalIgnoreCase)) return true;
+
+        if (DetectionAliases.TryGetValue(tool.Id, out var aliases))
+        {
+            foreach (var alias in aliases)
+            {
+                if (hay.Contains(alias, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Відрізає дужкові уточнення з назви («Foo (Bar)» → «Foo»).</summary>
+    private static string StripParenthetical(string name)
+    {
+        int idx = name.IndexOf('(');
+        return (idx > 0 ? name.Substring(0, idx) : name).Trim();
     }
 
     /// <summary>Запис з розділу реєстру Uninstall із даними про шлях до програми.</summary>
@@ -862,7 +950,7 @@ public static class ToolsEngine
         public string InstallLocation = string.Empty;
     }
 
-    private static void ScanUninstallRegistry(RegistryKey root, string subKey, Dictionary<string, UninstallEntry> entries)
+    private static void ScanUninstallRegistry(RegistryKey root, string subKey, List<UninstallEntry> snapshot, HashSet<string> seenNames)
     {
         try
         {
@@ -878,13 +966,14 @@ public static class ToolsEngine
                     if (string.IsNullOrWhiteSpace(disp)) continue;
 
                     string trimmed = disp.Trim();
-                    if (!entries.TryGetValue(trimmed, out var entry))
+                    if (!seenNames.Add(trimmed)) continue;
+
+                    snapshot.Add(new UninstallEntry
                     {
-                        entry = new UninstallEntry { DisplayName = trimmed };
-                        entries[trimmed] = entry;
-                    }
-                    entry.DisplayIcon = appKey?.GetValue("DisplayIcon")?.ToString() ?? entry.DisplayIcon;
-                    entry.InstallLocation = appKey?.GetValue("InstallLocation")?.ToString() ?? entry.InstallLocation;
+                        DisplayName = trimmed,
+                        DisplayIcon = appKey?.GetValue("DisplayIcon")?.ToString() ?? string.Empty,
+                        InstallLocation = appKey?.GetValue("InstallLocation")?.ToString() ?? string.Empty
+                    });
                 }
                 catch { }
             }
@@ -1009,6 +1098,156 @@ public static class ToolsEngine
         return null;
     }
 
+    /// <summary>Пошук EXE у кеші пакетів WinGet (LocalAppData\Microsoft\WinGet\Packages\<PkgId>_*).</summary>
+    private static string FindExeInWingetPackages(string wingetRoot, ToolItem tool)
+    {
+        if (string.IsNullOrWhiteSpace(wingetRoot) || !Directory.Exists(wingetRoot)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(tool.ExeCheckName)) return string.Empty;
+
+        try
+        {
+            foreach (var pkgDir in Directory.EnumerateDirectories(wingetRoot))
+            {
+                string leaf = Path.GetFileName(pkgDir);
+                if (!leaf.Contains(tool.WingetId, StringComparison.OrdinalIgnoreCase) &&
+                    !leaf.Contains(tool.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string? found = SearchForExe(pkgDir, tool.ExeCheckName, 0, 3);
+                if (found != null) return found;
+            }
+        }
+        catch { }
+
+        return string.Empty;
+    }
+
+    /// <summary>Пошук EXE у пласкій переносимій теці (BaseDirectory\Tools) з обмеженням глибини.</summary>
+    private static string FindExeInFlatFolder(string root, ToolItem tool)
+    {
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(tool.ExeCheckName)) return string.Empty;
+
+        try
+        {
+            string direct = Path.Combine(root, tool.Name, tool.ExeCheckName);
+            if (File.Exists(direct)) return direct;
+
+            string? found = SearchForExe(root, tool.ExeCheckName, 0, 3);
+            if (found != null) return found;
+        }
+        catch { }
+
+        return string.Empty;
+    }
+
+    #endregion
+
+    #region Створення ярликів на Робочому столі
+
+    private static bool _createDesktopShortcutOnInstall = true;
+
+    /// <summary>
+    /// Чи створювати ярлик на Робочому столі автоматично після встановлення/завантаження утиліти.
+    /// Значення зберігається у settings.json (ключ CreateDesktopShortcut).
+    /// </summary>
+    public static bool CreateDesktopShortcutOnInstall
+    {
+        get => _createDesktopShortcutOnInstall;
+        set
+        {
+            if (_createDesktopShortcutOnInstall == value) return;
+            _createDesktopShortcutOnInstall = value;
+            SettingsManager.SaveCreateDesktopShortcut(value);
+        }
+    }
+
+    static ToolsEngine()
+    {
+        try { _createDesktopShortcutOnInstall = SettingsManager.ReadCreateDesktopShortcut(); }
+        catch { _createDesktopShortcutOnInstall = true; }
+    }
+
+    /// <summary>
+    /// Створює ярлик .lnk на Робочому столі для утиліти через динамічний COM WScript.Shell.
+    /// </summary>
+    public static bool CreateDesktopShortcut(ToolItem tool, string? resolvedExePath = null)
+    {
+        if (tool == null) return false;
+
+        string target = string.IsNullOrWhiteSpace(resolvedExePath) ? tool.ExePath : resolvedExePath;
+        if (string.IsNullOrWhiteSpace(target)) target = ResolveToolExePath(tool);
+        if (string.IsNullOrWhiteSpace(target) || !File.Exists(target))
+        {
+            AppLogger.Log($"Ярлик: виконуваний файл не знайдено для {tool.Name}", "WARN");
+            return false;
+        }
+
+        try
+        {
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            if (string.IsNullOrWhiteSpace(desktop) || !Directory.Exists(desktop)) return false;
+
+            string lnkPath = Path.Combine(desktop, SanitizeFileName(tool.Name) + ".lnk");
+
+            Type? shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null) return false;
+
+            dynamic shell = Activator.CreateInstance(shellType)!;
+            dynamic shortcut = shell.CreateShortcut(lnkPath);
+            shortcut.TargetPath = target;
+            shortcut.WorkingDirectory = Path.GetDirectoryName(target) ?? string.Empty;
+            shortcut.IconLocation = target + ",0";
+            shortcut.Description = tool.Description;
+            shortcut.Save();
+
+            tool.ExePath = target;
+            AppLogger.Log($"Створено ярлик на Робочому столі: {lnkPath}", "SUCCESS");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка створення ярлика {tool.Name}: {ex.Message}", "ERROR");
+            return false;
+        }
+    }
+
+    /// <summary>Чи вже існує ярлик цієї утиліти на Робочому столі користувача або Public Desktop.</summary>
+    public static bool DesktopShortcutExists(ToolItem tool)
+    {
+        if (tool == null) return false;
+        string fileName = SanitizeFileName(tool.Name) + ".lnk";
+
+        foreach (var dir in new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)
+        })
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(dir) && File.Exists(Path.Combine(dir, fileName))) return true;
+            }
+            catch { }
+        }
+
+        return false;
+    }
+
+    /// <summary>Прибирає з назви символи, заборонені у іменах файлів.</summary>
+    private static string SanitizeFileName(string name)
+    {
+        char[] invalid = Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(name.Length);
+        foreach (char c in name)
+        {
+            sb.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
+        }
+        return sb.ToString().Trim();
+    }
+
     #endregion
 
     #region Виконання дій інсталяції
@@ -1025,7 +1264,7 @@ public static class ToolsEngine
                 var psi = new ProcessStartInfo
                 {
                     FileName = "winget.exe",
-                    Arguments = $"install --id \"{tool.WingetId}\" -e --silent --accept-source-agreements --accept-package-agreements --disable-interactivity",
+                    Arguments = $"install --id \"{tool.WingetId}\" --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity",
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     WindowStyle = ProcessWindowStyle.Hidden
@@ -1049,10 +1288,29 @@ public static class ToolsEngine
         tool.IsInstalled = success;
         tool.StatusText = success ? "✓ Встановлено" : "⚠️ Помилка";
         tool.IsBusy = false;
-        AppLogger.Log(success
-            ? $"Успішно встановлено через Winget: {tool.Name}"
-            : $"Помилка встановлення утиліти: {tool.Name}",
-            success ? "SUCCESS" : "ERROR");
+
+        if (success)
+        {
+            AppLogger.Log($"Успішно встановлено через Winget: {tool.Name}", "SUCCESS");
+
+            // Ярлик створюємо лише якщо winget не поклав його сам (Desktop / Public Desktop).
+            if (CreateDesktopShortcutOnInstall && !DesktopShortcutExists(tool))
+            {
+                CreateDesktopShortcut(tool);
+            }
+        }
+        else
+        {
+            AppLogger.Log($"Помилка встановлення утиліти: {tool.Name}", "ERROR");
+
+            // Резервний шлях: відкриваємо офіційний прямий лінк завантаження, якщо winget недоступний.
+            if (!string.IsNullOrWhiteSpace(tool.DownloadUrl))
+            {
+                OpenUrl(tool.DownloadUrl);
+                AppLogger.Log($"Відкрито резервне пряме завантаження для {tool.Name}: {tool.DownloadUrl}", "WARN");
+            }
+        }
+
         return success;
     }
 
@@ -1086,7 +1344,7 @@ public static class ToolsEngine
                 var psi = new ProcessStartInfo
                 {
                     FileName = "winget.exe",
-                    Arguments = "install --id \"abbodi1406.vcredist\" -e --silent --accept-source-agreements --accept-package-agreements",
+                    Arguments = "install --id \"abbodi1406.vcredist\" --exact --silent --accept-package-agreements --accept-source-agreements --disable-interactivity",
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     WindowStyle = ProcessWindowStyle.Hidden

@@ -4,6 +4,9 @@
                 "Description":  "Parallel ping measurement and 1-Click fastest DNS activation",
                 "BtnFastest":  "⚡ Fastest DNS",
                 "BtnReset":  "🔄 Reset to DHCP",
+                "BtnFlush":  "🔄 Flush DNS Cache",
+                "FlushDone":  "DNS cache flushed successfully.",
+                "FlushFailed":  "Failed to flush DNS cache.",
                 "StatusActive":  "🟢 ACTIVE",
                 "StatusAvailable":  "⚪ AVAILABLE",
                 "StatusTimeout":  "🔴 TIMEOUT",
@@ -74,6 +77,10 @@
                                "adguard":  {
                                                "Name":  "AdGuard DNS (Ad blocking)",
                                                "Description":  "Blocks banners, analytics, pop-ups and telemetry at the OS level."
+                                           },
+                               "nextdns":  {
+                                               "Name":  "NextDNS (Anycast)",
+                                               "Description":  "Cloud NextDNS resolver with ad blocking and customizable profiles."
                                            },
                                "mullvad_adblock":  {
                                                        "Name":  "Mullvad DNS (AdBlock + Malware)",

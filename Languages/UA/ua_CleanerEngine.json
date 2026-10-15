@@ -23,6 +23,37 @@
                     "SortSizeAsc":  "📦 За розміром (зрост.)",
                     "SortSafeFirst":  "🟢 Безпечні спочатку",
                     "SortCategory":  "📂 За категорією",
+                    "Analyzer":  {
+                                     "ModeCache":  "🧹 Очищення кешу та сміття",
+                                     "ModeAnalyzer":  "📊 Аналізатор диска (WizTree)",
+                                     "Scanning":  "Сканування обраного диска...",
+                                     "Progress":  "Сканування: {0}/{1} каталогів...",
+                                     "ScanDone":  "Сканування завершено: {0} (знайдено {1} елементів)",
+                                     "ScanFailed":  "Помилка сканування диска.",
+                                     "PathMissing":  "Обраний шлях недоступний.",
+                                     "Ready":  "Оберіть диск та натисніть «Сканувати диск».",
+                                     "DriveLabel":  "{0}  (Вільно {1} ГБ з {2} ГБ)",
+                                     "DriveLabelShort":  "Диск:",
+                                     "FilterLabel":  "Фільтр:",
+                                     "PresetProfile":  "👤 Профіль користувача та AppData",
+                                     "PresetDownloads":  "⬇️ Завантаження (Downloads)",
+                                     "FilterFolders":  "📂 Топ важких папок",
+                                     "FilterFiles":  "📄 Топ великих файлів",
+                                     "FilterAll":  "📊 Усі",
+                                     "BtnScan":  "🔍 Сканувати диск",
+                                     "BtnOpen":  "📂 Папка",
+                                     "BtnDelete":  "🗑️ Кошик",
+                                     "ConfirmDelete":  "Безпечно перемістити у Кошик:\n\n{0}\n\nПродовжити?",
+                                     "ConfirmTitle":  "Аналізатор диска",
+                                     "Deleted":  "🗑️ Переміщено у Кошик: {0}",
+                                     "DeleteFailed":  "Не вдалося видалити елемент (захищений шлях або файл зайнятий).",
+                                     "Tag":  {
+                                                 "File":  "Файл",
+                                                 "Folder":  "Папка",
+                                                 "AppData":  "AppData / Кеш",
+                                                 "Games":  "Ігри / Медіа"
+                                             }
+                                 },
                     "Item":  {
                                  "clean_gpu_shaders":  {
                                                            "Name":  "Кеш шейдерів GPU (DirectX / NVIDIA / AMD / Intel / Vulkan)",

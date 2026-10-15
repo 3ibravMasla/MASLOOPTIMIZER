@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -57,15 +58,50 @@ public class DebloatItem : INotifyPropertyChanged, IWeakEventListener
         OnPropertyChanged(nameof(UninstallButtonText));
         OnPropertyChanged(nameof(RestoreButtonText));
         OnPropertyChanged(nameof(LocalizedDescription));
+        OnPropertyChanged(nameof(CategoryLocalized));
+        OnPropertyChanged(nameof(RiskBadge));
     }
 
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string Category { get; set; } = "ШІ & Телеметрія";
+    public string Category { get; set; } = "System & Telemetry";
     public string PackageMatch { get; set; } = string.Empty;
     public string LocalizedDescription => LocalizationManager.Instance.T($"Debloat.Desc.{Id}");
     public string StoreId { get; set; } = string.Empty;
+
+    /// <summary>Рівень ризику: Safe / Medium / High.</summary>
+    public string Risk { get; set; } = "Safe";
+
     public bool IsSpecialService { get; set; } = false;
+
+    /// <summary>Локалізована назва категорії (ключ Categories.{Category}).</summary>
+    public string CategoryLocalized
+        => LocalizationManager.Instance.TryGet($"Categories.{Category}", out var cat) && !string.IsNullOrWhiteSpace(cat)
+            ? cat
+            : Category;
+
+    public string RiskBadge
+    {
+        get
+        {
+            string key = Risk switch
+            {
+                "High" => "Risk.High",
+                "Medium" => "Risk.Medium",
+                _ => "Risk.Safe"
+            };
+            return LocalizationManager.Instance.TryGet(key, out var txt) && !string.IsNullOrWhiteSpace(txt) ? txt : Risk;
+        }
+    }
+
+    /// <summary>Показувати бейдж ризику лише для Medium/High (безпечні не захаращують картку).</summary>
+    public bool ShowRisk => !string.Equals(Risk, "Safe", StringComparison.OrdinalIgnoreCase);
+
+    public Brush RiskColor => Risk switch
+    {
+        "High" => ThemeEngine.Brush("DangerBrush"),
+        _ => ThemeEngine.Brush("StatusNeutralBrush")
+    };
 
     private bool _isInstalled;
     public bool IsInstalled
@@ -95,6 +131,20 @@ public class DebloatItem : INotifyPropertyChanged, IWeakEventListener
                 _isBusy = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(ActionButtonText));
+            }
+        }
+    }
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected != value)
+            {
+                _isSelected = value;
+                OnPropertyChanged();
             }
         }
     }
@@ -129,32 +179,148 @@ public class DebloatItem : INotifyPropertyChanged, IWeakEventListener
 
 public static class DebloatEngine
 {
+    private const string CatAi = "AI & Copilot";
+    private const string CatMs = "Microsoft Bloatware";
+    private const string CatXbox = "Xbox & Gaming";
+    private const string CatMedia = "Media & Lifestyle";
+    private const string CatSys = "System & Telemetry";
+    private const string CatOneDrive = "OneDrive";
+
+    /// <summary>Каталог цільових пакетів Windows 11 24H2/25H2 (~40 позицій + OneDrive).</summary>
     public static List<DebloatItem> Catalog { get; } = new()
     {
         // =========================================================================
-        // 1. ШІ, ПОМІЧНИКИ ТА ТЕЛЕМЕТРІЯ
+        // 1. AI & COPILOT
         // =========================================================================
         new()
         {
             Id = "uwp_copilot",
-            Name = "Microsoft Copilot & Bing Chat",
-            Category = "ШІ & Телеметрія",
-            PackageMatch = "*Microsoft.Copilot*|*Microsoft.BingChat*|*Windows.Copilot*",
+            Name = "Microsoft Copilot",
+            Category = CatAi,
+            PackageMatch = "*Microsoft.Copilot*|*Microsoft.BingChat*",
             StoreId = "9NBLGGH516XP"
         },
         new()
         {
-            Id = "uwp_cortana",
-            Name = "Cortana",
-            Category = "ШІ & Телеметрія",
-            PackageMatch = "*Microsoft.549981C3F5F10*",
-            StoreId = "9NBLGGH4VSM8"
+            Id = "uwp_copilot_provider",
+            Name = "Copilot AI Provider (Windows.Ai.Copilot.Provider)",
+            Category = CatAi,
+            PackageMatch = "*Windows.Ai.Copilot.Provider*",
+        },
+        new()
+        {
+            Id = "uwp_webexp",
+            Name = "Windows Web Experience Pack (Widgets)",
+            Category = CatAi,
+            PackageMatch = "*WebExperience*",
+            StoreId = "9MSSGKG3SNGE",
+            Risk = "Medium"
+        },
+
+        // =========================================================================
+        // 2. MICROSOFT BLOATWARE
+        // =========================================================================
+        new()
+        {
+            Id = "uwp_clipchamp",
+            Name = "Clipchamp Video Editor",
+            Category = CatMs,
+            PackageMatch = "*Clipchamp.Clipchamp*",
+            StoreId = "9P1J8S7CCWWT"
+        },
+        new()
+        {
+            Id = "uwp_newoutlook",
+            Name = "New Outlook for Windows",
+            Category = CatMs,
+            PackageMatch = "*OutlookForWindows*",
+            StoreId = "9NRXF420CLMW"
+        },
+        new()
+        {
+            Id = "uwp_devhome",
+            Name = "Microsoft Dev Home",
+            Category = CatMs,
+            PackageMatch = "*Windows.DevHome*",
+            StoreId = "9N8MHTPHNGVV"
+        },
+        new()
+        {
+            Id = "uwp_news",
+            Name = "MSN News (Bing News)",
+            Category = CatMs,
+            PackageMatch = "*BingNews*",
+            StoreId = "9WZDNCRFHVFW"
+        },
+        new()
+        {
+            Id = "uwp_weather",
+            Name = "MSN Weather (Bing Weather)",
+            Category = CatMs,
+            PackageMatch = "*BingWeather*",
+            StoreId = "9WZDNCRFJ3Q2"
+        },
+        new()
+        {
+            Id = "uwp_finance",
+            Name = "MSN Finance (Bing Finance)",
+            Category = CatMs,
+            PackageMatch = "*BingFinance*",
+            StoreId = "9WZDNCRFHV4V"
+        },
+        new()
+        {
+            Id = "uwp_sports",
+            Name = "MSN Sports (Bing Sports)",
+            Category = CatMs,
+            PackageMatch = "*BingSports*",
+            StoreId = "9WZDNCRFHWCF"
+        },
+        new()
+        {
+            Id = "uwp_todos",
+            Name = "Microsoft To Do",
+            Category = CatMs,
+            PackageMatch = "*Todos*",
+            StoreId = "9NBLGGH5R558"
+        },
+        new()
+        {
+            Id = "uwp_stickynotes",
+            Name = "Microsoft Sticky Notes",
+            Category = CatMs,
+            PackageMatch = "*MicrosoftStickyNotes*",
+            StoreId = "9NBLGGH4QGHW"
+        },
+        new()
+        {
+            Id = "uwp_officehub",
+            Name = "Microsoft Office Hub",
+            Category = CatMs,
+            PackageMatch = "*MicrosoftOfficeHub*",
+            StoreId = "9WZDNCRFJ3PZ"
+        },
+        new()
+        {
+            Id = "uwp_gethelp",
+            Name = "Get Help",
+            Category = CatMs,
+            PackageMatch = "*GetHelp*",
+            StoreId = "9PKDZBMV1H3T"
+        },
+        new()
+        {
+            Id = "uwp_tips",
+            Name = "Tips (Get Started)",
+            Category = CatMs,
+            PackageMatch = "*Getstarted*",
+            StoreId = "9WZDNCRFJ0MP"
         },
         new()
         {
             Id = "uwp_feedback",
-            Name = "Центр відгуків (Feedback Hub)",
-            Category = "ШІ & Телеметрія",
+            Name = "Windows Feedback Hub",
+            Category = CatMs,
             PackageMatch = "*WindowsFeedbackHub*",
             StoreId = "9NBLGGH4R32N"
         },
@@ -162,226 +328,246 @@ public static class DebloatEngine
         {
             Id = "uwp_powerautomate",
             Name = "Power Automate Desktop",
-            Category = "ШІ & Телеметрія",
+            Category = CatMs,
             PackageMatch = "*PowerAutomateDesktop*",
             StoreId = "9NBLGGH5158M"
         },
         new()
         {
-            Id = "uwp_devhome",
-            Name = "Microsoft Dev Home",
-            Category = "ШІ & Телеметрія",
-            PackageMatch = "*Windows.DevHome*",
-            StoreId = "9N8MHTPHNGVV"
+            Id = "uwp_quickassist",
+            Name = "Quick Assist",
+            Category = CatMs,
+            PackageMatch = "*QuickAssist*",
+            StoreId = "9P7BP5VNWKX5"
         },
-
-        // =========================================================================
-        // 2. МЕДІА, ВІДЕО ТА ІГРИ
-        // =========================================================================
-        new()
-        {
-            Id = "uwp_clipchamp",
-            Name = "Clipchamp Video Editor",
-            Category = "Ігри & Медіа",
-            PackageMatch = "*Clipchamp.Clipchamp*",
-            StoreId = "9P1J8S7CCWWT"
-        },
-        new()
-        {
-            Id = "uwp_solitaire",
-            Name = "Microsoft Solitaire Collection",
-            Category = "Ігри & Медіа",
-            PackageMatch = "*MicrosoftSolitaireCollection*",
-            StoreId = "9WZDNCRFHWD2"
-        },
-        new()
-        {
-            Id = "uwp_xbox",
-            Name = "Xbox Game Bar & Gaming Suite",
-            Category = "Ігри & Медіа",
-            PackageMatch = "*XboxGamingOverlay*|*XboxApp*|*XboxSpeech*|*XboxTCUI*|*XboxIdentityProvider*",
-            StoreId = "9NZKPSTSNW4P"
-        },
-        new()
-        {
-            Id = "uwp_zunevideo",
-            Name = "Кіно й ТБ (Movies & TV / ZuneVideo)",
-            Category = "Ігри & Медіа",
-            PackageMatch = "*ZuneVideo*",
-            StoreId = "9WZDNCRFJ3P2"
-        },
-        new()
-        {
-            Id = "uwp_zunemusic",
-            Name = "Groove Music (Media Player / ZuneMusic)",
-            Category = "Ігри & Медіа",
-            PackageMatch = "*ZuneMusic*|*WindowsMediaPlayer*",
-            StoreId = "9WZDNCRFJ4PT"
-        },
-        new()
-        {
-            Id = "uwp_soundrec",
-            Name = "Звукозапис (Sound Recorder)",
-            Category = "Ігри & Медіа",
-            PackageMatch = "*WindowsSoundRecorder*|*SoundRecorder*",
-            StoreId = "9WZDNCRFHWKN"
-        },
-
-        // =========================================================================
-        // 3. 3D, ДИЗАЙН ТА ІНСТРУМЕНТИ
-        // =========================================================================
-        new()
-        {
-            Id = "uwp_3dviewer",
-            Name = "3D Viewer & Print 3D",
-            Category = "3D & Інструменти",
-            PackageMatch = "*Microsoft3DViewer*|*Print3D*",
-            StoreId = "9NBLGGH42THS"
-        },
-        new()
-        {
-            Id = "uwp_paint3d",
-            Name = "Paint 3D",
-            Category = "3D & Інструменти",
-            PackageMatch = "*Microsoft.Paint3D*|*Paint3D*",
-            StoreId = "9NBLGGH5FV99"
-        },
-        new()
-        {
-            Id = "uwp_mixedreality",
-            Name = "Портал змішаної реальності (Mixed Reality)",
-            Category = "3D & Інструменти",
-            PackageMatch = "*MixedReality.Portal*",
-            StoreId = "9NBLGGH63NW5"
-        },
-
-        // =========================================================================
-        // 4. НОВИНИ, ВІДЖЕТИ ТА РЕКЛАМА
-        // =========================================================================
-        new()
-        {
-            Id = "uwp_news",
-            Name = "Новини (MSN News)",
-            Category = "Новини & Віджети",
-            PackageMatch = "*BingNews*",
-            StoreId = "9WZDNCRFHVFW"
-        },
-        new()
-        {
-            Id = "uwp_weather",
-            Name = "Погода (MSN Weather)",
-            Category = "Новини & Віджети",
-            PackageMatch = "*BingWeather*",
-            StoreId = "9WZDNCRFJ3Q2"
-        },
-        new()
-        {
-            Id = "uwp_finance",
-            Name = "Фінанси та Спорт (MSN Finance & Sports)",
-            Category = "Новини & Віджети",
-            PackageMatch = "*BingFinance*|*BingSports*",
-            StoreId = "9WZDNCRFHV4V"
-        },
-        new()
-        {
-            Id = "uwp_webexp",
-            Name = "Windows Web Experience Pack (Віджети)",
-            Category = "Новини & Віджети",
-            PackageMatch = "*WebExperience*",
-            StoreId = "9MSSGKG3SNGE"
-        },
-        new()
-        {
-            Id = "uwp_promostubs",
-            Name = "Спонсорські промо-заглушки (TikTok, Spotify, Disney+)",
-            Category = "Новини & Віджети",
-            PackageMatch = "*Spotify*|*TikTok*|*Disney*|*Facebook*|*Instagram*|*Amazon*",
-        },
-
-        // =========================================================================
-        // 5. ЗВ'ЯЗОК, ПОШТА ТА ОРГАНАЙЗЕРИ
-        // =========================================================================
         new()
         {
             Id = "uwp_phonelink",
-            Name = "Зв'язок зі смартфоном (Phone Link)",
-            Category = "Зв'язок & Пошта",
+            Name = "Phone Link (Your Phone)",
+            Category = CatMs,
             PackageMatch = "*YourPhone*",
             StoreId = "9NBLGGH4NNS1"
         },
         new()
         {
             Id = "uwp_people",
-            Name = "Люди та Контакти (Microsoft People)",
-            Category = "Зв'язок & Пошта",
+            Name = "Microsoft People",
+            Category = CatMs,
             PackageMatch = "*Microsoft.People*",
             StoreId = "9NBLGGH10PG8"
         },
         new()
         {
             Id = "uwp_maps",
-            Name = "Карти Windows (Windows Maps)",
-            Category = "Зв'язок & Пошта",
+            Name = "Windows Maps",
+            Category = CatMs,
             PackageMatch = "*WindowsMaps*",
             StoreId = "9WZDNCRBXB69"
         },
         new()
         {
-            Id = "uwp_mailcalendar",
-            Name = "Пошта та Календар (Mail & Calendar)",
-            Category = "Зв'язок & Пошта",
-            PackageMatch = "*windowscommunicationsapps*",
-            StoreId = "9WZDNCRFHVQM"
+            Id = "uwp_bingsearch",
+            Name = "Microsoft Bing Search",
+            Category = CatMs,
+            PackageMatch = "*Microsoft.BingSearch*|*BingSearch*",
+            StoreId = "9NBLGGH6B4XK"
+        },
+
+        // =========================================================================
+        // 3. MEDIA & LIFESTYLE
+        // =========================================================================
+        new()
+        {
+            Id = "uwp_solitaire",
+            Name = "Microsoft Solitaire Collection",
+            Category = CatMedia,
+            PackageMatch = "*MicrosoftSolitaireCollection*",
+            StoreId = "9WZDNCRFHWD2"
         },
         new()
         {
-            Id = "uwp_newoutlook",
-            Name = "Новий Outlook для Windows",
-            Category = "Зв'язок & Пошта",
-            PackageMatch = "*OutlookForWindows*",
-            StoreId = "9NRXF420CLMW"
+            Id = "uwp_zunemusic",
+            Name = "Media Player (Zune Music)",
+            Category = CatMedia,
+            PackageMatch = "*ZuneMusic*",
+            StoreId = "9WZDNCRFJ4PT"
+        },
+        new()
+        {
+            Id = "uwp_zunevideo",
+            Name = "Movies & TV (Zune Video)",
+            Category = CatMedia,
+            PackageMatch = "*ZuneVideo*",
+            StoreId = "9WZDNCRFJ3P2"
+        },
+        new()
+        {
+            Id = "uwp_soundrec",
+            Name = "Sound Recorder",
+            Category = CatMedia,
+            PackageMatch = "*WindowsSoundRecorder*|*SoundRecorder*",
+            StoreId = "9WZDNCRFHWKN"
+        },
+        new()
+        {
+            Id = "uwp_camera",
+            Name = "Windows Camera",
+            Category = CatMedia,
+            PackageMatch = "*WindowsCamera*",
+            StoreId = "9WZDNCRFJBBG"
+        },
+        new()
+        {
+            Id = "uwp_alarms",
+            Name = "Windows Clock & Alarms",
+            Category = CatMedia,
+            PackageMatch = "*WindowsAlarms*",
+            StoreId = "9WZDNCRFJ3PR"
+        },
+        new()
+        {
+            Id = "uwp_mixedreality",
+            Name = "Mixed Reality Portal",
+            Category = CatMedia,
+            PackageMatch = "*MixedReality.Portal*",
+            StoreId = "9NBLGGH63NW5"
+        },
+        new()
+        {
+            Id = "uwp_photos",
+            Name = "Microsoft Photos (optional)",
+            Category = CatMedia,
+            PackageMatch = "*Microsoft.Windows.Photos*",
+            StoreId = "9WZDNCRFJBH4",
+            Risk = "Medium"
+        },
+        new()
+        {
+            Id = "uwp_paint",
+            Name = "Paint (optional)",
+            Category = CatMedia,
+            PackageMatch = "*Microsoft.Paint*",
+            StoreId = "9PCFS5B6T72H",
+            Risk = "Medium"
+        },
+
+        // =========================================================================
+        // 4. XBOX & GAMING
+        // =========================================================================
+        new()
+        {
+            Id = "uwp_xboxapp",
+            Name = "Xbox App (Gaming App)",
+            Category = CatXbox,
+            PackageMatch = "*Microsoft.GamingApp*",
+            StoreId = "9MV0B5HZVK9Z"
+        },
+        new()
+        {
+            Id = "uwp_xboxgamebar",
+            Name = "Xbox Game Bar",
+            Category = CatXbox,
+            PackageMatch = "*XboxGamingOverlay*",
+            StoreId = "9NZKPSTSNW4P"
+        },
+        new()
+        {
+            Id = "uwp_xboxoverlay",
+            Name = "Xbox Game Overlay",
+            Category = CatXbox,
+            PackageMatch = "*XboxGameOverlay*",
+        },
+        new()
+        {
+            Id = "uwp_xboxid",
+            Name = "Xbox Identity Provider",
+            Category = CatXbox,
+            PackageMatch = "*XboxIdentityProvider*",
+            StoreId = "9NBLGGH4RX5Z"
+        },
+        new()
+        {
+            Id = "uwp_xboxspeech",
+            Name = "Xbox Speech To Text Overlay",
+            Category = CatXbox,
+            PackageMatch = "*XboxSpeechToTextOverlay*",
+        },
+        new()
+        {
+            Id = "uwp_xboxtcui",
+            Name = "Xbox TCUI",
+            Category = CatXbox,
+            PackageMatch = "*Xbox.TCUI*",
+        },
+
+        // =========================================================================
+        // 5. SYSTEM & TELEMETRY
+        // =========================================================================
+        new()
+        {
+            Id = "uwp_cortana",
+            Name = "Cortana",
+            Category = CatSys,
+            PackageMatch = "*Microsoft.549981C3F5F10*",
+            StoreId = "9NBLGGH4VSM8"
         },
         new()
         {
             Id = "uwp_skype",
             Name = "Skype",
-            Category = "Зв'язок & Пошта",
+            Category = CatSys,
             PackageMatch = "*SkypeApp*",
             StoreId = "9WZDNCRFJ364"
         },
         new()
         {
             Id = "uwp_onenote",
-            Name = "OneNote для Windows 10",
-            Category = "Зв'язок & Пошта",
+            Name = "OneNote for Windows",
+            Category = CatSys,
             PackageMatch = "*Office.OneNote*",
             StoreId = "9WZDNCRD29V9"
         },
         new()
         {
-            Id = "uwp_gethelp",
-            Name = "Отримати допомогу (Get Help)",
-            Category = "Зв'язок & Пошта",
-            PackageMatch = "*GetHelp*",
-            StoreId = "9PK2ZG8443M9"
+            Id = "uwp_mailcalendar",
+            Name = "Mail & Calendar",
+            Category = CatSys,
+            PackageMatch = "*windowscommunicationsapps*",
+            StoreId = "9WZDNCRFHVQM"
         },
         new()
         {
-            Id = "uwp_tips",
-            Name = "Поради Windows (Tips & QuickAssist)",
-            Category = "Зв'язок & Пошта",
-            PackageMatch = "*Getstarted*|*QuickAssist*",
-            StoreId = "9WZDNCRFJ0MP"
+            Id = "uwp_promostubs",
+            Name = "Promo stubs (TikTok / Spotify / Disney+ / ...)",
+            Category = CatSys,
+            PackageMatch = "*Spotify*|*TikTok*|*Disney*|*Facebook*|*Instagram*|*Amazon*|*Netflix*|*CandyCrush*|*Asphalt*",
+            Risk = "Medium"
+        },
+        new()
+        {
+            Id = "uwp_family",
+            Name = "Microsoft Family",
+            Category = CatSys,
+            PackageMatch = "*MicrosoftFamily*|*Microsoft.Family*",
+            StoreId = "9PD17T8LBBGZ"
+        },
+        new()
+        {
+            Id = "uwp_crossdevice",
+            Name = "Cross Device Experience",
+            Category = CatSys,
+            PackageMatch = "*CrossDevice*",
+            Risk = "Medium"
         },
 
         // =========================================================================
-        // 6. ХМАРА & ONEDRIVE
+        // 6. ONEDRIVE (Win32/System — спеціальна обробка)
         // =========================================================================
         new()
         {
             Id = "uwp_onedrive",
             Name = "Microsoft OneDrive",
-            Category = "Хмара & OneDrive",
+            Category = CatOneDrive,
             IsSpecialService = true,
             StoreId = ""
         }
@@ -505,6 +691,10 @@ public static class DebloatEngine
 
     #region Видалення та Очищення
 
+    /// <summary>
+    /// Видаляє один UWP-пакет: і для користувача (AppxPackage), і провізійований (AppxProvisionedPackage)
+    /// в ОДНОМУ виклику PowerShell, щоб Windows Update не повернув додаток після перезавантаження.
+    /// </summary>
     public static async Task<bool> UninstallPackageAsync(DebloatItem item)
     {
         RunOnUi(() => item.IsBusy = true);
@@ -517,37 +707,17 @@ public static class DebloatEngine
                     return UninstallOneDriveFull();
                 }
 
-                var pkgManager = new Windows.Management.Deployment.PackageManager();
                 var patterns = item.PackageMatch.Split('|', StringSplitOptions.RemoveEmptyEntries)
                     .Select(p => p.Trim().Trim('*'))
+                    .Where(p => p.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
-                var userPkgs = pkgManager.FindPackagesForUser(string.Empty)
-                    .Where(p => patterns.Any(pat => p.Id.Name.Contains(pat, StringComparison.OrdinalIgnoreCase) && !p.Id.Name.Contains("ExperienceHost", StringComparison.OrdinalIgnoreCase)))
-                    .ToList();
+                string script = BuildRemovalScript(patterns);
+                bool ok = RunPowerShellEncoded(script, timeoutMs: 180_000);
 
-                bool removedAny = false;
-                foreach (var p in userPkgs)
-                {
-                    try
-                    {
-                        pkgManager.RemovePackageAsync(p.Id.FullName, Windows.Management.Deployment.RemovalOptions.RemoveForAllUsers).GetResults();
-                        removedAny = true;
-                    }
-                    catch { }
-                }
-
-                bool provisionedOk = true;
-                foreach (var pat in patterns)
-                {
-                    if (!RunPowerShellQuiet($"Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -like '*{pat}*' -and $_.DisplayName -notlike '*ExperienceHost*' }} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue"))
-                    {
-                        provisionedOk = false;
-                    }
-                }
-
-                AppLogger.Log($"Видалено UWP додаток: {item.Name}", "SUCCESS");
-                return removedAny || provisionedOk;
+                AppLogger.Log($"Видалено UWP додаток: {item.Name}", ok ? "SUCCESS" : "WARN");
+                return ok;
             }
             catch
             {
@@ -565,6 +735,87 @@ public static class DebloatEngine
         RunOnUi(() => item.IsBusy = false);
         return result;
     }
+
+    /// <summary>
+    /// Пакетне видалення: формує ОДИН спільний сценарій PowerShell для всіх обраних пакетів
+    /// і виконує його в єдиному процесі powershell.exe (замість N послідовних запусків).
+    /// Оновлює IsInstalled = false на місці.
+    /// </summary>
+    public static async Task<int> RemoveBatchPackagesAsync(IEnumerable<DebloatItem> items, IProgress<string>? progress = null)
+    {
+        var targets = items?.Where(i => i != null).Distinct().ToList() ?? new List<DebloatItem>();
+        if (targets.Count == 0) return 0;
+
+        var loc = LocalizationManager.Instance;
+        var uwp = targets.Where(t => !t.IsSpecialService).ToList();
+        var special = targets.Where(t => t.IsSpecialService).ToList();
+
+        return await Task.Run(() =>
+        {
+            int removed = 0;
+
+            if (uwp.Count > 0)
+            {
+                progress?.Report(loc.Format("Debloat.BatchRemoving", uwp.Count));
+
+                var patterns = uwp
+                    .SelectMany(i => i.PackageMatch.Split('|', StringSplitOptions.RemoveEmptyEntries))
+                    .Select(p => p.Trim().Trim('*'))
+                    .Where(p => p.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                string script = BuildRemovalScript(patterns);
+                bool ok = RunPowerShellEncoded(script, timeoutMs: 600_000);
+
+                foreach (var i in uwp)
+                {
+                    RunOnUi(() => i.IsInstalled = false);
+                    RunOnUi(() => i.IsSelected = false);
+                    removed++;
+                }
+
+                AppLogger.Log($"Пакетне видалення: оброблено {uwp.Count} пакетів ({(ok ? "OK" : "з помилками")})", ok ? "SUCCESS" : "WARN");
+            }
+
+            foreach (var s in special)
+            {
+                progress?.Report(loc.Format("Debloat.Uninstalling", s.Name));
+                bool ok = UninstallOneDriveFull();
+                if (ok)
+                {
+                    RunOnUi(() => s.IsInstalled = false);
+                    RunOnUi(() => s.IsSelected = false);
+                    removed++;
+                }
+            }
+
+            progress?.Report(loc.Format("Debloat.BatchRemoved", removed));
+            return removed;
+        });
+    }
+
+    /// <summary>Будує єдиний PowerShell-сценарій повного видалення (Appx + Provisioned) для набору масок.</summary>
+    private static string BuildRemovalScript(IEnumerable<string> patterns)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("$ErrorActionPreference='SilentlyContinue'");
+        sb.AppendLine("$ProgressPreference='SilentlyContinue'");
+
+        foreach (var raw in patterns)
+        {
+            string p = EscapeForSingleQuotedPs(raw);
+            if (p.Length == 0) continue;
+
+            sb.AppendLine($"Get-AppxPackage -AllUsers -Name '*{p}*' | Where-Object {{ $_.Name -notlike '*ExperienceHost*' }} | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue");
+            sb.AppendLine($"Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -like '*{p}*' -and $_.DisplayName -notlike '*ExperienceHost*' }} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue");
+        }
+
+        return sb.ToString();
+    }
+
+    private static string EscapeForSingleQuotedPs(string value)
+        => value.Replace("'", "''");
 
     #endregion
 
@@ -652,7 +903,7 @@ public static class DebloatEngine
             }";
 
             // Реєстрація всіх пакетів може тривати довго — даємо до 2 хвилин і чесно звітуємо про результат
-            bool ok = RunPowerShellQuiet(script, timeoutMs: 120_000);
+            bool ok = RunPowerShellEncoded(script, timeoutMs: 120_000);
             progress?.Report((100, ok
                 ? "Усі системні UWP-додатки відновлено."
                 : "Перереєстрацію не вдалося завершити (таймаут або відсутні права адміністратора)."));
@@ -697,7 +948,7 @@ public static class DebloatEngine
                     UseShellExecute = false,
                     WindowStyle = ProcessWindowStyle.Hidden
                 });
-                proc?.WaitForExit(15000);
+                proc?.WaitForExit(20000);
             }
 
             using (var key = Registry.ClassesRoot.OpenSubKey(@"CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}", true))
@@ -707,6 +958,11 @@ public static class DebloatEngine
             using (var keyWow = Registry.ClassesRoot.OpenSubKey(@"Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}", true))
             {
                 keyWow?.SetValue("System.IsPinnedToNameSpaceTree", 0, RegistryValueKind.DWord);
+            }
+
+            using (var run = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true))
+            {
+                run?.DeleteValue("OneDrive", false);
             }
 
             return true;
@@ -751,7 +1007,7 @@ public static class DebloatEngine
 
     #endregion
 
-    #region Допоміжний метод CLI
+    #region Допоміжні методи CLI
 
     /// <summary>Виконання PowerShell-команди з перевіркою ExitCode та таймаутом.</summary>
     private static bool RunPowerShellQuiet(string command, int timeoutMs = 60_000)
@@ -762,6 +1018,38 @@ public static class DebloatEngine
             {
                 FileName = "powershell.exe",
                 Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"{command}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                WindowStyle = ProcessWindowStyle.Hidden
+            });
+
+            if (proc == null) return false;
+
+            if (!proc.WaitForExit(timeoutMs))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
+
+            return proc.ExitCode == 0;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// Виконання складного багаторядкового сценарію PowerShell без проблем із екрануванням лапок:
+    /// сценарій кодується Base64 (UTF-16LE) і передається через -EncodedCommand.
+    /// </summary>
+    private static bool RunPowerShellEncoded(string script, int timeoutMs = 60_000)
+    {
+        try
+        {
+            string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+
+            using var proc = Process.Start(new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}",
                 CreateNoWindow = true,
                 UseShellExecute = false,
                 WindowStyle = ProcessWindowStyle.Hidden

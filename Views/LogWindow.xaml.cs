@@ -10,6 +10,10 @@ public partial class LogWindow : Window
     {
         InitializeComponent();
         LogsListView.ItemsSource = AppLogger.LogEntries;
+
+        // Фаза 4.4: UI-пости логу вмикаються лише на час існування вікна.
+        AppLogger.SetLogWindowOpen(true);
+        Closed += (_, _) => AppLogger.SetLogWindowOpen(false);
     }
 
     private void OpenLogsFolder_Click(object sender, RoutedEventArgs e)

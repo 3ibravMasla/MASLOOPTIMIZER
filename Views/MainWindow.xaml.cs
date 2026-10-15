@@ -29,8 +29,8 @@ namespace MASLOOPTIMIZER;
 
 public partial class MainWindow : Window, INotifyPropertyChanged
 {
-    private string _currentTab = "UI";
-    private string _currentRisk = "UI";
+    private string _currentTab = "TWEAKS";
+    private string _currentRisk = "ALL";
     private string _searchQuery = string.Empty;
     private HardwareInfo? _currentHwInfo;
     private double _uiScale = 1.0;
@@ -60,22 +60,27 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     // Стан фільтрації для Автозапуску (джерела)
     private string _currentStartupSource = "Всі";
-    private List<StartupEntry>? _allStartupEntries;
+    private List<StartupItem>? _allStartupEntries;
     private StartupSortMode _currentStartupSort = StartupSortMode.Default;
 
-    // Стан сортування для Очищення та MSI
+    // Стан сортування для Очищення
     private CleanerSortMode _currentCleanerSort = CleanerSortMode.SizeDescending;
-    private MsiSortMode _currentMsiSort = MsiSortMode.Default;
 
-    // Останній успішно застосований профіль живлення (для бейджа "АКТИВНО")
-    private SystemPowerMode? _lastPowerMode;
+    // v0.6.0 Фаза 5: стан режиму CleanerView + аналізатор диска (WizTree).
+    private bool _cleanerAnalyzerMode;
+    private bool _analyzerDrivesLoaded;
+    private List<DiskHeavyItem> _lastAnalyzerItems = new();
+
+    // v0.6.0: ліниве завантаження важких сканів (усуває фриз холодного старту).
+    private bool _toolsScanned;
+    private bool _debloatScanned;
 
     public ObservableCollection<TweakModel> FilteredTweaks { get; set; } = new();
     public ObservableCollection<DebloatItem> FilteredDebloat { get; set; } = new();
     public ObservableCollection<ToolItem> FilteredTools { get; set; } = new();
-    public ObservableCollection<PciMsiDevice> FilteredMsiDevices { get; set; } = new();
+    public ObservableCollection<DiskHeavyItem> FilteredAnalyzer { get; set; } = new();
     public ObservableCollection<DnsPreset> FilteredDns { get; set; } = new();
-    public ObservableCollection<StartupEntry> FilteredStartup { get; set; } = new();
+    public ObservableCollection<StartupItem> FilteredStartup { get; set; } = new();
 
     /// <summary>Масштаб інтерфейсу у вигляді множника (1.0 = 100%).</summary>
     public double UiScale
@@ -105,17 +110,11 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         TweaksItemsControl.ItemsSource = FilteredTweaks;
         DebloatItemsControl.ItemsSource = FilteredDebloat;
         ToolsItemsControl.ItemsSource = FilteredTools;
-        MsiItemsControl.ItemsSource = FilteredMsiDevices;
 
         DnsItemsControl.ItemsSource = FilteredDns;
         CleanerItemsControl.ItemsSource = CleanerEngine.Cleaners;
+        AnalyzerItemsControl.ItemsSource = FilteredAnalyzer;
         StartupItemsControl.ItemsSource = FilteredStartup;
-
-        // Оновлення бейджа активного профілю живлення при зміні режиму (подія спрацьовує з фонового потоку).
-        PowerEngine.OnPowerModeChanged += OnPowerModeChanged;
-
-        // Синхронізація перемикача Game Mode з реальним станом ядра (подія спрацьовує з фонового потоку).
-        GameModeEngine.OnGameModeStateChanged += OnGameModeStateChanged;
 
         Loaded += MainWindow_Loaded;
         Closing += (s, e) =>
@@ -128,6 +127,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         _updateCheckTimer.Interval = TimeSpan.FromMinutes(30);
         _updateCheckTimer.Tick += (s, e) => _ = CheckForUpdatesBackgroundAsync();
         _updateCheckTimer.Start();
+    }
+
+    private bool _resourcesDisposed;
+
+    /// <summary>
+    /// Знімає підписки зі статичних подій та зупиняє таймери. Викликається один раз
+    /// при виході з програми: вікно лише ховається (Closing скасовується), тому
+    /// цей метод не залежить від Closed.
+    /// </summary>
+    public void DisposeResources()
+    {
+        if (_resourcesDisposed) return;
+        _resourcesDisposed = true;
+
+        _updateCheckTimer.Stop();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -188,33 +202,62 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         // Застосовуємо збережену мову до всього інтерфейсу одразу після завантаження даних.
         RefreshLocalizedChrome();
 
-        UpdateTweakChipsAndFilter();
+        UpdateTweakChipsAndFilter(rebuildChips: true);
         UpdateDebloatChipsAndFilter();
         UpdateToolsChipsAndFilter();
         UpdateDnsChipsAndFilter();
         UpdateStartupChipsAndFilter();
-        _ = ToolsEngine.DetectInstalledToolsAsync().ContinueWith(_ => Dispatcher.Invoke(UpdateToolsChipsAndFilter));
-        _ = DebloatEngine.ScanInstalledPackagesAsync().ContinueWith(_ => Dispatcher.Invoke(UpdateDebloatChipsAndFilter));
 
-        StatusText.Text = LocalizationManager.Instance["Footer.Scanning"];
-        await TweakEngine.Instance.EvaluateAllStatusesAsync((percent, name) =>
+        // v0.6.0: важкі скани Tools/Debloat більше НЕ виконуються одразу — лише ліниво, при відкритті вкладки.
+        // Оцінка статусів твіків виконується у фоні та не блокує холодний старт і не перебиває статусбар.
+        AppProgressBar.Value = 0;
+        ProgressPercentText.Text = "0%";
+        _ = RunTweakStatusScanAsync();
+
+        // Фаза 5.2/5.4: перша перевірка — не одразу після старту, а з відкладенням і jitter.
+        _ = DeferredStartupUpdateCheckAsync();
+    }
+
+    /// <summary>
+    /// v0.6.0: фонова оцінка статусів усіх твіків (не блокує холодний старт). Оновлює лише прогрес-бар.
+    /// </summary>
+    private async Task RunTweakStatusScanAsync()
+    {
+        try
+        {
+            await TweakEngine.Instance.EvaluateAllStatusesAsync((percent, _) =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    AppProgressBar.Value = percent;
+                    ProgressPercentText.Text = $"{percent}%";
+                });
+            });
+            UpdateTweakChipsAndFilter();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Фонова оцінка статусів твіків: {ex.Message}", "WARN");
+        }
+        finally
         {
             Dispatcher.Invoke(() =>
             {
-                AppProgressBar.Value = percent;
-                ProgressPercentText.Text = $"{percent}%";
-                StatusText.Text = LocalizationManager.Instance.Format("Footer.Analyzing", name);
+                AppProgressBar.Value = 100;
+                ProgressPercentText.Text = "100%";
             });
-        });
-
-        StatusText.Text = LocalizationManager.Instance["Footer.ScanDone"];
-        AppProgressBar.Value = 100;
-        ProgressPercentText.Text = "100%";
-
-        _ = CheckForUpdatesBackgroundAsync();
+        }
     }
 
     #region Фоновий модуль оновлень (GitHub Toast/Banner)
+
+    /// <summary>Фаза 5.2/5.4: відкладена стартова перевірка (N хвилин простою + випадковий jitter).</summary>
+    private async Task DeferredStartupUpdateCheckAsync()
+    {
+        await UpdateManager.WaitStartupJitterAsync().ConfigureAwait(false);
+        if (_resourcesDisposed) return;
+        await CheckForUpdatesBackgroundAsync();
+    }
 
     /// <summary>Періодична фонова перевірка останнього релізу на GitHub.</summary>
     private async Task CheckForUpdatesBackgroundAsync()
@@ -344,13 +387,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void RefreshThemeBoundColors()
     {
         foreach (var c in CleanerEngine.Cleaners) c.RefreshThemeColors();
-        foreach (var d in FilteredMsiDevices) d.RefreshThemeColors();
     }
 
     public void RefreshLocalizedChromePublic()
     {
         RefreshLocalizedChrome();
-        UpdateTweakChipsAndFilter();
+        UpdateTweakChipsAndFilter(rebuildChips: true);
         UpdateDebloatChipsAndFilter();
         UpdateToolsChipsAndFilter();
         UpdateDnsChipsAndFilter();
@@ -359,36 +401,19 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     #region Фільтрація ТВІКІВ
 
-    private void UpdateTweakChipsAndFilter()
+    // v0.6.0: чіпси категорій твіків кешуються — будуються лише при першому завантаженні або зміні мови;
+    // при кліку оновлюється ТІЛЬКИ активний вигляд (без перебудови дерева елементів).
+    private readonly Dictionary<string, Border> _tweakChipMap = new(StringComparer.OrdinalIgnoreCase);
+    private bool _tweakChipsBuilt;
+
+    private void UpdateTweakChipsAndFilter(bool rebuildChips = false)
     {
-        CategoryChipsPanel.Children.Clear();
-
-        var categories = TweakEngine.Instance.GetCategories(_currentRisk);
-        var tweaksInRisk = TweakEngine.Instance.AllTweaks
-            .Where(t => string.Equals(t.Risk, _currentRisk, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        foreach (var cat in categories)
+        if (rebuildChips || !_tweakChipsBuilt)
         {
-            int count = cat == "Всі"
-                ? tweaksInRisk.Count
-                : tweaksInRisk.Count(t => string.Equals(t.Category, cat, StringComparison.OrdinalIgnoreCase));
-
-            bool isSelected = string.Equals(cat, _currentTweakCategory, StringComparison.OrdinalIgnoreCase);
-
-            string catDisplay = LocalizeCategory(cat);
-            var chip = CreateFilterChip(
-                text: cat == "Всі" ? $"🌟 {catDisplay} ({count})" : $"{catDisplay} ({count})",
-                tag: cat,
-                isSelected: isSelected,
-                onClick: (selectedCat) =>
-                {
-                    _currentTweakCategory = selectedCat;
-                    UpdateTweakChipsAndFilter();
-                });
-
-            CategoryChipsPanel.Children.Add(chip);
+            BuildTweakChips();
         }
+
+        UpdateTweakChipStates();
 
         FilteredTweaks.Clear();
         var filtered = TweakEngine.Instance.GetFilteredAndSortedTweaks(
@@ -401,6 +426,87 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         foreach (var tweak in filtered)
         {
             FilteredTweaks.Add(tweak);
+        }
+    }
+
+    /// <summary>Будує чіпси категорій один раз (перше завантаження / зміна мови).</summary>
+    private void BuildTweakChips()
+    {
+        CategoryChipsPanel.Children.Clear();
+        _tweakChipMap.Clear();
+
+        var categories = TweakEngine.Instance.GetCategories(_currentRisk);
+        var tweaksInRisk = TweakEngine.Instance.AllTweaks
+            .Where(t => _currentRisk.Equals("ALL", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(t.Risk, _currentRisk, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var cat in categories)
+        {
+            int count = cat == "Всі"
+                ? tweaksInRisk.Count
+                : tweaksInRisk.Count(t => string.Equals(t.Category, cat, StringComparison.OrdinalIgnoreCase));
+
+            string catDisplay = LocalizeCategory(cat);
+            string text = cat == "Всі" ? $"🌟 {catDisplay} ({count})" : $"{catDisplay} ({count})";
+
+            var chip = CreateChipBorder(text, cat);
+            string capturedCat = cat;
+
+            chip.MouseEnter += (s, e) =>
+            {
+                if (!_tweakChipMap.TryGetValue(_currentTweakCategory, out var active) || !ReferenceEquals(active, chip))
+                    chip.Background = (Brush)FindResource("ChipHoverBg");
+            };
+            chip.MouseLeave += (s, e) =>
+            {
+                if (!_tweakChipMap.TryGetValue(_currentTweakCategory, out var active) || !ReferenceEquals(active, chip))
+                    chip.Background = (Brush)FindResource("ChipBg");
+            };
+            chip.MouseDown += (s, e) =>
+            {
+                _currentTweakCategory = capturedCat;
+                UpdateTweakChipsAndFilter();
+            };
+
+            _tweakChipMap[cat] = chip;
+            CategoryChipsPanel.Children.Add(chip);
+        }
+
+        _tweakChipsBuilt = true;
+    }
+
+    /// <summary>Оновлює лише активний вигляд кешованих чіпсів (без перебудови).</summary>
+    private void UpdateTweakChipStates()
+    {
+        foreach (var pair in _tweakChipMap)
+        {
+            ApplyChipState(pair.Value, string.Equals(pair.Key, _currentTweakCategory, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private Border CreateChipBorder(string text, string tag)
+    {
+        return new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(0, 0, 6, 4),
+            Cursor = Cursors.Hand,
+            Tag = tag,
+            Child = new TextBlock { Text = text, FontSize = 11.5 }
+        };
+    }
+
+    private void ApplyChipState(Border chip, bool isSelected)
+    {
+        chip.Background = isSelected ? (Brush)FindResource("ChipActiveBg") : (Brush)FindResource("ChipBg");
+        chip.BorderBrush = isSelected ? (Brush)FindResource("ChipActiveBorder") : (Brush)FindResource("ChipBorder");
+        if (chip.Child is TextBlock tb)
+        {
+            tb.FontWeight = isSelected ? FontWeights.Bold : FontWeights.SemiBold;
+            tb.Foreground = isSelected ? (Brush)FindResource("ChipActiveText") : (Brush)FindResource("TextPrimary");
         }
     }
 
@@ -466,8 +572,17 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             FilteredDebloat.Add(item);
         }
 
+        UpdateDebloatStatsText();
+    }
+
+    /// <summary>Оновлює лише підсумок статистики без перебудови списку (без блимання).</summary>
+    private void UpdateDebloatStatsText()
+    {
         var stats = DebloatEngine.GetStatistics();
-        DebloatStatsText.Text = LocalizationManager.Instance.Format("Debloat.StatsSummary", stats.Installed, stats.Removed, stats.Total);
+        if (DebloatStatsText != null)
+        {
+            DebloatStatsText.Text = LocalizationManager.Instance.Format("Debloat.StatsSummary", stats.Installed, stats.Removed, stats.Total);
+        }
     }
 
     private void DebloatSortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -740,9 +855,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             DebloatView.Visibility = Visibility.Collapsed;
             StartupView.Visibility = Visibility.Collapsed;
             ToolsView.Visibility = Visibility.Collapsed;
-            GameMsiView.Visibility = Visibility.Collapsed;
-            NetworkView.Visibility = Visibility.Collapsed;
-            PowerView.Visibility = Visibility.Collapsed;
 
             if (tag == "DNS")
             {
@@ -766,6 +878,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             else if (tag == "DEBLOAT")
             {
                 DebloatView.Visibility = Visibility.Visible;
+                if (!_debloatScanned)
+                {
+                    StatusText.Text = LocalizationManager.Instance["Debloat.Rescanning"];
+                    await DebloatEngine.ScanInstalledPackagesAsync();
+                    _debloatScanned = true;
+                }
                 UpdateDebloatChipsAndFilter();
                 StatusText.Text = LocalizationManager.Instance["Debloat.Ready"];
             }
@@ -779,35 +897,20 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             else if (tag == "TOOLS")
             {
                 ToolsView.Visibility = Visibility.Visible;
+                if (!_toolsScanned)
+                {
+                    StatusText.Text = LocalizationManager.Instance["Tools.Rescanning"];
+                    await ToolsEngine.DetectInstalledToolsAsync();
+                    _toolsScanned = true;
+                }
                 UpdateToolsChipsAndFilter();
                 StatusText.Text = LocalizationManager.Instance["Tools.Ready"];
             }
-            else if (tag == "GAMEMSI")
-            {
-                GameMsiView.Visibility = Visibility.Visible;
-                RefreshGameModeUi();
-                if (FilteredMsiDevices.Count == 0)
-                {
-                    await ScanMsiDevicesAsync();
-                }
-                StatusText.Text = LocalizationManager.Instance["GameMode.Ready"];
-            }
-            else if (tag == "NETWORK")
-            {
-                NetworkView.Visibility = Visibility.Visible;
-                await RefreshNetworkStatusAsync();
-            }
-            else if (tag == "POWER")
-            {
-                PowerView.Visibility = Visibility.Visible;
-                await RefreshPowerUiAsync();
-                StatusText.Text = LocalizationManager.Instance["Power.Title"];
-            }
             else
             {
+                // v0.6.0: уніфікований вью «Твіки системи» — усі твіки, категорії через CategoryChipsPanel.
                 TweaksView.Visibility = Visibility.Visible;
-                _currentRisk = tag;
-                _currentTweakCategory = "Всі";
+                _currentRisk = "ALL";
                 UpdateTweakChipsAndFilter();
             }
         }
@@ -883,53 +986,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private async void BtnBatchApply_Click(object sender, RoutedEventArgs e)
-    {
-        var safeTweaks = TweakEngine.Instance.AllTweaks
-            .Where(t => string.Equals(t.Risk, "Safe", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        var loc = LocalizationManager.Instance;
-        if (MessageBox.Show(loc.Format("Dialogs.SafePackConfirm", safeTweaks.Count), loc["Dialogs.SafePackTitle"], MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-        {
-            int i = 0;
-            foreach (var tweak in safeTweaks)
-            {
-                i++;
-                int pct = (int)((i / (double)safeTweaks.Count) * 100);
-                AppProgressBar.Value = pct;
-                ProgressPercentText.Text = $"{pct}%";
-                StatusText.Text = loc.Format("Dialogs.Optimizing", tweak.LocalizedName);
-
-                await TweakEngine.Instance.ExecuteTweakAsync(tweak, isApply: true);
-            }
-            StatusText.Text = loc["Dialogs.SafePackDone"];
-            AppLogger.Log("1-Click Safe Pack повністю застосовано", "SUCCESS");
-            UpdateTweakChipsAndFilter();
-        }
-    }
-
-    private async void BtnSafeMasloPack_Click(object sender, RoutedEventArgs e)
-    {
-        if (MessageBox.Show(LocalizationManager.Instance["Dialogs.MasloPackConfirm"], LocalizationManager.Instance["Dialogs.MasloPackTitle"], MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-        {
-            var res = await PresetEngine.ApplyMasloSignaturePackAsync(
-                TweakEngine.Instance.AllTweaks,
-                DebloatEngine.Catalog,
-                (pct, msg) => Dispatcher.Invoke(() =>
-                {
-                    AppProgressBar.Value = pct;
-                    ProgressPercentText.Text = $"{pct}%";
-                    StatusText.Text = msg;
-                }));
-
-            StatusText.Text = res.Message;
-            AppLogger.Log(res.Message, "SUCCESS");
-            UpdateTweakChipsAndFilter();
-            UpdateDebloatChipsAndFilter();
-        }
-    }
-
     #endregion
 
     #region DNS
@@ -969,6 +1025,13 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         StatusText.Text = ok ? loc["Dns.ResetDone"] : loc["Dns.ResetFailed"];
         AppLogger.Log("DNS reset to DHCP", ok ? "SUCCESS" : "WARN");
         UpdateDnsChipsAndFilter();
+    }
+
+    private async void BtnFlushDns_Click(object sender, RoutedEventArgs e)
+    {
+        var loc = LocalizationManager.Instance;
+        bool ok = await DnsEngine.FlushDnsCacheAsync();
+        StatusText.Text = ok ? loc["Dns.FlushDone"] : loc["Dns.FlushFailed"];
     }
 
     #endregion
@@ -1071,7 +1134,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             bool ok = await DebloatEngine.UninstallPackageAsync(item);
             StatusText.Text = ok ? LocalizationManager.Instance.Format("Debloat.Uninstalled", item.Name) : LocalizationManager.Instance.Format("Debloat.UninstallFailed", item.Name);
             AppLogger.Log($"Видалення UWP {item.Name}: {ok}", ok ? "SUCCESS" : "ERROR");
-            UpdateDebloatChipsAndFilter();
+            UpdateDebloatStatsText();
         }
     }
 
@@ -1083,7 +1146,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             bool ok = await DebloatEngine.RestorePackageAsync(item);
             StatusText.Text = ok ? LocalizationManager.Instance.Format("Debloat.Restored", item.Name) : LocalizationManager.Instance["Debloat.RestoreStoreOpened"];
             AppLogger.Log($"Відновлення UWP {item.Name}: {ok}", ok ? "SUCCESS" : "WARN");
-            UpdateDebloatChipsAndFilter();
+            UpdateDebloatStatsText();
         }
     }
 
@@ -1095,15 +1158,63 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         StatusText.Text = LocalizationManager.Instance["Debloat.RescanDone"];
     }
 
+    /// <summary>Виділяє всі встановлені безпечні пакети (Risk = Safe) для пакетного видалення.</summary>
+    private void BtnSelectSafeDebloat_Click(object sender, RoutedEventArgs e)
+    {
+        foreach (var item in DebloatEngine.Catalog)
+        {
+            item.IsSelected = item.IsInstalled && string.Equals(item.Risk, "Safe", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>Пакетне видалення обраних пакетів в одному процесі PowerShell.</summary>
+    private async void BtnRemoveSelectedDebloat_Click(object sender, RoutedEventArgs e)
+    {
+        var loc = LocalizationManager.Instance;
+        var selected = DebloatEngine.Catalog.Where(d => d.IsSelected).ToList();
+        if (selected.Count == 0)
+        {
+            StatusText.Text = loc["Debloat.NothingSelected"];
+            return;
+        }
+
+        if (MessageBox.Show(loc.Format("Debloat.ConfirmBatch", selected.Count), loc["Debloat.ConfirmBatchTitle"],
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            var progress = new Progress<string>(s => StatusText.Text = s);
+            int removed = await DebloatEngine.RemoveBatchPackagesAsync(selected, progress);
+            StatusText.Text = loc.Format("Debloat.BatchRemoved", removed);
+            UpdateDebloatStatsText();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка пакетного видалення: {ex.Message}", "ERROR");
+        }
+    }
+
+    /// <summary>Миттєве перемикання одного запису автозапуску без повного пересканування списку.</summary>
     private async void ToggleStartup_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button btn && btn.Tag is StartupEntry item)
+        if (sender is Button btn && btn.Tag is StartupItem item)
         {
-            await Task.Run(() => StartupEngine.ToggleStartupState(item));
+            bool target = !item.IsEnabled;
+            await StartupEngine.ToggleStartupStateAsync(item, target);
             var loc = LocalizationManager.Instance;
             string state = item.IsEnabled ? loc["Startup.EnabledWord"] : loc["Startup.PausedWord"];
             StatusText.Text = loc.Format("Startup.ToggleDone", item.Name, state);
-            UpdateStartupChipsAndFilter();
+        }
+    }
+
+    private void OpenStartupLocation_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is StartupItem item)
+        {
+            StartupEngine.OpenFileLocation(item);
         }
     }
 
@@ -1224,7 +1335,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var loc = LocalizationManager.Instance;
         StatusText.Text = loc["Update.Checking"];
-        var (available, newVer, url) = await UpdateManager.CheckForUpdateAsync();
+        // Ручна перевірка (Фаза 5.2): ігнорує throttle і quiet-режим — це явна дія користувача.
+        var (available, newVer, url) = await UpdateManager.CheckForUpdateAsync(manual: true);
 
         if (available)
         {
@@ -1238,72 +1350,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         {
             MessageBox.Show(loc.Format("Update.UpToDate", UpdateManager.CurrentVersion), loc["Update.UpToDateTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
             StatusText.Text = loc["Update.UpToDateStatus"];
-        }
-    }
-
-    private async void BtnPresetMenu_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        // Контекстне меню «Пресети»: Tag = Save / Load → одразу виконуємо дію.
-        if (sender is MenuItem mi && mi.Tag is string tag)
-        {
-            if (tag.Equals("Save", StringComparison.OrdinalIgnoreCase))
-            {
-                var saveRes = PresetEngine.ExportFullProfile(TweakEngine.Instance.AllTweaks, DebloatEngine.Catalog);
-                StatusText.Text = saveRes.Message;
-                if (saveRes.Success) MessageBox.Show(saveRes.Message, loc["Dialogs.ExportConfigTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            if (tag.Equals("Load", StringComparison.OrdinalIgnoreCase))
-            {
-                StatusText.Text = loc["Dialogs.DeployingProfile"];
-                var loadRes = await PresetEngine.ImportAndApplyProfileAsync(
-                    TweakEngine.Instance.AllTweaks,
-                    DebloatEngine.Catalog,
-                    (pct, msg) => Dispatcher.Invoke(() =>
-                    {
-                        AppProgressBar.Value = pct;
-                        ProgressPercentText.Text = $"{pct}%";
-                        StatusText.Text = msg;
-                    }));
-
-                StatusText.Text = loadRes.Message;
-                MessageBox.Show(loadRes.Message, loc["Dialogs.ImportConfigTitle"], MessageBoxButton.OK, loadRes.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
-                UpdateTweakChipsAndFilter();
-                UpdateDebloatChipsAndFilter();
-                return;
-            }
-        }
-
-        var choice = MessageBox.Show(
-            loc["Dialogs.PresetMenuPrompt"],
-            loc["Dialogs.PresetMenuTitle"],
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Question);
-
-        if (choice == MessageBoxResult.Yes)
-        {
-            var res = PresetEngine.ExportFullProfile(TweakEngine.Instance.AllTweaks, DebloatEngine.Catalog);
-            StatusText.Text = res.Message;
-            if (res.Success) MessageBox.Show(res.Message, loc["Dialogs.ExportConfigTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        else if (choice == MessageBoxResult.No)
-        {
-            StatusText.Text = loc["Dialogs.DeployingProfile"];
-            var res = await PresetEngine.ImportAndApplyProfileAsync(
-                TweakEngine.Instance.AllTweaks,
-                DebloatEngine.Catalog,
-                (pct, msg) => Dispatcher.Invoke(() =>
-                {
-                    AppProgressBar.Value = pct;
-                    ProgressPercentText.Text = $"{pct}%";
-                    StatusText.Text = msg;
-                }));
-
-            StatusText.Text = res.Message;
-            MessageBox.Show(res.Message, loc["Dialogs.ImportConfigTitle"], MessageBoxButton.OK, res.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
-            UpdateTweakChipsAndFilter();
-            UpdateDebloatChipsAndFilter();
         }
     }
 
@@ -1389,7 +1435,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var loc = LocalizationManager.Instance;
         loc.LoadLanguage(loc.NextLanguage());
         RefreshLocalizedChrome();
-        UpdateTweakChipsAndFilter();
+        UpdateTweakChipsAndFilter(rebuildChips: true);
         UpdateDebloatChipsAndFilter();
         UpdateToolsChipsAndFilter();
         UpdateDnsChipsAndFilter();
@@ -1427,33 +1473,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         HwBadgeTweaksCount.Text = loc.Format("Header.DatabaseCount", TweakEngine.Instance.AllTweaks.Count);
 
         // Сайдбар
-        LblNavUi.Text = loc["Sidebar.NavUI"];
-        LblNavSafe.Text = loc["Sidebar.NavSafe"];
-        LblNavMed.Text = loc["Sidebar.NavMedium"];
-        LblNavHigh.Text = loc["Sidebar.NavHigh"];
+        LblNavTweaks.Text = loc["Sidebar.NavTweaks"];
         LblNavDns.Text = loc["Sidebar.NavDns"];
         LblNavDebloat.Text = loc["Sidebar.NavDebloat"];
         LblNavStartup.Text = loc["Sidebar.NavStartup"];
         LblNavTools.Text = loc["Sidebar.NavTools"];
         LblNavClean.Text = loc["Sidebar.NavCleaner"];
-        LblAutoTitle.Text = loc["Sidebar.AutomationTitle"];
-        BtnBatchApply.Content = loc["Sidebar.BtnSafePack"];
-        BtnSafeMasloPack.Content = loc["Sidebar.BtnMasloPack"];
-        BtnGameBoost.Content = loc["Sidebar.BtnGameBoost"];
-        BtnPresetMenu.Content = loc["Sidebar.BtnPresets"];
-        LblNavGameMode.Text = loc["Sidebar.NavGameMode"];
-        LblNavNetwork.Text = loc["Sidebar.NavNetwork"];
-        LblNavPower.Text = loc["Sidebar.NavPower"];
-
-        // Підказки (ToolTip) кнопок автоматизації
-        TtipGameBoost.Text = loc["Sidebar.BtnGameBoostTip"];
-        TtipPresets.Text = loc["Sidebar.BtnPresetsTip"];
-
-        // Контекстне меню пресетів
-        MiSafePack.Header = loc["Sidebar.BtnSafePack"];
-        MiMasloPack.Header = loc["Sidebar.BtnMasloPack"];
-        MiSaveProfile.Header = loc["Sidebar.MiSaveProfile"];
-        MiLoadProfile.Header = loc["Sidebar.MiLoadProfile"];
 
         // Тост-банер оновлення (якщо видимий)
         if (UpdateToast.Visibility == Visibility.Visible)
@@ -1471,7 +1496,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         LblSortDns.Text = loc["Dns.SortLabel"];
         LblSortStartup.Text = loc["Common.SortLabel"];
         LblSortCleaner.Text = loc["Common.SortLabel"];
-        LblSortMsi.Text = loc["Common.SortLabel"];
         ApplyLocalizedSortItems();
         ApplyDnsSortItems();
 
@@ -1480,9 +1504,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         DnsDescText.Text = loc["Dns.Description"];
         BtnFastestDns.Content = loc["Dns.BtnFastest"];
         BtnResetDns.Content = loc["Dns.BtnReset"];
+        BtnFlushDns.Content = loc["Dns.BtnFlush"];
 
         DebloatTitleText.Text = loc["Debloat.Title"];
         BtnRescanDebloat.Content = loc["Debloat.BtnRescan"];
+        BtnSelectSafeDebloat.Content = loc["Debloat.SelectSafe"];
+        BtnRemoveSelectedDebloat.Content = loc["Debloat.RemoveSelected"];
 
         StartupTitleText.Text = loc["Startup.Title"];
         StartupDescText.Text = loc["Startup.Description"];
@@ -1490,53 +1517,23 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
         ToolsTitleText.Text = loc["Tools.Title"];
         BtnRescanTools.Content = loc["Tools.BtnRescan"];
+        ChkCreateDesktopShortcut.Content = loc["Tools.ChkCreateShortcut"];
+        ChkCreateDesktopShortcut.IsChecked = ToolsEngine.CreateDesktopShortcutOnInstall;
 
         CleanerTitleText.Text = loc["Cleaner.Title"];
         CleanerTotalText.Text = loc["Cleaner.Calculating"];
         BtnCleanAll.Content = loc["Cleaner.BtnCleanAll"];
         BtnRescanCleaner.Content = loc["Cleaner.BtnRescan"];
 
-        // Game Mode & MSI
-        GameMsiTitleText.Text = loc["GameMode.Title"];
-        GameMsiDescText.Text = loc["GameMode.Description"];
-        TglGameMode.Content = loc["GameMode.ToggleOff"];
-        BtnPurgeStandby.Content = loc["GameMode.BtnPurge"];
-        LblGameModeHow.Text = loc["GameMode.HowItWorksTitle"];
-        TxtGameModeHow.Text = loc["GameMode.HowItWorks"];
-        LblStandbyPurge.Text = loc["GameMode.StandbyTitle"];
-        TxtStandbyPurge.Text = loc["GameMode.StandbyDesc"];
-
-        MsiTitleText.Text = loc["Msi.Title"];
-        MsiStatsText.Text = loc["Msi.Scanning"];
-        MsiEducationalText.Text = loc["Msi.EducationalText"];
-        BtnScanMsi.Content = loc["Msi.BtnScan"];
-        BtnMsiOptimize.Content = loc["Msi.BtnOptimize"];
-        BtnMsiRestore.Content = loc["Msi.BtnRestore"];
-        RefreshGameModeUi();
-
-        // Профілі живлення (PowerEngine)
-        PowerTitleText.Text = loc["Power.Title"];
-        PowerEcoTitle.Text = loc["Power.CardEcoTitle"];
-        PowerEcoDesc.Text = loc["Power.CardEcoDesc"];
-        PowerSnapshotTitle.Text = loc["Power.CardSnapshotTitle"];
-        PowerSnapshotDesc.Text = loc["Power.CardSnapshotDesc"];
-        PowerUltraTitle.Text = loc["Power.CardUltraTitle"];
-        PowerUltraDesc.Text = loc["Power.CardUltraDesc"];
-        BtnPowerEco.Content = loc["Power.BtnActivate"];
-        BtnPowerSnapshot.Content = loc["Power.BtnActivate"];
-        BtnPowerUltra.Content = loc["Power.BtnActivate"];
-        BtnPowerUpdateSnapshot.Content = loc["Power.BtnUpdateSnapshot"];
-        _ = RefreshPowerUiAsync();
-
-        // Мережа (NetworkEngine)
-        NetworkTitleText.Text = loc["Network.Title"];
-        NetworkDescText.Text = loc["Network.Description"];
-        NetworkStatusText.Text = loc["Network.StatusInitial"];
-        NetworkDetailsText.Text = loc["Network.DetailsInitial"];
-        BtnNagle.Content = loc["Network.BtnNagle"];
-        BtnEee.Content = loc["Network.BtnEee"];
-        BtnQos.Content = loc["Network.BtnQos"];
-        BtnNetworkReset.Content = loc["Network.BtnReset"];
+        // Режими CleanerView + аналізатор диска
+        BtnCleanerModeCache.Content = loc["Cleaner.Analyzer.ModeCache"];
+        BtnCleanerModeAnalyzer.Content = loc["Cleaner.Analyzer.ModeAnalyzer"];
+        LblAnalyzerDrive.Text = loc["Cleaner.Analyzer.DriveLabelShort"];
+        LblAnalyzerFilter.Text = loc["Cleaner.Analyzer.FilterLabel"];
+        BtnAnalyzerScan.Content = loc["Common.BtnScan"];
+        AnalyzerSummaryText.Text = loc["Cleaner.Analyzer.Ready"];
+        ApplyAnalyzerSortItems();
+        if (_cleanerAnalyzerMode) PopulateAnalyzerDrives();
 
         // Футер
         StatusText.Text = loc["Footer.ReadyStatus"];
@@ -1592,17 +1589,6 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         };
         ApplySortItems(CleanerSortComboBox, cleanerMap);
 
-        var msiMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Default"] = "Common.SortDefault",
-            ["MsiFirst"] = "Msi.SortMsiFirst",
-            ["LineBasedFirst"] = "Msi.SortLineBased",
-            ["Priority"] = "Msi.SortPriority",
-            ["Name"] = "Common.SortName",
-            ["Category"] = "Msi.SortCategory",
-            ["Vendor"] = "Msi.SortVendor",
-        };
-        ApplySortItems(MsiSortComboBox, msiMap);
     }
 
     private static void ApplySortItems(System.Windows.Controls.ComboBox combo, Dictionary<string, string> map)
@@ -1634,6 +1620,24 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
     }
 
+    /// <summary>Локалізує пункти фільтра аналізатора диска (Топ папок / Топ файлів / Усі).</summary>
+    private void ApplyAnalyzerSortItems()
+    {
+        if (AnalyzerFilterComboBox == null) return;
+        foreach (var item in AnalyzerFilterComboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag is string tag)
+            {
+                item.Content = tag switch
+                {
+                    "folders" => LocalizationManager.Instance["Cleaner.Analyzer.FilterFolders"],
+                    "files" => LocalizationManager.Instance["Cleaner.Analyzer.FilterFiles"],
+                    _ => LocalizationManager.Instance["Cleaner.Analyzer.FilterAll"]
+                };
+            }
+        }
+    }
+
     /// <summary>Локалізація назви категорії: "Всі" → Common.AllCategories, інакше Categories.{name} з fallback на назву з бандлу.</summary>
     private static string LocalizeCategory(string category)
     {
@@ -1653,328 +1657,171 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         return $"{bytes} {loc["Common.UnitBytes"]}";
     }
 
-    #region Game Mode, MSI, Мережа та Налаштування
+    #region Аналізатор диска (WizTree) та ярлики Tools
 
-    private void RefreshGameModeUi()
+    private void SetCleanerMode(bool analyzer)
     {
+        _cleanerAnalyzerMode = analyzer;
+        CleanerCacheModePanel.Visibility = analyzer ? Visibility.Collapsed : Visibility.Visible;
+        CleanerAnalyzerModePanel.Visibility = analyzer ? Visibility.Visible : Visibility.Collapsed;
+
+        BtnCleanerModeCache.Background = (Brush)FindResource(analyzer ? "ActionBtnBg" : "AccentGreen");
+        BtnCleanerModeAnalyzer.Background = (Brush)FindResource(analyzer ? "AccentGreen" : "ActionBtnBg");
+
+        if (analyzer) PopulateAnalyzerDrives();
+    }
+
+    private void BtnCleanerModeCache_Click(object sender, RoutedEventArgs e) => SetCleanerMode(false);
+
+    private void BtnCleanerModeAnalyzer_Click(object sender, RoutedEventArgs e) => SetCleanerMode(true);
+
+    /// <summary>Заповнює список дисків (fixed drives) + швидкі пресети (Профіль, Downloads).</summary>
+    private void PopulateAnalyzerDrives()
+    {
+        if (_analyzerDrivesLoaded || AnalyzerDriveComboBox == null) return;
         var loc = LocalizationManager.Instance;
-        bool active = GameModeEngine.IsGameModeActive;
-        TglGameMode.IsChecked = active;
-        GameModeStatusText.Text = active ? loc["GameMode.StatusActive"] : loc["GameMode.StatusInactive"];
-        GameModeStatusText.Foreground = active ? (Brush)FindResource("AccentGreen") : (Brush)FindResource("TextMuted");
-        TglGameMode.Content = active ? loc["GameMode.ToggleOn"] : loc["GameMode.ToggleOff"];
-    }
 
-    private async void TglGameMode_Checked(object sender, RoutedEventArgs e)
-    {
-        if (!GameModeEngine.IsGameModeActive)
-        {
-            GameModeStatusText.Text = LocalizationManager.Instance["GameMode.Activating"];
-            await GameModeEngine.ActivateGameModeAsync();
-            RefreshGameModeUi();
-        }
-    }
-
-    private async void TglGameMode_Unchecked(object sender, RoutedEventArgs e)
-    {
-        if (GameModeEngine.IsGameModeActive)
-        {
-            GameModeStatusText.Text = LocalizationManager.Instance["GameMode.Deactivating"];
-            await GameModeEngine.DeactivateGameModeAsync();
-            RefreshGameModeUi();
-        }
-    }
-
-    private async void BtnPurgeStandby_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnPurgeStandby.Content = loc["GameMode.PurgeBusy"];
-        var (success, freed) = await GameModeEngine.PurgeStandbyListAsync();
-        BtnPurgeStandby.Content = success ? loc.Format("GameMode.PurgeFreed", freed) : loc["GameMode.PurgeError"];
-        GameModeStatusText.Text = success
-            ? loc.Format("GameMode.PurgeOk", freed)
-            : loc["GameMode.PurgeFail"];
-    }
-
-    #region Профілі живлення (PowerEngine)
-
-    private async void PowerActivate_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button btn || btn.Tag is not string tag)
-            return;
-
-        var loc = LocalizationManager.Instance;
-        SystemPowerMode? mode = tag switch
-        {
-            "Eco" => SystemPowerMode.EcoPowerSaver,
-            "Snapshot" => SystemPowerMode.OriginalSnapshot,
-            "Ultra" => SystemPowerMode.UltraPerformance,
-            _ => null
-        };
-
-        if (mode is null)
-            return;
-
-        btn.IsEnabled = false;
-        StatusText.Text = loc["Power.Applying"];
+        AnalyzerDriveComboBox.Items.Clear();
         try
         {
-            bool ok = await PowerEngine.ApplyProfileAsync(mode.Value);
-            StatusText.Text = ok ? loc["Power.SuccessMessage"] : loc["Power.ApplyError"];
+            foreach (var drive in DriveInfo.GetDrives().Where(d => d.IsReady && d.DriveType == DriveType.Fixed))
+            {
+                double freeGb = drive.AvailableFreeSpace / 1073741824.0;
+                double totalGb = drive.TotalSize / 1073741824.0;
+                string label = loc.Format("Cleaner.Analyzer.DriveLabel", drive.Name, freeGb.ToString("0.#"), totalGb.ToString("0.#"));
+                AnalyzerDriveComboBox.Items.Add(new ComboBoxItem { Content = label, Tag = drive.Name });
+            }
+        }
+        catch { }
+
+        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (!string.IsNullOrWhiteSpace(profile))
+        {
+            AnalyzerDriveComboBox.Items.Add(new ComboBoxItem { Content = loc["Cleaner.Analyzer.PresetProfile"], Tag = profile });
+            AnalyzerDriveComboBox.Items.Add(new ComboBoxItem { Content = loc["Cleaner.Analyzer.PresetDownloads"], Tag = Path.Combine(profile, "Downloads") });
+        }
+
+        if (AnalyzerDriveComboBox.Items.Count > 0) AnalyzerDriveComboBox.SelectedIndex = 0;
+        _analyzerDrivesLoaded = true;
+    }
+
+    private async void BtnAnalyzerScan_Click(object sender, RoutedEventArgs e)
+    {
+        if (AnalyzerDriveComboBox?.SelectedItem is not ComboBoxItem sel || sel.Tag is not string root)
+        {
+            return;
+        }
+
+        var loc = LocalizationManager.Instance;
+        BtnAnalyzerScan.IsEnabled = false;
+        FilteredAnalyzer.Clear();
+        AnalyzerSummaryText.Text = loc["Cleaner.Analyzer.Scanning"];
+
+        try
+        {
+            if (!Directory.Exists(root))
+            {
+                AnalyzerSummaryText.Text = loc["Cleaner.Analyzer.PathMissing"];
+                return;
+            }
+
+            var progress = new Progress<string>(s => AnalyzerSummaryText.Text = s);
+            var items = await CleanerEngine.ScanDriveHeavyItemsAsync(root, 50, 30, progress);
+
+            _lastAnalyzerItems = items;
+            ApplyAnalyzerFilter();
+
+            string filter = (AnalyzerFilterComboBox?.SelectedItem as ComboBoxItem)?.Tag as string ?? "all";
+            AnalyzerSummaryText.Text = loc.Format("Cleaner.Analyzer.ScanDone", root, FilteredAnalyzer.Count);
+            AppLogger.Log($"Аналізатор диска: {root} → {items.Count} елементів (фільтр {filter})", "SUCCESS");
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Помилка аналізу диска {root}: {ex.Message}", "ERROR");
+            AnalyzerSummaryText.Text = loc["Cleaner.Analyzer.ScanFailed"];
         }
         finally
         {
-            btn.IsEnabled = true;
+            BtnAnalyzerScan.IsEnabled = true;
         }
     }
 
-    private async void BtnPowerUpdateSnapshot_Click(object sender, RoutedEventArgs e)
+    private void AnalyzerFilterComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        Button? btn = sender as Button;
-        if (btn is not null)
-            btn.IsEnabled = false;
+        ApplyAnalyzerFilter();
+    }
 
-        StatusText.Text = LocalizationManager.Instance["Power.SnapshotCreating"];
-        try
+    private void ApplyAnalyzerFilter()
+    {
+        if (AnalyzerItemsControl == null) return;
+        string filter = (AnalyzerFilterComboBox?.SelectedItem as ComboBoxItem)?.Tag as string ?? "all";
+
+        FilteredAnalyzer.Clear();
+        foreach (var item in _lastAnalyzerItems)
         {
-            bool ok = await PowerEngine.CaptureInitialSnapshotIfNeededAsync(forceRecapture: true);
-            StatusText.Text = ok ? LocalizationManager.Instance["Power.SnapshotDone"] : LocalizationManager.Instance["Power.SnapshotError"];
+            if (filter == "folders" && !item.IsDirectory) continue;
+            if (filter == "files" && item.IsDirectory) continue;
+            FilteredAnalyzer.Add(item);
         }
-        finally
+    }
+
+    private void AnalyzerOpenFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is DiskHeavyItem item)
         {
-            if (btn is not null)
-                btn.IsEnabled = true;
+            CleanerEngine.OpenInExplorer(item);
         }
     }
 
-    private async void BtnPowerRefresh_Click(object sender, RoutedEventArgs e)
+    private async void AnalyzerDeleteItem_Click(object sender, RoutedEventArgs e)
     {
-        await RefreshPowerUiAsync();
-    }
+        if (sender is not Button btn || btn.Tag is not DiskHeavyItem item) return;
 
-    /// <summary>Підтягує з PowerEngine тип пристрою, герцовку та назву плану живлення.</summary>
-    private async Task RefreshPowerUiAsync()
-    {
         var loc = LocalizationManager.Instance;
+        var confirm = MessageBox.Show(
+            loc.Format("Cleaner.Analyzer.ConfirmDelete", item.Name),
+            loc["Cleaner.Analyzer.ConfirmTitle"],
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
 
-        bool laptop = false;
-        int hz = 0;
-        string planName = "—";
+        if (confirm != MessageBoxResult.Yes) return;
 
-        await Task.Run(() =>
+        bool ok = await CleanerEngine.DeleteHeavyItemAsync(item, sendToRecycleBin: true);
+        if (ok)
         {
-            try { laptop = PowerEngine.IsLaptopDevice(); } catch { }
-            try { hz = PowerEngine.GetDisplayRefreshRates().CurrentHz; } catch { }
-            try { planName = PowerEngine.GetActivePowerPlanName(); } catch { }
-        });
-
-        PowerDeviceTypeText.Text = laptop ? loc["Power.DeviceTypeLaptop"] : loc["Power.DeviceTypeDesktop"];
-        PowerHzText.Text = loc.Format("Power.HzLabel", hz);
-        PowerPlanNameText.Text = planName;
-        UpdatePowerBadges();
-    }
-
-    private void UpdatePowerBadges()
-    {
-        PowerEcoBadge.Visibility = _lastPowerMode == SystemPowerMode.EcoPowerSaver ? Visibility.Visible : Visibility.Collapsed;
-        PowerSnapshotBadge.Visibility = _lastPowerMode == SystemPowerMode.OriginalSnapshot ? Visibility.Visible : Visibility.Collapsed;
-        PowerUltraBadge.Visibility = _lastPowerMode == SystemPowerMode.UltraPerformance ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void OnPowerModeChanged(SystemPowerMode mode)
-    {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.Invoke(() => OnPowerModeChanged(mode));
-            return;
+            FilteredAnalyzer.Remove(item);
+            _lastAnalyzerItems.Remove(item);
+            StatusText.Text = loc.Format("Cleaner.Analyzer.Deleted", item.Name);
         }
-
-        _lastPowerMode = mode;
-        UpdatePowerBadges();
+        else
+        {
+            StatusText.Text = loc["Cleaner.Analyzer.DeleteFailed"];
+        }
     }
 
-    private void OnGameModeStateChanged(bool isActive)
+    private void ChkCreateDesktopShortcut_Click(object sender, RoutedEventArgs e)
     {
-        if (!Dispatcher.CheckAccess())
+        if (sender is System.Windows.Controls.CheckBox cb)
         {
-            Dispatcher.Invoke(() => OnGameModeStateChanged(isActive));
-            return;
+            ToolsEngine.CreateDesktopShortcutOnInstall = cb.IsChecked == true;
         }
+    }
 
-        RefreshGameModeUi();
+    private void CreateShortcutTool_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button btn && btn.Tag is ToolItem tool)
+        {
+            var loc = LocalizationManager.Instance;
+            bool ok = ToolsEngine.CreateDesktopShortcut(tool);
+            StatusText.Text = ok
+                ? loc.Format("Tools.ShortcutCreated", tool.Name)
+                : loc.Format("Tools.ShortcutFailed", tool.Name);
+        }
     }
 
     #endregion
 
-    private void UpdateMsiDevices()
-    {
-        var filtered = MsiEngine.GetFilteredAndSortedDevices(sortMode: _currentMsiSort);
-        FilteredMsiDevices.Clear();
-        foreach (var d in filtered)
-            FilteredMsiDevices.Add(d);
-    }
-
-    private void MsiSortComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (MsiSortComboBox?.SelectedItem is ComboBoxItem item && item.Tag is string tag)
-        {
-            _currentMsiSort = tag switch
-            {
-                "MsiFirst" => MsiSortMode.MsiFirst,
-                "LineBasedFirst" => MsiSortMode.LineBasedFirst,
-                "Priority" => MsiSortMode.PriorityDescending,
-                "Name" => MsiSortMode.NameAscending,
-                "Category" => MsiSortMode.Category,
-                "Vendor" => MsiSortMode.Vendor,
-                _ => MsiSortMode.Default
-            };
-            UpdateMsiDevices();
-        }
-    }
-
-    private async Task ScanMsiDevicesAsync()
-    {
-        var loc = LocalizationManager.Instance;
-        BtnScanMsi.IsEnabled = false;
-        BtnScanMsi.Content = loc["Msi.ScanBusy"];
-        MsiStatsText.Text = loc["Msi.Scanning"];
-        try
-        {
-            await MsiEngine.ScanPciDevicesAsync();
-            UpdateMsiDevices();
-
-            var stats = MsiEngine.GetStatistics();
-            MsiStatsText.Text = loc.Format("Msi.StatsFormat", stats.TotalDevices, stats.MsiEnabledCount, stats.MsiPercentage);
-        }
-        finally
-        {
-            BtnScanMsi.IsEnabled = true;
-            BtnScanMsi.Content = loc["Msi.BtnScan"];
-        }
-    }
-
-    private async void BtnScanMsi_Click(object sender, RoutedEventArgs e) => await ScanMsiDevicesAsync();
-
-    private async void BtnMsiOptimize_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnMsiOptimize.Content = "⏳...";
-        int n = await MsiEngine.ApplyOptimalGamingMsiAsync();
-        await ScanMsiDevicesAsync();
-        MsiStatsText.Text = loc.Format("Msi.OptimizeDone", n);
-        BtnMsiOptimize.Content = loc["Msi.BtnOptimize"];
-    }
-
-    private async void BtnMsiRestore_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnMsiRestore.Content = "⏳...";
-        int n = await MsiEngine.RestoreAllToDefaultAsync();
-        await ScanMsiDevicesAsync();
-        MsiStatsText.Text = loc.Format("Msi.RestoreDone", n);
-        BtnMsiRestore.Content = loc["Msi.BtnRestore"];
-    }
-
-    private async void MsiToggle_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is Button btn && btn.Tag is PciMsiDevice device)
-        {
-            bool enable = !device.IsMsiSupported;
-            bool ok = await Task.Run(() => MsiEngine.SetMsiState(device, enable));
-            if (ok)
-            {
-                await ScanMsiDevicesAsync();
-            }
-            else
-            {
-                MsiStatsText.Text = LocalizationManager.Instance.Format("Msi.ToggleFail", device.Name);
-            }
-        }
-    }
-
-
-    private async Task RefreshNetworkStatusAsync()
-    {
-        var loc = LocalizationManager.Instance;
-        NetworkStatusText.Text = loc["Network.Reading"];
-        try
-        {
-            var s = await NetworkEngine.GetTuningStatusAsync();
-            var parts = new List<string>
-            {
-                s.IsNagleDisabled ? loc["Network.NagleOn"] : loc["Network.NagleOff"],
-                s.IsEeeDisabled ? loc["Network.EeeOn"] : loc["Network.EeeOff"],
-                s.IsQosUnlocked ? loc["Network.QosOn"] : loc["Network.QosOff"],
-                s.IsDnsCacheOptimized ? loc["Network.DnsCacheOn"] : loc["Network.DnsCacheOff"]
-            };
-            NetworkStatusText.Text = loc.Format("Network.StatusPrefix", string.Join(" | ", parts));
-            NetworkDetailsText.Text = loc.Format("Network.ActiveAdapters", s.ActiveAdaptersCount, string.Join(", ", s.ActiveAdaptersNames));
-        }
-        catch (Exception ex)
-        {
-            NetworkStatusText.Text = loc.Format("Network.Error", ex.Message);
-        }
-    }
-
-    private async void BtnNagle_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnNagle.Content = loc["Network.Busy"];
-        bool ok = await NetworkEngine.OptimizeTcpLatencyAsync(true);
-        await RefreshNetworkStatusAsync();
-        BtnNagle.Content = ok ? loc["Network.NagleDone"] : loc["Network.ErrorShort"];
-    }
-
-    private async void BtnEee_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnEee.Content = loc["Network.Busy"];
-        bool ok = await NetworkEngine.OptimizeNicPowerSavingAsync(true);
-        await RefreshNetworkStatusAsync();
-        BtnEee.Content = ok ? loc["Network.EeeDone"] : loc["Network.ErrorShort"];
-    }
-
-    private async void BtnQos_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnQos.Content = loc["Network.Busy"];
-        bool ok = await NetworkEngine.OptimizeDnsAndQosAsync(true);
-        await RefreshNetworkStatusAsync();
-        BtnQos.Content = ok ? loc["Network.QosDone"] : loc["Network.ErrorShort"];
-    }
-
-    private async void BtnNetworkReset_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnNetworkReset.Content = loc["Network.Busy"];
-        bool ok = await NetworkEngine.ResetNetworkStackAsync();
-        await RefreshNetworkStatusAsync();
-        BtnNetworkReset.Content = ok ? loc["Network.ResetDone"] : loc["Network.ErrorShort"];
-    }
-
-    private async void BtnGameBoost_Click(object sender, RoutedEventArgs e)
-    {
-        var loc = LocalizationManager.Instance;
-        BtnGameBoost.Content = loc["Sidebar.BtnGameBoostBusy"];
-        try
-        {
-            var purge = await GameModeEngine.PurgeStandbyListAsync();
-            bool activated = await GameModeEngine.ActivateGameModeAsync();
-            RefreshGameModeUi();
-            StatusText.Text = activated
-                ? loc.Format("Dialogs.GameBoostApplied", purge.FreedMB)
-                : loc["Dialogs.GameBoostPartial"];
-
-            MessageBox.Show(
-                loc.Format("Dialogs.GameBoostDone", purge.FreedMB, activated ? loc["Common.Yes"] : loc["Common.No"]),
-                loc["Dialogs.GameBoostTitle"], MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(loc.Format("Dialogs.GameBoostError", ex.Message), loc["Dialogs.GameBoostErrorTitle"], MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        BtnGameBoost.Content = loc["Sidebar.BtnGameBoost"];
-    }
+    #region Налаштування та бекап
 
     private void BtnSettings_Click(object sender, RoutedEventArgs e)
     {

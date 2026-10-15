@@ -15,13 +15,9 @@ namespace MASLOOPTIMIZER;
 public static class TrayManager
 {
     private static NotifyIcon? _notifyIcon;
-    private static ToolStripMenuItem? _gameModeItem;
     public static WidgetWindow? Widget { get; private set; }
 
     #region Win32 API
-
-    [DllImport("psapi.dll")]
-    private static extern int EmptyWorkingSet(IntPtr hwProc);
 
     [DllImport("Shell32.dll", CharSet = CharSet.Unicode)]
     private static extern uint SHEmptyRecycleBin(IntPtr hwnd, string? pszRootPath, uint dwFlags);
@@ -60,28 +56,23 @@ public static class TrayManager
         mOpenApp.Font = new Font("Segoe UI", 9.5f, System.Drawing.FontStyle.Bold);
 
         var mToggleWidget = new ToolStripMenuItem("📌 Віджет моніторингу", null, (s, e) => ToggleWidget());
-        var mGameMode = new ToolStripMenuItem("🎮 Game Mode: Вимкнено", null, OnGameModeTrayClicked);
-        _gameModeItem = mGameMode;
         var mFlushRam = new ToolStripMenuItem("🧹 Очистити пам'ять ОЗП", null, async (s, e) => await FlushRamQuickAsync());
         var mEmptyTrash = new ToolStripMenuItem("🗑️ Очистити весь кошик", null, (s, e) => EmptyTrashQuick());
+        var mHygiene = new ToolStripMenuItem("🧼 Гігієна сесії (DNS + буфер обміну)", null, OnHygieneClicked);
         var mExit = new ToolStripMenuItem("🛑 Повний вихід", null, (s, e) => FullExit());
         mExit.ForeColor = ColorTranslator.FromHtml("#F87171");
 
         contextMenu.Items.Add(mOpenApp);
         contextMenu.Items.Add(mToggleWidget);
-        contextMenu.Items.Add(mGameMode);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(mFlushRam);
         contextMenu.Items.Add(mEmptyTrash);
+        contextMenu.Items.Add(mHygiene);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(mExit);
 
         _notifyIcon.ContextMenuStrip = contextMenu;
         _notifyIcon.DoubleClick += (s, e) => ShowMainWindow();
-
-        // Синхронізація пункту трею з реальним станом Game Mode (подія спрацьовує з фонового потоку).
-        GameModeEngine.OnGameModeStateChanged += OnGameModeStateChanged;
-        UpdateGameModeTrayItem(GameModeEngine.IsGameModeActive);
     }
 
     private static Icon? LoadTrayIcon()
@@ -157,34 +148,21 @@ public static class TrayManager
 
     private static async Task FlushRamQuickAsync()
     {
-        await Task.Run(() =>
+        // Фаза 3.6: під час гри/Game Mode блокуюча збірка GC неприпустима (stutter) — дія відкладається.
+        if (AppActivityCoordinator.IsQuietMode)
         {
-            try
-            {
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-                EmptyWorkingSet(Process.GetCurrentProcess().Handle);
+            _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "ОЗП буде очищено після завершення гри (відкладено)", ToolTipIcon.Info);
+            return;
+        }
 
-                foreach (var proc in Process.GetProcesses())
-                {
-                    try
-                    {
-                        if (!proc.HasExited && proc.Id > 4 && !proc.ProcessName.Equals("System", StringComparison.OrdinalIgnoreCase))
-                        {
-                            EmptyWorkingSet(proc.Handle);
-                        }
-                    }
-                    catch { }
-                    finally
-                    {
-                        proc.Dispose(); // Звільнення нативних системних дескрипторів
-                    }
-                }
-            }
-            catch { }
-        });
+        // Фаза 6: standalone-очистка Standby RAM (спільна з віджетом) — звітуємо фактично звільнені МБ.
+        long freedBytes = 0;
+        try { freedBytes = await MonitorEngine.PurgeStandbyMemoryAsync(); } catch { }
 
-        _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "ОЗП успішно оптимізовано та очищено!", ToolTipIcon.Info);
+        double freedMb = freedBytes / (1024.0 * 1024.0);
+        _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER",
+            freedMb >= 1 ? $"ОЗП очищено — звільнено ≈{freedMb:N0} МБ" : "ОЗП успішно оптимізовано та очищено!",
+            ToolTipIcon.Info);
     }
 
     private static void EmptyTrashQuick()
@@ -197,14 +175,26 @@ public static class TrayManager
         catch { }
     }
 
+    /// <summary>
+    /// Ручна гігієна сесії (safe defaults): на відміну від минулої поведінки,
+    /// не виконується на старті/логіні — лише явно з меню трею.
+    /// </summary>
+    private static async void OnHygieneClicked(object? sender, EventArgs e)
+    {
+        try
+        {
+            await MonitorEngine.RunSessionHygieneAsync();
+            _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "Гігієну сесії виконано (DNS + буфер обміну)", ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Трей: помилка гігієни сесії: {ex.Message}", "WARN");
+        }
+    }
+
     public static void FullExit()
     {
-        if (_notifyIcon != null)
-        {
-            _notifyIcon.Visible = false;
-            _notifyIcon.Dispose();
-            _notifyIcon = null;
-        }
+        Shutdown();
 
         Application.Current?.Dispatcher.Invoke(() =>
         {
@@ -212,44 +202,25 @@ public static class TrayManager
         });
     }
 
-    private static async void OnGameModeTrayClicked(object? sender, EventArgs e)
+    /// <summary>
+    /// Ідемпотентне звільнення ресурсів трею та віджета: DisposeResources віджета
+    /// (таймери/лічильники/підписки) та диспозиція NotifyIcon. Викликається з FullExit і App.OnExit.
+    /// </summary>
+    public static void Shutdown()
     {
-        if (_gameModeItem != null)
-            _gameModeItem.Text = "⏳ Game Mode...";
-
         try
         {
-            await GameModeEngine.ToggleGameModeAsync();
+            Widget?.DisposeResources();
+            Widget = null;
         }
-        catch (Exception ex)
+        catch { }
+
+        if (_notifyIcon != null)
         {
-            AppLogger.Log($"Помилка перемикання Game Mode з трею: {ex.Message}", "ERROR");
+            try { _notifyIcon.Visible = false; } catch { }
+            try { _notifyIcon.Dispose(); } catch { }
+            _notifyIcon = null;
         }
-        finally
-        {
-            UpdateGameModeTrayItem(GameModeEngine.IsGameModeActive);
-        }
-    }
-
-    private static void OnGameModeStateChanged(bool isActive)
-    {
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher == null)
-            return;
-
-        if (!dispatcher.CheckAccess())
-        {
-            dispatcher.Invoke(() => OnGameModeStateChanged(isActive));
-            return;
-        }
-
-        UpdateGameModeTrayItem(isActive);
-    }
-
-    private static void UpdateGameModeTrayItem(bool isActive)
-    {
-        if (_gameModeItem != null)
-            _gameModeItem.Text = isActive ? "🎮 Game Mode: Увімкнено" : "🎮 Game Mode: Вимкнено";
     }
 
     #region Кастомний рендерер темного меню трею

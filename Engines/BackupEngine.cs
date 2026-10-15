@@ -123,6 +123,7 @@ public static class BackupEngine
         @"HKCU\Software\Microsoft\InputPersonalization",
         @"HKCU\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy",
         @"HKCU\Software\Microsoft\Windows\Windows Error Reporting",
+        @"HKCU\Software\MASLOOPTIMIZER",
         @"HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
     };
 

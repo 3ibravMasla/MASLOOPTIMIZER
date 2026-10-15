@@ -35,6 +35,23 @@ Thumbs.db
 ehthumbs.db
 [Dd]esktop.ini
 
+# Артефакти битих PowerShell-пайпів (наприклад, випадковий "out-file $null)")
+$null*
+
+# Repomix — AI-контекст, у репозиторії не потрібен
+.repomixignore
+
+# Персональний довідник розробника (містить локальні шляхи) — лишається тільки локально
+DEVBOOK.md
+
+# Діагностика / перф-вимірювання та згенеровані звіти (не для GitHub).
+# Увага: Tools/_*.ps1 — це РОБОЧІ хелпери (див. DEVBOOK §16), тому ігноруємо лише артефакти.
+Tools/PerfOut/
+Tools/_*.md
+Tools/_*.txt
+Tools/_*.json
+*.csv
+
 # AI-асистенти (розкоментуйте, якщо НЕ хочете бачити їх на GitHub)
 #.clineignore
 #.clinerules

@@ -38,6 +38,20 @@ public class RegistryAction
 
     [JsonPropertyName("DeleteOnRestore")]
     public bool DeleteOnRestore { get; set; } = false;
+
+    /// <summary>
+    /// Твік керує ЦІЛИМ ключем: Apply видаляє ключ (наприклад, прибрання теки з «Цей ПК»
+    /// або пункту контекстного меню), Restore відновлює його.
+    /// </summary>
+    [JsonPropertyName("DeleteKeyOnApply")]
+    public bool DeleteKeyOnApply { get; set; } = false;
+
+    /// <summary>
+    /// Restore видаляє весь ключ (для verb-ключів контекстних меню, щоб не лишалося
+    /// порожніх пунктів), а не лише значення.
+    /// </summary>
+    [JsonPropertyName("DeleteKeyOnRestore")]
+    public bool DeleteKeyOnRestore { get; set; } = false;
 }
 
 public class ServiceAction
@@ -84,6 +98,13 @@ public class TweakModel : INotifyPropertyChanged, IWeakEventListener
     [JsonPropertyName("Category")]
     public string Category { get; set; } = "Загальні";
 
+    /// <summary>
+    /// Відносний шлях до зовнішнього .bat-скрипта всередині Scripts\Tweaks\,
+    /// напр. "CPU/core_parking.bat". Порожній — твік виконується нативно.
+    /// </summary>
+    [JsonPropertyName("ScriptPath")]
+    public string ScriptPath { get; set; } = string.Empty;
+
     [JsonPropertyName("Risk")]
     public string Risk { get; set; } = "Safe"; // UI, Safe, Medium, High
 
@@ -107,6 +128,37 @@ public class TweakModel : INotifyPropertyChanged, IWeakEventListener
 
     [JsonPropertyName("CommandAction")]
     public CommandAction? CommandAction { get; set; }
+
+    // --- Швидкий нативний зонд стану (без спавну cmd.exe) ---
+    // Заповнюється в tweaks.bundle.json для кожного твіка, щоб CheckTweakStatusNative
+    // визначав стан за ~0 мс. CheckExpectedValue = "__ABSENT__" означає
+    // "застосовано, коли значення відсутнє".
+
+    [JsonPropertyName("CheckRegHive")]
+    public string CheckRegHive { get; set; } = string.Empty;
+
+    [JsonPropertyName("CheckRegKey")]
+    public string CheckRegKey { get; set; } = string.Empty;
+
+    [JsonPropertyName("CheckRegValue")]
+    public string CheckRegValue { get; set; } = string.Empty;
+
+    [JsonPropertyName("CheckExpectedValue")]
+    public string CheckExpectedValue { get; set; } = string.Empty;
+
+    /// <summary>Твік має власний реєстровий зонд (або нативні RegistryActions/ServiceActions).</summary>
+    [JsonIgnore]
+    public bool HasStatusProbe =>
+        !string.IsNullOrWhiteSpace(CheckRegKey) ||
+        (RegistryActions is { Count: > 0 }) ||
+        (ServiceActions is { Count: > 0 });
+
+    /// <summary>
+    /// Після успішної дії розіслати WM_SETTINGCHANGE + SHChangeNotify, щоб Explorer
+    /// підхопив зміни без повторного входу в систему.
+    /// </summary>
+    [JsonPropertyName("RefreshShell")]
+    public bool RefreshShell { get; set; } = false;
 
     // Локалізовані відображувані поля: переклад з Languages/{lang}.json,
     // fallback — оригінальний текст з tweaks.bundle.json

@@ -225,4 +225,30 @@ public static class SettingsManager
     }
 
     #endregion
+
+    #region Ярлики на Робочому столі (Tools)
+
+    /// <summary>Чи створювати ярлик на Робочому столі автоматично після встановлення (типово true).</summary>
+    public static bool ReadCreateDesktopShortcut()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.SettingsFile)) return true;
+
+            using var doc = JsonDocument.Parse(File.ReadAllText(AppPaths.SettingsFile));
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("CreateDesktopShortcut", out var el))
+            {
+                if (el.ValueKind == JsonValueKind.True) return true;
+                if (el.ValueKind == JsonValueKind.False) return false;
+            }
+        }
+        catch { }
+        return true;
+    }
+
+    public static void SaveCreateDesktopShortcut(bool enabled)
+        => WriteSetting("CreateDesktopShortcut", JsonSerializer.SerializeToElement(enabled));
+
+    #endregion
 }

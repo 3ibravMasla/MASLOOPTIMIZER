@@ -4,6 +4,9 @@
                 "Description":  "Паралельний вимір пінгу та 1-Click активація найшвидших DNS-серверів",
                 "BtnFastest":  "⚡ Найшвидший DNS",
                 "BtnReset":  "🔄 Скинути до DHCP",
+                "BtnFlush":  "🔄 Очистити DNS-кеш",
+                "FlushDone":  "DNS-кеш успішно очищено.",
+                "FlushFailed":  "Не вдалося очистити DNS-кеш.",
                 "StatusActive":  "🟢 АКТИВНИЙ",
                 "StatusAvailable":  "⚪ ДОСТУПНИЙ",
                 "StatusTimeout":  "🔴 ТАЙМАУТ",
@@ -74,6 +77,10 @@
                                "adguard":  {
                                                "Name":  "AdGuard DNS (Блокування реклами)",
                                                "Description":  "Блокує банери, аналітику, спливаючі вікна та телеметрію на рівні всієї ОС."
+                                           },
+                               "nextdns":  {
+                                               "Name":  "NextDNS (Anycast)",
+                                               "Description":  "Хмарний резолвер NextDNS із блокуванням реклами та налаштуванням профілів."
                                            },
                                "mullvad_adblock":  {
                                                        "Name":  "Mullvad DNS (AdBlock + Malware)",

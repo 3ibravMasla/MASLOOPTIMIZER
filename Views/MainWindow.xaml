@@ -1,8 +1,8 @@
-<Window x:Class="MASLOOPTIMIZER.MainWindow"
+﻿<Window x:Class="MASLOOPTIMIZER.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:MASLOOPTIMIZER"
-        Title="MASLOOPTIMIZER v0.4.6"
+        Title="MASLOOPTIMIZER v0.6.0"
         Height="900"
         Width="1380"
         WindowStartupLocation="CenterScreen"
@@ -78,7 +78,7 @@
                                 BorderThickness="1"
                                 VerticalAlignment="Center">
                             <TextBlock x:Name="LblCoreVersion"
-                                       Text="v0.4.6"
+                                       Text="v0.6.0"
                                        FontSize="10"
                                        FontWeight="Bold"
                                        Foreground="{DynamicResource TextPrimary}"/>
@@ -290,79 +290,22 @@
                     <ScrollViewer Grid.Row="1"
                                   VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <Button x:Name="NavBtnUI"
+                            <Button x:Name="NavBtnTweaks"
                                     Style="{StaticResource SidebarNavBtn}"
                                     Click="NavBtn_Click"
-                                    Tag="UI">
+                                    Tag="TWEAKS">
                                 <StackPanel Orientation="Horizontal">
                                     <Border Background="#8A2BE2"
                                             CornerRadius="3"
                                             Padding="5,1"
                                             Margin="0,0,8,0">
-                                        <TextBlock Text="QoL"
+                                        <TextBlock Text="TWK"
                                                    FontSize="9"
                                                    FontWeight="Black"
                                                    Foreground="White"/>
                                     </Border>
-                                    <TextBlock x:Name="LblNavUi"
-                                               Text="Твіки системи/Корисне"/>
-                                </StackPanel>
-                            </Button>
-
-                            <Button x:Name="NavBtnSafe"
-                                    Style="{StaticResource SidebarNavBtn}"
-                                    Click="NavBtn_Click"
-                                    Tag="Safe">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="{DynamicResource SuccessBrush}"
-                                            CornerRadius="3"
-                                            Padding="5,1"
-                                            Margin="0,0,8,0">
-                                        <TextBlock Text="SAFE"
-                                                   FontSize="9"
-                                                   FontWeight="Black"
-                                                   Foreground="White"/>
-                                    </Border>
-                                    <TextBlock x:Name="LblNavSafe"
-                                               Text="Безпечні твіки"/>
-                                </StackPanel>
-                            </Button>
-
-                            <Button x:Name="NavBtnMed"
-                                    Style="{StaticResource SidebarNavBtn}"
-                                    Click="NavBtn_Click"
-                                    Tag="Medium">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="{DynamicResource WarningBrush}"
-                                            CornerRadius="3"
-                                            Padding="5,1"
-                                            Margin="0,0,8,0">
-                                        <TextBlock Text="MED"
-                                                   FontSize="9"
-                                                   FontWeight="Black"
-                                                   Foreground="White"/>
-                                    </Border>
-                                    <TextBlock x:Name="LblNavMed"
-                                               Text="Помірні твіки"/>
-                                </StackPanel>
-                            </Button>
-
-                            <Button x:Name="NavBtnHigh"
-                                    Style="{StaticResource SidebarNavBtn}"
-                                    Click="NavBtn_Click"
-                                    Tag="High">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="{DynamicResource DangerBrush}"
-                                            CornerRadius="3"
-                                            Padding="5,1"
-                                            Margin="0,0,8,0">
-                                        <TextBlock Text="HIGH"
-                                                   FontSize="9"
-                                                   FontWeight="Black"
-                                                   Foreground="White"/>
-                                    </Border>
-                                    <TextBlock x:Name="LblNavHigh"
-                                               Text="Небезпечні твіки"/>
+                                    <TextBlock x:Name="LblNavTweaks"
+                                               Text="Твіки системи"/>
                                 </StackPanel>
                             </Button>
 
@@ -464,141 +407,10 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button x:Name="NavBtnGameMode"
-                                    Style="{StaticResource SidebarNavBtn}"
-                                    Click="NavBtn_Click"
-                                    Tag="GAMEMSI">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="#8E44AD"
-                                            CornerRadius="3"
-                                            Padding="5,1"
-                                            Margin="0,0,8,0">
-                                        <TextBlock Text="GAME"
-                                                   FontSize="9"
-                                                   FontWeight="Black"
-                                                   Foreground="White"/>
-                                    </Border>
-                                    <TextBlock x:Name="LblNavGameMode"
-                                               Text="🎮 Game Mode &amp; MSI"/>
-                                </StackPanel>
-                            </Button>
-
-                            <Button x:Name="NavBtnNetwork"
-                                    Style="{StaticResource SidebarNavBtn}"
-                                    Click="NavBtn_Click"
-                                    Tag="NETWORK">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="#0E7490"
-                                            CornerRadius="3"
-                                            Padding="5,1"
-                                            Margin="0,0,8,0">
-                                        <TextBlock Text="NET"
-                                                   FontSize="9"
-                                                   FontWeight="Black"
-                                                   Foreground="White"/>
-                                    </Border>
-                                    <TextBlock x:Name="LblNavNetwork"
-                                               Text="⚡ Мережа &amp; TCP"/>
-                                </StackPanel>
-                            </Button>
-                            <Button x:Name="NavBtnPower"
-                                    Style="{StaticResource SidebarNavBtn}"
-                                    Click="NavBtn_Click"
-                                    Tag="POWER">
-                                <StackPanel Orientation="Horizontal">
-                                    <Border Background="#F59E0B"
-                                            CornerRadius="3"
-                                            Padding="5,1"
-                                            Margin="0,0,8,0">
-                                        <TextBlock Text="PWR"
-                                                   FontSize="9"
-                                                   FontWeight="Black"
-                                                   Foreground="White"/>
-                                    </Border>
-                                    <TextBlock x:Name="LblNavPower"
-                                               Text="⚡ Профілі живлення"/>
-                                </StackPanel>
-                            </Button>
 
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- Нижні кнопки автоматизації -->
-                    <StackPanel Grid.Row="2"
-                                Margin="0,8,0,0">
-                        <TextBlock x:Name="LblAutoTitle"
-                                   Text="АВТОМАТИЗАЦІЯ"
-                                   FontSize="9"
-                                   FontWeight="Bold"
-                                   Foreground="{DynamicResource TextMuted}"
-                                   Margin="0,0,0,5"/>
-
-                        <!-- Пак-кнопки перенесені у контекстне меню «Пресети» (ПКМ) -->
-                        <Button x:Name="BtnBatchApply"
-                                Content="⚡ 1-Click Safe Pack"
-                                Visibility="Collapsed"
-                                Click="BtnBatchApply_Click"/>
-                        <Button x:Name="BtnSafeMasloPack"
-                                Content="⚡ 1-Click Safe Maslo Pack"
-                                Visibility="Collapsed"
-                                Click="BtnSafeMasloPack_Click"/>
-
-                        <Button x:Name="BtnGameBoost"
-                                Content="🚀 1-Click Game Boost"
-                                Background="#8E44AD"
-                                Foreground="White"
-                                FontWeight="Bold"
-                                FontSize="11"
-                                Padding="10,6"
-                                Margin="0,0,0,4"
-                                Cursor="Hand"
-                                Click="BtnGameBoost_Click"
-                                ToolTipService.ShowDuration="12000">
-                            <Button.ToolTip>
-                                <TextBlock x:Name="TtipGameBoost"
-                                           Text="Миттєвий буст FPS..."
-                                           TextWrapping="Wrap"
-                                           MaxWidth="320"
-                                           FontSize="11"/>
-                            </Button.ToolTip>
-                        </Button>
-                        <Button x:Name="BtnPresetMenu"
-                                Content="📦 Пресети (JSON)"
-                                Style="{StaticResource HeaderActionBtn}"
-                                Padding="10,6"
-                                Margin="0"
-                                Click="BtnPresetMenu_Click"
-                                ToolTipService.ShowDuration="12000">
-                            <Button.ToolTip>
-                                <TextBlock x:Name="TtipPresets"
-                                           Text="Менеджер пресетів..."
-                                           TextWrapping="Wrap"
-                                           MaxWidth="320"
-                                           FontSize="11"/>
-                            </Button.ToolTip>
-                            <Button.ContextMenu>
-                                <ContextMenu x:Name="PresetMenu"
-                                             Background="{DynamicResource CardBg}"
-                                             BorderBrush="{DynamicResource CardBorder}">
-                                    <MenuItem x:Name="MiSaveProfile"
-                                              Header="💾 Зберегти конфіг"
-                                              Click="BtnPresetMenu_Click"
-                                              Tag="Save"/>
-                                    <MenuItem x:Name="MiLoadProfile"
-                                              Header="📂 Завантажити пресет"
-                                              Click="BtnPresetMenu_Click"
-                                              Tag="Load"/>
-                                    <Separator/>
-                                    <MenuItem x:Name="MiSafePack"
-                                              Header="⚡ 1-Click Safe Pack"
-                                              Click="BtnBatchApply_Click"/>
-                                    <MenuItem x:Name="MiMasloPack"
-                                              Header="⚡ 1-Click Safe Maslo Pack"
-                                              Click="BtnSafeMasloPack_Click"/>
-                                </ContextMenu>
-                            </Button.ContextMenu>
-                        </Button>
-                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -673,8 +485,17 @@
                         </Border>
 
                         <ScrollViewer Grid.Row="1"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="TweaksItemsControl">
+                                      VerticalScrollBarVisibility="Auto"
+                                      CanContentScroll="True">
+                            <ItemsControl x:Name="TweaksItemsControl"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:TweakModel}">
                                         <Border Background="{DynamicResource CardBg}"
@@ -804,8 +625,17 @@
                                             Foreground="{DynamicResource TextPrimary}"
                                             FontWeight="SemiBold"
                                             Padding="10,6"
+                                            Margin="0,0,6,0"
                                             Cursor="Hand"
                                             Click="BtnResetDns_Click"/>
+                                    <Button x:Name="BtnFlushDns"
+                                            Content="🔄 Очистити DNS-кеш"
+                                            Background="{DynamicResource ActionBtnBg}"
+                                            Foreground="{DynamicResource TextPrimary}"
+                                            FontWeight="SemiBold"
+                                            Padding="10,6"
+                                            Cursor="Hand"
+                                            Click="BtnFlushDns_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -855,8 +685,17 @@
                         </Border>
 
                         <ScrollViewer Grid.Row="2"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="DnsItemsControl">
+                                      VerticalScrollBarVisibility="Auto"
+                                      CanContentScroll="True">
+                            <ItemsControl x:Name="DnsItemsControl"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:DnsPreset}">
                                         <Border Background="{DynamicResource CardBg}"
@@ -987,6 +826,24 @@
                                             Orientation="Horizontal"
                                             VerticalAlignment="Center"
                                             Margin="10,0,0,0">
+                                    <Button x:Name="BtnSelectSafeDebloat"
+                                            Content="✅ Виділити встановлені безпечні"
+                                            Background="{DynamicResource ActionBtnBg}"
+                                            Foreground="{DynamicResource TextPrimary}"
+                                            FontWeight="SemiBold"
+                                            Padding="10,6"
+                                            Margin="0,0,8,0"
+                                            Cursor="Hand"
+                                            Click="BtnSelectSafeDebloat_Click"/>
+                                    <Button x:Name="BtnRemoveSelectedDebloat"
+                                            Content="🗑️ Видалити обрані"
+                                            Background="{DynamicResource DangerBrush}"
+                                            Foreground="White"
+                                            FontWeight="SemiBold"
+                                            Padding="10,6"
+                                            Margin="0,0,10,0"
+                                            Cursor="Hand"
+                                            Click="BtnRemoveSelectedDebloat_Click"/>
                                     <TextBlock x:Name="LblSortDebloat"
                                                Text="Сортування:"
                                                Foreground="{DynamicResource TextMuted}"
@@ -1017,8 +874,17 @@
 
                         <!-- Список UWP -->
                         <ScrollViewer Grid.Row="2"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="DebloatItemsControl">
+                                      VerticalScrollBarVisibility="Auto"
+                                      CanContentScroll="True">
+                            <ItemsControl x:Name="DebloatItemsControl"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:DebloatItem}">
                                         <Border Background="{DynamicResource CardBg}"
@@ -1029,10 +895,16 @@
                                                 Padding="14">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0">
+                                                <CheckBox Grid.Column="0"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                          VerticalAlignment="Center"
+                                                          Margin="0,0,12,0"
+                                                          Cursor="Hand"/>
+                                                <StackPanel Grid.Column="1">
                                                     <WrapPanel Orientation="Horizontal">
                                                         <TextBlock Text="{Binding Name}"
                                                                    FontWeight="Bold"
@@ -1042,10 +914,20 @@
                                                                 CornerRadius="3"
                                                                 Padding="6,1"
                                                                 Margin="10,0,0,0">
-                                                            <TextBlock Text="{Binding Category}"
+                                                            <TextBlock Text="{Binding CategoryLocalized}"
                                                                        FontSize="10"
                                                                        FontWeight="SemiBold"
                                                                        Foreground="{DynamicResource TextSecondary}"/>
+                                                        </Border>
+                                                        <Border CornerRadius="3"
+                                                                Padding="6,1"
+                                                                Margin="6,0,0,0"
+                                                                Visibility="{Binding ShowRisk, Converter={StaticResource BoolToVis}}"
+                                                                Background="{Binding RiskColor}">
+                                                            <TextBlock Text="{Binding RiskBadge}"
+                                                                       FontSize="9.5"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="White"/>
                                                         </Border>
                                                         <Border CornerRadius="3"
                                                                 Padding="6,1"
@@ -1063,7 +945,7 @@
                                                                FontSize="11.5"
                                                                TextWrapping="Wrap"/>
                                                 </StackPanel>
-                                                <StackPanel Grid.Column="1"
+                                                <StackPanel Grid.Column="2"
                                                             Orientation="Horizontal"
                                                             VerticalAlignment="Center">
                                                     <Button Content="{Binding UninstallButtonText}"
@@ -1190,10 +1072,19 @@
                         </Border>
 
                         <ScrollViewer Grid.Row="2"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="StartupItemsControl">
+                                      VerticalScrollBarVisibility="Auto"
+                                      CanContentScroll="True">
+                            <ItemsControl x:Name="StartupItemsControl"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type local:StartupEntry}">
+                                    <DataTemplate DataType="{x:Type local:StartupItem}">
                                         <Border Background="{DynamicResource CardBg}"
                                                 BorderBrush="{DynamicResource CardBorder}"
                                                 BorderThickness="1"
@@ -1248,6 +1139,15 @@
                                                                        FontWeight="Bold"
                                                                        Foreground="{DynamicResource WarningText}"/>
                                                         </Border>
+                                                        <Border CornerRadius="3"
+                                                                Padding="6,1"
+                                                                Margin="6,0,0,0"
+                                                                Background="{Binding ImpactColor}">
+                                                            <TextBlock Text="{Binding StartupImpactLocalized}"
+                                                                       FontSize="9.5"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="White"/>
+                                                        </Border>
                                                     </WrapPanel>
                                                     <TextBlock Text="{Binding Command}"
                                                                Foreground="{DynamicResource TextMuted}"
@@ -1255,16 +1155,28 @@
                                                                FontSize="11"
                                                                TextWrapping="Wrap"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="1"
-                                                        Content="{Binding ButtonText}"
-                                                        Background="{Binding ButtonBg}"
-                                                        Foreground="White"
-                                                        Padding="12,6"
-                                                        FontWeight="Bold"
-                                                        Cursor="Hand"
-                                                        Click="ToggleStartup_Click"
-                                                        Tag="{Binding}"
-                                                        VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1"
+                                                            Orientation="Horizontal"
+                                                            VerticalAlignment="Center">
+                                                    <Button Content="{Binding OpenFolderText}"
+                                                            ToolTip="{Binding OpenFolderText}"
+                                                            Background="{DynamicResource ActionBtnBg}"
+                                                            Foreground="{DynamicResource TextPrimary}"
+                                                            Padding="10,6"
+                                                            Margin="0,0,8,0"
+                                                            FontWeight="SemiBold"
+                                                            Cursor="Hand"
+                                                            Click="OpenStartupLocation_Click"
+                                                            Tag="{Binding}"/>
+                                                    <Button Content="{Binding ButtonText}"
+                                                            Background="{Binding ButtonBg}"
+                                                            Foreground="White"
+                                                            Padding="12,6"
+                                                            FontWeight="Bold"
+                                                            Cursor="Hand"
+                                                            Click="ToggleStartup_Click"
+                                                            Tag="{Binding}"/>
+                                                </StackPanel>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>
@@ -1307,15 +1219,27 @@
                                                Foreground="{DynamicResource TextSecondary}"
                                                Margin="0,3,0,0"/>
                                 </StackPanel>
-                                <Button x:Name="BtnRescanTools"
-                                        Grid.Column="1"
-                                        Content="🔄 Оновити статус"
-                                        Background="{DynamicResource ActionBtnBg}"
-                                        Foreground="{DynamicResource TextPrimary}"
-                                        FontWeight="SemiBold"
-                                        Padding="10,6"
-                                        Cursor="Hand"
-                                        Click="BtnRescanTools_Click"/>
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <CheckBox x:Name="ChkCreateDesktopShortcut"
+                                              Content="📌 Створювати ярлик на Робочому столі"
+                                              IsChecked="True"
+                                              Foreground="{DynamicResource TextSecondary}"
+                                              FontSize="11.5"
+                                              VerticalAlignment="Center"
+                                              Margin="0,0,12,0"
+                                              Cursor="Hand"
+                                              Click="ChkCreateDesktopShortcut_Click"/>
+                                    <Button x:Name="BtnRescanTools"
+                                            Content="🔄 Оновити статус"
+                                            Background="{DynamicResource ActionBtnBg}"
+                                            Foreground="{DynamicResource TextPrimary}"
+                                            FontWeight="SemiBold"
+                                            Padding="10,6"
+                                            Cursor="Hand"
+                                            Click="BtnRescanTools_Click"/>
+                                </StackPanel>
                             </Grid>
                         </Border>
 
@@ -1369,8 +1293,17 @@
 
                         <!-- Список софту -->
                         <ScrollViewer Grid.Row="2"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="ToolsItemsControl">
+                                      VerticalScrollBarVisibility="Auto"
+                                      CanContentScroll="True">
+                            <ItemsControl x:Name="ToolsItemsControl"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:ToolItem}">
                                         <Border Background="{DynamicResource CardBg}"
@@ -1437,6 +1370,18 @@
                                                             Cursor="Hand"
                                                             Click="OpenTool_Click"
                                                             Tag="{Binding}"/>
+                                                    <Button Content="{Binding ShortcutButtonText}"
+                                                            Visibility="{Binding IsShortcutVisible, Converter={StaticResource BoolToVis}}"
+                                                            Background="{DynamicResource ActionBtnBg}"
+                                                            Foreground="{DynamicResource TextPrimary}"
+                                                            BorderBrush="{DynamicResource ActionBtnBorder}"
+                                                            BorderThickness="1"
+                                                            Padding="10,6"
+                                                            Margin="4"
+                                                            FontWeight="SemiBold"
+                                                            Cursor="Hand"
+                                                            Click="CreateShortcutTool_Click"
+                                                            Tag="{Binding}"/>
                                                     <Button Content="{Binding SiteButtonText}"
                                                             Background="{DynamicResource ActionBtnBg}"
                                                             Foreground="{DynamicResource TextPrimary}"
@@ -1462,6 +1407,43 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
+
+                        <!-- Перемикач режимів: Очищення кешу / Аналізатор диска -->
+                        <Border Grid.Row="0"
+                                Background="{DynamicResource CardBg}"
+                                BorderBrush="{DynamicResource CardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="10,8"
+                                Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="BtnCleanerModeCache"
+                                        Content="🧹 Очищення кешу та сміття"
+                                        Background="{DynamicResource AccentGreen}"
+                                        Foreground="White"
+                                        FontWeight="SemiBold"
+                                        Padding="12,6"
+                                        Margin="0,0,8,0"
+                                        Cursor="Hand"
+                                        Click="BtnCleanerModeCache_Click"/>
+                                <Button x:Name="BtnCleanerModeAnalyzer"
+                                        Content="📊 Аналізатор диска (WizTree)"
+                                        Background="{DynamicResource ActionBtnBg}"
+                                        Foreground="{DynamicResource TextPrimary}"
+                                        FontWeight="SemiBold"
+                                        Padding="12,6"
+                                        Cursor="Hand"
+                                        Click="BtnCleanerModeAnalyzer_Click"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Режим 1: очищення кешу та сміття -->
+                        <Grid x:Name="CleanerCacheModePanel"
+                              Grid.Row="1">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
                         <Border Grid.Row="0"
                                 Background="{DynamicResource CardBg}"
                                 BorderBrush="{DynamicResource CardBorder}"
@@ -1549,8 +1531,17 @@
                         </Border>
 
                         <ScrollViewer Grid.Row="1"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="CleanerItemsControl">
+                                      VerticalScrollBarVisibility="Auto"
+                                      CanContentScroll="True">
+                            <ItemsControl x:Name="CleanerItemsControl"
+                                          VirtualizingStackPanel.IsVirtualizing="True"
+                                          VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                          ScrollViewer.CanContentScroll="True">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <VirtualizingStackPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type local:CleanerItem}">
                                         <Border Background="{DynamicResource CardBg}"
@@ -1621,718 +1612,180 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
-                    </Grid>
-                    <!-- 7. Панель GAME MODE & MSI -->
-                    <Grid x:Name="GameMsiView"
-                          Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
+                        </Grid>
 
-                        <!-- Верхній блок: Game Mode -->
-                        <Border Grid.Row="0"
-                                Background="{DynamicResource CardBg}"
-                                BorderBrush="{DynamicResource CardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="14"
-                                Margin="0,0,0,10">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <Grid Grid.Row="0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock x:Name="GameMsiTitleText"
-                                                   Text="🎮 ІГРОВИЙ РЕЖИМ"
-                                                   FontSize="12"
-                                                   FontWeight="Black"
-                                                   Foreground="{DynamicResource AccentGreen}"/>
-                                        <TextBlock x:Name="GameMsiDescText"
-                                                   Text="Пріоритет GPU/CPU, зупинка фонових служб та звільнення пам'яті"
-                                                   FontSize="11.5"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   Margin="0,3,0,0"/>
-                                        <TextBlock x:Name="GameModeStatusText"
-                                                   Text="⚪ Неактивний"
-                                                   FontSize="11"
-                                                   FontWeight="Bold"
+                        <!-- Режим 2: аналізатор диска (WizTree) -->
+                        <Grid x:Name="CleanerAnalyzerModePanel"
+                              Grid.Row="1"
+                              Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0"
+                                    Background="{DynamicResource CardBg}"
+                                    BorderBrush="{DynamicResource CardBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="12"
+                                    Margin="0,0,0,10">
+                                <StackPanel>
+                                    <WrapPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="LblAnalyzerDrive"
+                                                   Text="Диск:"
                                                    Foreground="{DynamicResource TextMuted}"
-                                                   Margin="0,6,0,0"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1"
-                                                Orientation="Horizontal"
-                                                VerticalAlignment="Center">
-                                        <ToggleButton x:Name="TglGameMode"
-                                                      Content="🎮 Game Mode"
-                                                      Background="{DynamicResource ActionBtnBg}"
-                                                      Foreground="{DynamicResource TextPrimary}"
-                                                      BorderBrush="{DynamicResource ActionBtnBorder}"
-                                                      Padding="12,6"
-                                                      Margin="0,0,6,0"
-                                                      Checked="TglGameMode_Checked"
-                                                      Unchecked="TglGameMode_Unchecked"/>
-                                        <Button x:Name="BtnPurgeStandby"
-                                                Content="🧹 Очистити Standby RAM"
-                                                Background="#8E44AD"
+                                                   FontSize="11.5"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,6,0"/>
+                                        <ComboBox x:Name="AnalyzerDriveComboBox"
+                                                  Width="290"
+                                                  Height="28"
+                                                  VerticalContentAlignment="Center"
+                                                  Background="{DynamicResource HeaderBg}"
+                                                  Foreground="{DynamicResource TextPrimary}"
+                                                  BorderBrush="{DynamicResource ActionBtnBorder}"
+                                                  Margin="0,0,12,0"/>
+                                        <TextBlock x:Name="LblAnalyzerFilter"
+                                                   Text="Фільтр:"
+                                                   Foreground="{DynamicResource TextMuted}"
+                                                   FontSize="11.5"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,6,0"/>
+                                        <ComboBox x:Name="AnalyzerFilterComboBox"
+                                                  Width="195"
+                                                  Height="28"
+                                                  VerticalContentAlignment="Center"
+                                                  Background="{DynamicResource HeaderBg}"
+                                                  Foreground="{DynamicResource TextPrimary}"
+                                                  BorderBrush="{DynamicResource ActionBtnBorder}"
+                                                  SelectionChanged="AnalyzerFilterComboBox_SelectionChanged"
+                                                  Margin="0,0,12,0">
+                                            <ComboBoxItem Content="📂 Топ важких папок"
+                                                          Tag="folders"/>
+                                            <ComboBoxItem Content="📄 Топ великих файлів"
+                                                          Tag="files"/>
+                                            <ComboBoxItem Content="📊 Усі"
+                                                          IsSelected="True"
+                                                          Tag="all"/>
+                                        </ComboBox>
+                                        <Button x:Name="BtnAnalyzerScan"
+                                                Content="🔍 Сканувати диск"
+                                                Background="#0078D4"
                                                 Foreground="White"
                                                 FontWeight="Bold"
-                                                Padding="12,6"
-                                                Margin="0,0,6,0"
+                                                Padding="14,6"
                                                 Cursor="Hand"
-                                                Click="BtnPurgeStandby_Click"/>
-                                    </StackPanel>
-                                </Grid>
-
-                                <!-- Принцип роботи Game Mode -->
-                                <StackPanel Grid.Row="1"
-                                            Margin="0,10,0,0">
-                                    <TextBlock x:Name="LblGameModeHow"
-                                               Text="📖 ЯК ЦЕ ПРАЦЮЄ"
-                                               FontSize="10.5"
-                                               FontWeight="Black"
-                                               Foreground="{DynamicResource TextSecondary}"/>
-                                    <TextBlock x:Name="TxtGameModeHow"
-                                               TextWrapping="Wrap"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               Margin="0,2,0,0"
-                                               Text="Game Mode зупиняє некритичні фонові служби, піднімає пріоритет процесора та перемикає схему живлення на Ultimate Performance."/>
-                                </StackPanel>
-
-                                <!-- Standby RAM Purge -->
-                                <StackPanel Grid.Row="2"
-                                            Margin="0,8,0,0">
-                                    <TextBlock x:Name="LblStandbyPurge"
-                                               Text="🧹 STAND BY RAM PURGE"
-                                               FontSize="10.5"
-                                               FontWeight="Black"
-                                               Foreground="{DynamicResource TextSecondary}"/>
-                                    <TextBlock x:Name="TxtStandbyPurge"
-                                               TextWrapping="Wrap"
-                                               FontSize="11"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               Margin="0,2,0,0"
-                                               Text="Скидає модифіковані та резервні сторінки пам'яті через нативний виклик NtSetSystemInformation (SystemMemoryListInformation) для усунення мікрофризів."/>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-
-                        <!-- Блок MSI Mode -->
-                        <Border Grid.Row="1"
-                                Background="{DynamicResource CardBg}"
-                                BorderBrush="{DynamicResource CardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="14"
-                                Margin="0,0,0,10">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <!-- Інформаційний банер MSI Mode -->
-                                <Border Grid.Row="0"
-                                        Grid.ColumnSpan="2"
-                                        Background="{DynamicResource ChipBg}"
-                                        BorderBrush="{DynamicResource ChipBorder}"
-                                        BorderThickness="1"
-                                        CornerRadius="6"
-                                        Padding="10,8"
-                                        Margin="0,0,0,10">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0"
-                                                   Text="💡"
-                                                   FontSize="13"
-                                                   VerticalAlignment="Top"
-                                                   Margin="0,0,8,0"/>
-                                        <TextBlock Grid.Column="1"
-                                                   x:Name="MsiEducationalText"
-                                                   TextWrapping="Wrap"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   Text="MSI (Message Signaled Interrupts) дозволяє пристроям спілкуватися з процесором безпосередньо, минаючи спільну чергу (IRQ). Це знижує Input Lag та підвищує стабільність FPS. Увага: змінюйте налаштування лише для GPU, активного SSD, мережі та USB з мишею."/>
-                                    </Grid>
-                                </Border>
-
-                                <StackPanel Grid.Row="1"
-                                            Grid.Column="0">
-                                    <TextBlock x:Name="MsiTitleText"
-                                               Text="⚡ MSI MODE ДЛЯ PCI-ПРИСТРОЇВ"
-                                               FontSize="12"
-                                               FontWeight="Black"
-                                               Foreground="{DynamicResource AccentGreen}"/>
-                                    <TextBlock x:Name="MsiStatsText"
-                                               Text="Сканування PCI-пристроїв..."
-                                               FontSize="11.5"
-                                               Foreground="{DynamicResource TextSecondary}"
-                                               Margin="0,3,0,0"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="1"
-                                            Grid.Column="1"
-                                            Orientation="Horizontal"
-                                            VerticalAlignment="Center">
-                                    <Button x:Name="BtnScanMsi"
-                                            Content="🔍 Сканувати PCI"
-                                            Background="{DynamicResource ActionBtnBg}"
-                                            Foreground="{DynamicResource TextPrimary}"
-                                            Padding="12,6"
-                                            Margin="0,0,6,0"
-                                            Cursor="Hand"
-                                            Click="BtnScanMsi_Click"/>
-                                    <Button x:Name="BtnMsiOptimize"
-                                            Content="🚀 1-Click Gaming MSI"
-                                            Background="{DynamicResource SuccessBrush}"
-                                            Foreground="White"
-                                            FontWeight="Bold"
-                                            Padding="12,6"
-                                            Margin="0,0,6,0"
-                                            Cursor="Hand"
-                                            Click="BtnMsiOptimize_Click"/>
-                                    <Button x:Name="BtnMsiRestore"
-                                            Content="↩️ Відновити"
-                                            Background="{DynamicResource ActionBtnBg}"
-                                            Foreground="{DynamicResource TextPrimary}"
-                                            Padding="12,6"
-                                            Cursor="Hand"
-                                            Click="BtnMsiRestore_Click"/>
-                                </StackPanel>
-                                <StackPanel Grid.Row="2"
-                                            Grid.ColumnSpan="2"
-                                            Orientation="Horizontal"
-                                            HorizontalAlignment="Right"
-                                            VerticalAlignment="Center"
-                                            Margin="0,10,0,0">
-                                    <TextBlock x:Name="LblSortMsi"
-                                               Text="Сортування:"
-                                               Foreground="{DynamicResource TextMuted}"
-                                               FontSize="11.5"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,6,0"/>
-                                    <ComboBox x:Name="MsiSortComboBox"
-                                              SelectionChanged="MsiSortComboBox_SelectionChanged"
-                                              Width="200"
-                                              Height="28"
-                                              VerticalContentAlignment="Center"
-                                              Background="{DynamicResource HeaderBg}"
-                                              Foreground="{DynamicResource TextPrimary}"
-                                              BorderBrush="{DynamicResource ActionBtnBorder}">
-                                        <ComboBoxItem Content="За замовчуванням"
-                                                      IsSelected="True"
-                                                      Tag="Default"/>
-                                        <ComboBoxItem Content="🟢 MSI спочатку"
-                                                      Tag="MsiFirst"/>
-                                        <ComboBoxItem Content="⚪ Line-based спочатку"
-                                                      Tag="LineBasedFirst"/>
-                                        <ComboBoxItem Content="⚡ За пріоритетом"
-                                                      Tag="Priority"/>
-                                        <ComboBoxItem Content="🔤 За назвою (А-Я)"
-                                                      Tag="Name"/>
-                                        <ComboBoxItem Content="📂 За категорією"
-                                                      Tag="Category"/>
-                                        <ComboBoxItem Content="🏢 За вендором"
-                                                      Tag="Vendor"/>
-                                    </ComboBox>
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-
-                        <ScrollViewer Grid.Row="2"
-                                      VerticalScrollBarVisibility="Auto">
-                            <ItemsControl x:Name="MsiItemsControl">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type local:PciMsiDevice}">
-                                        <Border Background="{DynamicResource CardBg}"
-                                                BorderBrush="{DynamicResource CardBorder}"
-                                                BorderThickness="1"
-                                                CornerRadius="6"
-                                                Margin="0,0,0,8"
-                                                Padding="14"
-                                                ToolTip="{Binding ToolTipText}"
-                                                ToolTipService.ShowDuration="20000">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsBlacklisted}"
-                                                                     Value="True">
-                                                            <Setter Property="Opacity"
-                                                                    Value="0.5"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0">
-                                                    <WrapPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding CategoryIcon}"
-                                                                   FontSize="12"
-                                                                   VerticalAlignment="Center"/>
-                                                        <TextBlock Text="{Binding Name}"
-                                                                   FontWeight="Bold"
-                                                                   FontSize="13"
-                                                                   Foreground="{DynamicResource TextPrimary}"
-                                                                   Margin="6,0,0,0"/>
-                                                        <TextBlock FontSize="10.5"
-                                                                   Foreground="{DynamicResource TextMuted}"
-                                                                   VerticalAlignment="Center"
-                                                                   Margin="8,0,0,0">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="Visibility"
-                                                                            Value="Visible"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding IrqNumber}"
-                                                                                     Value="">
-                                                                            <Setter Property="Visibility"
-                                                                                    Value="Collapsed"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </TextBlock.Style>
-                                                            <Run Text="{Binding IrqLabelText, Mode=OneWay}"/>
-                                                            <Run Text="{Binding IrqNumber, Mode=OneWay}"/>
-                                                        </TextBlock>
-                                                        <Border Background="{Binding VendorBadge}"
-                                                                CornerRadius="3"
-                                                                Padding="6,1"
-                                                                Margin="10,0,0,0">
-                                                            <TextBlock Text="{Binding Vendor}"
-                                                                       FontSize="10"
-                                                                       FontWeight="Bold"
-                                                                       Foreground="White"/>
-                                                        </Border>
-                                                        <Border Background="{Binding StatusColor}"
-                                                                CornerRadius="3"
-                                                                Padding="6,1"
-                                                                Margin="6,0,0,0">
-                                                            <TextBlock Text="{Binding StatusText}"
-                                                                       FontSize="9.5"
-                                                                       FontWeight="Bold"
-                                                                       Foreground="White"/>
-                                                        </Border>
-                                                    </WrapPanel>
-                                                    <TextBlock Text="{Binding LocationInfo}"
-                                                               Foreground="{DynamicResource TextSecondary}"
-                                                               FontSize="11"
-                                                               Margin="0,4,0,2"/>
-                                                    <TextBlock FontSize="10.5"
-                                                               Foreground="{DynamicResource InfoText}"
-                                                               Margin="0,2,0,0">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Visibility"
-                                                                        Value="Visible"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding AttachedDevices}"
-                                                                                 Value="">
-                                                                        <Setter Property="Visibility"
-                                                                                Value="Collapsed"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                        <Run Text="{Binding AttachedLabelText, Mode=OneWay}"/>
-                                                        <Run Text="{Binding AttachedDevices, Mode=OneWay}"
-                                                             FontWeight="SemiBold"/>
-                                                    </TextBlock>
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="{Binding PriorityLabelText}"
-                                                                   Foreground="{DynamicResource TextMuted}"
-                                                                   FontSize="10.5"/>
-                                                        <TextBlock Text="{Binding Priority}"
-                                                                   Foreground="{Binding PriorityColor}"
-                                                                   FontSize="10.5"
-                                                                   FontWeight="Bold"/>
-                                                        <TextBlock Text="{Binding MessageLimit, StringFormat=' | IRQ: {0}'}"
-                                                                   Foreground="{DynamicResource TextMuted}"
-                                                                   FontSize="10.5"
-                                                                   Margin="4,0,0,0"/>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                                <Button Grid.Column="1"
-                                                        Content="{Binding ActionButtonText}"
-                                                        Background="{Binding ActionButtonBg}"
-                                                        Foreground="White"
-                                                        Padding="12,6"
-                                                        FontWeight="SemiBold"
-                                                        Cursor="Hand"
-                                                        Click="MsiToggle_Click"
-                                                        Tag="{Binding}"
-                                                        VerticalAlignment="Center"/>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Grid>
-                    <!-- 8. Панель МЕРЕЖА & TCP -->
-                    <Grid x:Name="NetworkView"
-                          Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <Border Grid.Row="0"
-                                Background="{DynamicResource CardBg}"
-                                BorderBrush="{DynamicResource CardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="14"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock x:Name="NetworkTitleText"
-                                           Text="⚡ МЕРЕЖА &amp; TCP ОПТИМІЗАЦІЯ"
-                                           FontSize="12"
-                                           FontWeight="Black"
-                                           Foreground="{DynamicResource AccentGreen}"/>
-                                <TextBlock x:Name="NetworkDescText"
-                                           Text="Зниження затримок, вимкнення енергозбереження адаптерів та розблокування 20% QoS"
-                                           FontSize="11.5"
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           Margin="0,3,0,8"/>
-                                <TextBlock x:Name="NetworkStatusText"
-                                           Text="Статус: —"
-                                           FontSize="11"
-                                           FontWeight="Bold"
-                                           Foreground="{DynamicResource TextMuted}"
-                                           Margin="0,0,0,8"/>
-                                <WrapPanel Orientation="Horizontal">
-                                    <Button x:Name="BtnNagle"
-                                            Content="🔌 1-Click Вимкнути Nagle (TCP NoDelay)"
-                                            Background="#0078D4"
-                                            Foreground="White"
-                                            FontWeight="Bold"
-                                            Padding="12,7"
-                                            Margin="0,0,8,6"
-                                            Cursor="Hand"
-                                            Click="BtnNagle_Click"/>
-                                    <Button x:Name="BtnEee"
-                                            Content="🌿 Вимкнути EEE/Green Ethernet"
-                                            Background="#0E7490"
-                                            Foreground="White"
-                                            FontWeight="Bold"
-                                            Padding="12,7"
-                                            Margin="0,0,8,6"
-                                            Cursor="Hand"
-                                            Click="BtnEee_Click"/>
-                                    <Button x:Name="BtnQos"
-                                            Content="📶 Розблокувати 20% QoS"
-                                            Background="#6A1B9A"
-                                            Foreground="White"
-                                            FontWeight="Bold"
-                                            Padding="12,7"
-                                            Margin="0,0,8,6"
-                                            Cursor="Hand"
-                                            Click="BtnQos_Click"/>
-                                    <Button x:Name="BtnNetworkReset"
-                                            Content="🛟 Аварійне відновлення мережі"
-                                            Background="{DynamicResource DangerBrush}"
-                                            Foreground="White"
-                                            FontWeight="Bold"
-                                            Padding="12,7"
-                                            Margin="0,0,8,6"
-                                            Cursor="Hand"
-                                            Click="BtnNetworkReset_Click"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Grid.Row="1"
-                                Background="{DynamicResource CardBg}"
-                                BorderBrush="{DynamicResource CardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="14">
-                            <StackPanel>
-                                <TextBlock x:Name="NetworkDetailsText"
-                                           Text="Натисніть кнопку для застосування оптимізації мережі."
-                                           FontSize="11"
-                                           Foreground="{DynamicResource TextSecondary}"
-                                           TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-
-                    <!-- 9. Панель ПРОФІЛІВ ЖИВЛЕННЯ -->
-                    <Grid x:Name="PowerView"
-                          Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- Header: пристрій / герцовка / план живлення -->
-                        <Border Grid.Row="0"
-                                Background="{DynamicResource CardBg}"
-                                BorderBrush="{DynamicResource CardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="16"
-                                Margin="0,0,0,12">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock x:Name="PowerTitleText"
-                                               Text="⚡ ПРОФІЛІ ЖИВЛЕННЯ"
-                                               FontSize="15"
-                                               FontWeight="Black"
-                                               Foreground="{DynamicResource AccentGreen}"/>
-                                    <WrapPanel Margin="0,10,0,0">
-                                        <Border Background="{DynamicResource BadgeBg}"
-                                                CornerRadius="4"
-                                                Padding="9,3"
-                                                Margin="0,0,8,0"
-                                                BorderBrush="{DynamicResource AccentGreen}"
-                                                BorderThickness="1">
-                                            <TextBlock x:Name="PowerDeviceTypeText"
-                                                       Text="💻 Настільний ПК"
-                                                       FontSize="11"
-                                                       FontWeight="Bold"
-                                                       Foreground="{DynamicResource TextPrimary}"/>
-                                        </Border>
-                                        <Border Background="{DynamicResource BadgeBg}"
-                                                CornerRadius="4"
-                                                Padding="9,3"
-                                                Margin="0,0,8,0">
-                                            <TextBlock x:Name="PowerHzText"
-                                                       Text="Частота: 60 Гц"
-                                                       FontSize="11"
-                                                       FontWeight="Bold"
-                                                       Foreground="{DynamicResource TextPrimary}"/>
-                                        </Border>
-                                        <Border Background="{DynamicResource BadgeBg}"
-                                                CornerRadius="4"
-                                                Padding="9,3">
-                                            <TextBlock x:Name="PowerPlanNameText"
-                                                       Text="Збалансована"
-                                                       FontSize="11"
-                                                       FontWeight="Bold"
-                                                       Foreground="{DynamicResource TextPrimary}"/>
-                                        </Border>
+                                                Click="BtnAnalyzerScan_Click"/>
                                     </WrapPanel>
+                                    <TextBlock x:Name="AnalyzerSummaryText"
+                                               Text="Оберіть диск та натисніть «Сканувати диск»."
+                                               Foreground="{DynamicResource TextSecondary}"
+                                               FontSize="11.5"
+                                               Margin="0,8,0,0"/>
                                 </StackPanel>
+                            </Border>
 
-                                <Button Grid.Column="1"
-                                        x:Name="BtnPowerRefresh"
-                                        Content="🔄 Оновити"
-                                        Background="{DynamicResource ActionBtnBg}"
-                                        Foreground="{DynamicResource TextPrimary}"
-                                        BorderBrush="{DynamicResource ActionBtnBorder}"
-                                        Padding="12,6"
-                                        Cursor="Hand"
-                                        VerticalAlignment="Center"
-                                        Click="BtnPowerRefresh_Click"/>
-                            </Grid>
-                        </Border>
-
-                        <!-- 3 інтерактивні картки -->
-                        <ScrollViewer Grid.Row="1"
-                                      VerticalScrollBarVisibility="Auto">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <!-- Eco Saver -->
-                                <Border Grid.Column="0"
-                                        Background="{DynamicResource CardBg}"
-                                        BorderBrush="{DynamicResource CardBorder}"
-                                        BorderThickness="1"
-                                        CornerRadius="8"
-                                        Padding="16"
-                                        Margin="0,0,10,0">
-                                    <StackPanel>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0"
-                                                       x:Name="PowerEcoTitle"
-                                                       Text="🌿 Еко-режим"
-                                                       FontSize="13"
-                                                       FontWeight="Black"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       TextWrapping="Wrap"/>
-                                            <Border Grid.Column="1"
-                                                    x:Name="PowerEcoBadge"
-                                                    Background="{DynamicResource SuccessBrush}"
-                                                    CornerRadius="4"
-                                                    Padding="8,2"
-                                                    Margin="8,0,0,0"
-                                                    Visibility="Collapsed"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="✓ АКТИВНО"
-                                                           FontSize="9.5"
-                                                           FontWeight="Black"
-                                                           Foreground="White"/>
+                            <ScrollViewer Grid.Row="1"
+                                          VerticalScrollBarVisibility="Auto"
+                                          CanContentScroll="True">
+                                <ItemsControl x:Name="AnalyzerItemsControl"
+                                              VirtualizingStackPanel.IsVirtualizing="True"
+                                              VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                              ScrollViewer.CanContentScroll="True">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <VirtualizingStackPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type local:DiskHeavyItem}">
+                                            <Border Background="{DynamicResource CardBg}"
+                                                    BorderBrush="{DynamicResource CardBorder}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="6"
+                                                    Margin="0,0,0,8"
+                                                    Padding="12">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <WrapPanel Orientation="Horizontal">
+                                                            <TextBlock Text="{Binding Name}"
+                                                                       FontWeight="Bold"
+                                                                       FontSize="13"
+                                                                       Foreground="{DynamicResource TextPrimary}"
+                                                                       MaxWidth="420"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <Border Background="{DynamicResource BadgeBg}"
+                                                                    CornerRadius="3"
+                                                                    Padding="6,1"
+                                                                    Margin="10,0,0,0">
+                                                                <TextBlock Text="{Binding CategoryTagLocalized}"
+                                                                           FontSize="10"
+                                                                           FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource TextSecondary}"/>
+                                                            </Border>
+                                                            <Border Background="{DynamicResource BadgeBg}"
+                                                                    CornerRadius="3"
+                                                                    Padding="6,1"
+                                                                    Margin="6,0,0,0">
+                                                                <TextBlock Text="{Binding SizeFormatted}"
+                                                                           FontSize="10"
+                                                                           FontWeight="Bold"
+                                                                           Foreground="{DynamicResource InfoText}"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding LastModifiedFormatted}"
+                                                                       FontSize="10"
+                                                                       Foreground="{DynamicResource TextMuted}"
+                                                                       VerticalAlignment="Center"
+                                                                       Margin="8,0,0,0"/>
+                                                        </WrapPanel>
+                                                        <TextBlock Text="{Binding FullPath}"
+                                                                   Foreground="{DynamicResource TextSecondary}"
+                                                                   FontSize="10.5"
+                                                                   Margin="0,4,0,4"
+                                                                   TextTrimming="CharacterEllipsis"/>
+                                                        <ProgressBar Value="{Binding RelativePercent, Mode=OneWay}"
+                                                                     Maximum="100"
+                                                                     Height="8"
+                                                                     Background="{DynamicResource BadgeBg}"
+                                                                     Foreground="{DynamicResource AccentGreen}"
+                                                                     BorderThickness="0"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="1"
+                                                                Orientation="Horizontal"
+                                                                VerticalAlignment="Center">
+                                                        <Button Content="{Binding OpenButtonText}"
+                                                                Background="{DynamicResource ActionBtnBg}"
+                                                                Foreground="{DynamicResource TextPrimary}"
+                                                                BorderBrush="{DynamicResource ActionBtnBorder}"
+                                                                BorderThickness="1"
+                                                                Padding="10,6"
+                                                                Margin="4"
+                                                                FontWeight="SemiBold"
+                                                                Cursor="Hand"
+                                                                Click="AnalyzerOpenFolder_Click"
+                                                                Tag="{Binding}"/>
+                                                        <Button Content="{Binding DeleteButtonText}"
+                                                                Background="#C62828"
+                                                                Foreground="White"
+                                                                Padding="10,6"
+                                                                Margin="4"
+                                                                FontWeight="SemiBold"
+                                                                Cursor="Hand"
+                                                                Click="AnalyzerDeleteItem_Click"
+                                                                Tag="{Binding}"/>
+                                                    </StackPanel>
+                                                </Grid>
                                             </Border>
-                                        </Grid>
-                                        <TextBlock x:Name="PowerEcoDesc"
-                                                   TextWrapping="Wrap"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   Margin="0,8,0,0"
-                                                   Text="Знижує споживання: CPU до 60%, дисплей 60 Гц, PCIe ASPM та енергоощадний режим GPU."/>
-                                        <Button x:Name="BtnPowerEco"
-                                                Content="⚡ Активувати"
-                                                Background="{DynamicResource ActionBtnBg}"
-                                                Foreground="{DynamicResource TextPrimary}"
-                                                BorderBrush="{DynamicResource ActionBtnBorder}"
-                                                Padding="12,7"
-                                                Margin="0,12,0,0"
-                                                Cursor="Hand"
-                                                Click="PowerActivate_Click"
-                                                Tag="Eco"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Original Snapshot -->
-                                <Border Grid.Column="1"
-                                        Background="{DynamicResource CardBg}"
-                                        BorderBrush="{DynamicResource CardBorder}"
-                                        BorderThickness="1"
-                                        CornerRadius="8"
-                                        Padding="16"
-                                        Margin="0,0,10,0">
-                                    <StackPanel>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0"
-                                                       x:Name="PowerSnapshotTitle"
-                                                       Text="📸 Зліпок системи"
-                                                       FontSize="13"
-                                                       FontWeight="Black"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       TextWrapping="Wrap"/>
-                                            <Border Grid.Column="1"
-                                                    x:Name="PowerSnapshotBadge"
-                                                    Background="{DynamicResource SuccessBrush}"
-                                                    CornerRadius="4"
-                                                    Padding="8,2"
-                                                    Margin="8,0,0,0"
-                                                    Visibility="Collapsed"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="✓ АКТИВНО"
-                                                           FontSize="9.5"
-                                                           FontWeight="Black"
-                                                           Foreground="White"/>
-                                            </Border>
-                                        </Grid>
-                                        <TextBlock x:Name="PowerSnapshotDesc"
-                                                   TextWrapping="Wrap"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   Margin="0,8,0,0"
-                                                   Text="Відновлює збережену схему живлення, частоту дисплея та налаштування GPU."/>
-                                        <Button x:Name="BtnPowerSnapshot"
-                                                Content="⚡ Активувати"
-                                                Background="{DynamicResource ActionBtnBg}"
-                                                Foreground="{DynamicResource TextPrimary}"
-                                                BorderBrush="{DynamicResource ActionBtnBorder}"
-                                                Padding="12,7"
-                                                Margin="0,12,0,0"
-                                                Cursor="Hand"
-                                                Click="PowerActivate_Click"
-                                                Tag="Snapshot"/>
-                                        <Button x:Name="BtnPowerUpdateSnapshot"
-                                                Content="🔄 Оновити зліпок"
-                                                Background="#8E44AD"
-                                                Foreground="White"
-                                                BorderThickness="0"
-                                                Padding="12,7"
-                                                Margin="0,8,0,0"
-                                                Cursor="Hand"
-                                                Click="BtnPowerUpdateSnapshot_Click"/>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Ultra Performance -->
-                                <Border Grid.Column="2"
-                                        Background="{DynamicResource CardBg}"
-                                        BorderBrush="{DynamicResource CardBorder}"
-                                        BorderThickness="1"
-                                        CornerRadius="8"
-                                        Padding="16">
-                                    <StackPanel>
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0"
-                                                       x:Name="PowerUltraTitle"
-                                                       Text="🚀 Максимальна продуктивність"
-                                                       FontSize="13"
-                                                       FontWeight="Black"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       TextWrapping="Wrap"/>
-                                            <Border Grid.Column="1"
-                                                    x:Name="PowerUltraBadge"
-                                                    Background="{DynamicResource SuccessBrush}"
-                                                    CornerRadius="4"
-                                                    Padding="8,2"
-                                                    Margin="8,0,0,0"
-                                                    Visibility="Collapsed"
-                                                    VerticalAlignment="Center">
-                                                <TextBlock Text="✓ АКТИВНО"
-                                                           FontSize="9.5"
-                                                           FontWeight="Black"
-                                                           Foreground="White"/>
-                                            </Border>
-                                        </Grid>
-                                        <TextBlock x:Name="PowerUltraDesc"
-                                                   TextWrapping="Wrap"
-                                                   FontSize="11"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   Margin="0,8,0,0"
-                                                   Text="CPU до 100%, максимальна частота дисплея та вимкнені енергоощадні обмеження."/>
-                                        <Button x:Name="BtnPowerUltra"
-                                                Content="⚡ Активувати"
-                                                Background="{DynamicResource ActionBtnBg}"
-                                                Foreground="{DynamicResource TextPrimary}"
-                                                BorderBrush="{DynamicResource ActionBtnBorder}"
-                                                Padding="12,7"
-                                                Margin="0,12,0,0"
-                                                Cursor="Hand"
-                                                Click="PowerActivate_Click"
-                                                Tag="Ultra"/>
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
-                        </ScrollViewer>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
                     </Grid>
                 </Grid>
             </Border>

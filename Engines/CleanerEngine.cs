@@ -175,6 +175,88 @@ public class CleanerItem : INotifyPropertyChanged, IWeakEventListener
         => OnPropertyChanged(nameof(StatusColor));
 }
 
+/// <summary>Елемент аналізатора диска (режим WizTree): важкий файл або роздута тека.</summary>
+public class DiskHeavyItem : INotifyPropertyChanged, IWeakEventListener
+{
+    public DiskHeavyItem()
+    {
+        PropertyChangedEventManager.AddListener(LocalizationManager.Instance, this, string.Empty);
+    }
+
+    bool IWeakEventListener.ReceiveWeakEvent(Type managerType, object sender, EventArgs e)
+    {
+        if (managerType == typeof(PropertyChangedEventManager))
+        {
+            OnLocalizationChanged(sender, (PropertyChangedEventArgs)e);
+            return true;
+        }
+        return false;
+    }
+
+    private void OnLocalizationChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        OnPropertyChanged(nameof(SizeFormatted));
+        OnPropertyChanged(nameof(CategoryTagLocalized));
+        OnPropertyChanged(nameof(OpenButtonText));
+        OnPropertyChanged(nameof(DeleteButtonText));
+    }
+
+    public string Name { get; set; } = string.Empty;
+    public string FullPath { get; set; } = string.Empty;
+
+    /// <summary>Стабільний тег категорії: "Файл" / "Папка" / "AppData / Кеш" / "Ігри / Медіа".</summary>
+    public string CategoryTag { get; set; } = "Файл";
+
+    public long SizeBytes { get; set; }
+
+    /// <summary>Відсоток від найбільшого знайденого елемента (0..100) для смуги розміру.</summary>
+    public double RelativePercent { get; set; }
+
+    public DateTime LastModified { get; set; } = DateTime.MinValue;
+
+    public bool IsDirectory { get; set; }
+
+    public string SizeFormatted
+    {
+        get
+        {
+            var loc = LocalizationManager.Instance;
+            long b = SizeBytes;
+            if (b >= 1024L * 1024 * 1024) return $"{b / (1024.0 * 1024 * 1024):N2} {loc["Common.UnitGB"]}";
+            if (b >= 1024 * 1024) return $"{b / (1024.0 * 1024):N2} {loc["Common.UnitMB"]}";
+            if (b >= 1024) return $"{b / 1024.0:N2} {loc["Common.UnitKB"]}";
+            return $"{b} {loc["Common.UnitBytes"]}";
+        }
+    }
+
+    public string LastModifiedFormatted => LastModified == DateTime.MinValue
+        ? "—"
+        : LastModified.ToString("yyyy-MM-dd HH:mm");
+
+    /// <summary>Кнопка «Папка» — відкрити розташування у Провіднику.</summary>
+    public string OpenButtonText => LocalizationManager.Instance["Common.BtnOpenFolder"];
+
+    /// <summary>Кнопка «Кошик» — безпечно видалити елемент.</summary>
+    public string DeleteButtonText => LocalizationManager.Instance["Common.BtnRecycle"];
+
+    /// <summary>Локалізований бейдж категорії.</summary>
+    public string CategoryTagLocalized => LocalizationManager.Instance.TryGet($"Cleaner.Analyzer.Tag.{CategoryTagKey}", out var v) && !string.IsNullOrWhiteSpace(v)
+        ? v
+        : CategoryTag;
+
+    private string CategoryTagKey => CategoryTag switch
+    {
+        "Папка" => "Folder",
+        "AppData / Кеш" => "AppData",
+        "Ігри / Медіа" => "Games",
+        _ => "File"
+    };
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    protected void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
 public static class CleanerEngine
 {
     private static readonly string LocalAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
@@ -727,41 +809,26 @@ public static class CleanerEngine
         }
         if (!Directory.Exists(path)) return 0;
 
-        long total = 0;
-        var stack = new Stack<string>();
-        stack.Push(path);
-
-        while (stack.Count > 0)
+        // .NET 8 EnumerationOptions: пропуск недоступних каталогів і ReparsePoint (симлінки/junctions),
+        // що захищає від зациклень та подвійного підрахунку.
+        var options = new EnumerationOptions
         {
-            string current = stack.Pop();
-            try
-            {
-                foreach (var file in Directory.EnumerateFiles(current))
-                {
-                    try
-                    {
-                        var fi = new FileInfo(file);
-                        if ((fi.Attributes & FileAttributes.ReparsePoint) == 0)
-                            total += fi.Length;
-                    }
-                    catch { }
-                }
+            IgnoreInaccessible = true,
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            ReturnSpecialDirectories = false
+        };
 
-                foreach (var dir in Directory.EnumerateDirectories(current))
-                {
-                    try
-                    {
-                        var di = new DirectoryInfo(dir);
-                        if ((di.Attributes & FileAttributes.ReparsePoint) == 0)
-                        {
-                            stack.Push(dir);
-                        }
-                    }
-                    catch { }
-                }
+        long total = 0;
+        try
+        {
+            foreach (var file in new DirectoryInfo(path).EnumerateFiles("*", options))
+            {
+                try { total += file.Length; }
+                catch { }
             }
-            catch { }
         }
+        catch { }
 
         return total;
     }
@@ -1042,6 +1109,429 @@ public static class CleanerEngine
         }
 
         return 0;
+    }
+
+    #endregion
+
+    #region Аналізатор диска (WizTree-режим: важкі файли та роздуті теки)
+
+    private static readonly HashSet<string> HeavyFileExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".iso", ".img", ".vhd", ".vhdx", ".vmdk", ".zip", ".rar", ".7z", ".tar", ".gz",
+        ".mp4", ".mkv", ".avi", ".mov", ".flv", ".dmp", ".mdmp", ".bak", ".exe", ".msi",
+        ".pak", ".bin", ".log", ".tib", ".wim", ".esd", ".cab", ".dat", ".img"
+    };
+
+    private static readonly string[] GameMediaKeywords =
+    {
+        "steam", "steamapps", "epic games", "epicgames", "riot games", "battle.net", "blizzard",
+        "ubisoft", "gog", "ea games", "eadesktop", "games", "xbox", "minecraft", "warcraft",
+        "call of duty", "activision", "rockstar"
+    };
+
+    private const long HeavyFileThresholdBytes = 50L * 1024 * 1024; // > 50 МБ
+
+    /// <summary>
+    /// Швидкий аналіз зайнятого простору (WizTree-стиль): топ важких файлів та топ роздутих тек.
+    /// Проходить обраний корінь паралельно по top-level каталогах, пропускаючи WinSxS (hardlinks) та
+    /// ReparsePoint (симлінки/junctions), тому завершується за кілька секунд.
+    /// </summary>
+    public static async Task<List<DiskHeavyItem>> ScanDriveHeavyItemsAsync(
+        string rootPath,
+        int topFilesCount = 50,
+        int topFoldersCount = 30,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
+    {
+        return await Task.Run(() =>
+        {
+            var result = new List<DiskHeavyItem>();
+            if (string.IsNullOrWhiteSpace(rootPath) || !Directory.Exists(rootPath)) return result;
+
+            // Нормалізуємо корінь без завершальної риски (C:\ → C:) для коректного порівняння батьків.
+            string scanRoot = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (scanRoot.Length == 2 && scanRoot[1] == ':') scanRoot += Path.DirectorySeparatorChar;
+            string compareRoot = scanRoot.TrimEnd(Path.DirectorySeparatorChar);
+
+            var candidates = BuildAnalyzerCandidates(scanRoot);
+            var sizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            var heavyFiles = new List<DiskHeavyItem>();
+            var gate = new object();
+
+            string[] topLevelDirs;
+            try { topLevelDirs = Directory.GetDirectories(scanRoot); }
+            catch { topLevelDirs = Array.Empty<string>(); }
+
+            int done = 0;
+            var parallelOptions = new ParallelOptions
+            {
+                CancellationToken = ct,
+                MaxDegreeOfParallelism = Math.Max(2, Environment.ProcessorCount)
+            };
+
+            progress?.Report(LocalizationManager.Instance["Cleaner.Analyzer.Scanning"]);
+
+            Parallel.ForEach(topLevelDirs, parallelOptions, topDir =>
+            {
+                var localSizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                var localFiles = new List<DiskHeavyItem>();
+                WalkForAnalyzer(topDir, compareRoot, candidates, localSizes, localFiles, ct);
+
+                lock (gate)
+                {
+                    foreach (var kv in localSizes)
+                    {
+                        sizes.TryGetValue(kv.Key, out long existing);
+                        sizes[kv.Key] = existing + kv.Value;
+                    }
+                    heavyFiles.AddRange(localFiles);
+                    done++;
+                    if (done % 4 == 0)
+                    {
+                        progress?.Report(LocalizationManager.Instance.Format("Cleaner.Analyzer.Progress", done, topLevelDirs.Length));
+                    }
+                }
+            });
+
+            // Файли, що лежать прямо в корені (наприклад, C:\hiberfil.sys, pagefile.sys, великі ISO/архіви).
+            try
+            {
+                foreach (var f in new DirectoryInfo(scanRoot).EnumerateFiles())
+                {
+                    try
+                    {
+                        long len = f.Length;
+                        if (len <= 0) continue;
+                        if (len >= HeavyFileThresholdBytes && HeavyFileExtensions.Contains(f.Extension))
+                        {
+                            heavyFiles.Add(new DiskHeavyItem
+                            {
+                                Name = f.Name,
+                                FullPath = f.FullName,
+                                IsDirectory = false,
+                                SizeBytes = len,
+                                LastModified = SafeLastWrite(f),
+                                CategoryTag = "Файл"
+                            });
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            // Топ важких файлів
+            var topFiles = heavyFiles
+                .OrderByDescending(x => x.SizeBytes)
+                .Take(Math.Max(1, topFilesCount))
+                .ToList();
+
+            // Топ важких тек (агрегація кандидатів) з визначенням категорії
+            var topFolders = sizes
+                .Where(kv => kv.Value > 0)
+                .OrderByDescending(kv => kv.Value)
+                .Take(Math.Max(1, topFoldersCount))
+                .Select(kv => new DiskHeavyItem
+                {
+                    Name = SafeDisplayName(kv.Key, compareRoot),
+                    FullPath = kv.Key,
+                    IsDirectory = true,
+                    SizeBytes = kv.Value,
+                    LastModified = SafeDirectoryLastWrite(kv.Key),
+                    CategoryTag = ClassifyFolderTag(kv.Key)
+                })
+                .ToList();
+
+            result.AddRange(topFolders);
+            result.AddRange(topFiles);
+
+            long max = result.Count == 0 ? 0 : result.Max(x => x.SizeBytes);
+            if (max > 0)
+            {
+                foreach (var item in result)
+                {
+                    item.RelativePercent = Math.Round(item.SizeBytes / (double)max * 100.0, 1);
+                }
+            }
+
+            return result;
+        }, ct);
+    }
+
+    /// <summary>Рекурсивний обхід піддерева: агрегує розміри кандидатів та збирає важкі файли.</summary>
+    private static void WalkForAnalyzer(
+        string startDir,
+        string compareRoot,
+        HashSet<string> candidates,
+        Dictionary<string, long> sizes,
+        List<DiskHeavyItem> heavyFiles,
+        CancellationToken ct)
+    {
+        var stack = new Stack<string>();
+        stack.Push(startDir);
+
+        while (stack.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            string current = stack.Pop();
+
+            // Файли
+            try
+            {
+                foreach (var f in new DirectoryInfo(current).EnumerateFiles())
+                {
+                    long len;
+                    try { len = f.Length; } catch { continue; }
+                    if (len <= 0) continue;
+
+                    AccumulateAncestors(current, len, compareRoot, candidates, sizes);
+
+                    if (len >= HeavyFileThresholdBytes && HeavyFileExtensions.Contains(f.Extension))
+                    {
+                        heavyFiles.Add(new DiskHeavyItem
+                        {
+                            Name = f.Name,
+                            FullPath = f.FullName,
+                            IsDirectory = false,
+                            SizeBytes = len,
+                            LastModified = SafeLastWrite(f),
+                            CategoryTag = "Файл"
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            // Підкаталоги (пропускаємо WinSxS-hardlinks та ReparsePoint)
+            try
+            {
+                foreach (var d in new DirectoryInfo(current).EnumerateDirectories())
+                {
+                    try
+                    {
+                        if ((d.Attributes & FileAttributes.ReparsePoint) != 0) continue;
+                    }
+                    catch { continue; }
+
+                    if (d.Name.Equals("WinSxS", StringComparison.OrdinalIgnoreCase)) continue;
+                    stack.Push(d.FullName);
+                }
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>Додає розмір файлу всім каталогам-кандидатам, що є його предками.</summary>
+    private static void AccumulateAncestors(
+        string dir,
+        long len,
+        string compareRoot,
+        HashSet<string> candidates,
+        Dictionary<string, long> sizes)
+    {
+        string? current = dir;
+        int guard = 0;
+        while (!string.IsNullOrEmpty(current) && guard++ < 64)
+        {
+            if (candidates.Contains(current))
+            {
+                sizes.TryGetValue(current, out long acc);
+                sizes[current] = acc + len;
+            }
+
+            if (string.Equals(current.TrimEnd(Path.DirectorySeparatorChar), compareRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            string? parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent) || string.Equals(parent, current, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+            current = parent;
+        }
+    }
+
+    /// <summary>Формує набір тек-кандидатів: top-level + другий рівень + відомі «роздуті» каталоги AppData/Temp/Downloads.</summary>
+    private static HashSet<string> BuildAnalyzerCandidates(string scanRoot)
+    {
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        void AddIfExists(string? p)
+        {
+            if (!string.IsNullOrWhiteSpace(p) && Directory.Exists(p)) candidates.Add(Path.GetFullPath(p));
+        }
+
+        void AddChildren(string? dir)
+        {
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) return;
+            try
+            {
+                foreach (var child in Directory.GetDirectories(dir)) candidates.Add(Path.GetFullPath(child));
+            }
+            catch { }
+        }
+
+        // Top-level диска та їхні безпосередні підкаталоги
+        try
+        {
+            foreach (var d in Directory.GetDirectories(scanRoot))
+            {
+                candidates.Add(Path.GetFullPath(d));
+                AddChildren(d);
+            }
+        }
+        catch { }
+
+        // Відомі «роздуті» локації
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        AddChildren(local);      // AppData\Local\*
+        AddChildren(roaming);    // AppData\Roaming\*
+        AddIfExists(Path.Combine(userProfile, "Downloads"));
+        AddIfExists(Path.Combine(userProfile, "Documents"));
+        AddIfExists(Path.Combine(userProfile, "Videos"));
+        AddIfExists(Path.Combine(local, "Temp"));
+        AddIfExists(Path.Combine(userProfile, "AppData", "Local", "Packages"));
+        AddIfExists(Path.Combine(local, "Docker"));
+        AddIfExists(Path.Combine(local, "Docker", "wsl"));
+        AddIfExists(@"C:\Temp");
+        AddIfExists(Path.Combine(WinDir, "Temp"));
+
+        return candidates;
+    }
+
+    /// <summary>Класифікує теку за стабільним тегом категорії.</summary>
+    private static string ClassifyFolderTag(string path)
+    {
+        string lower = path.ToLowerInvariant();
+
+        if (lower.Contains(@"\appdata\local\") || lower.Contains(@"\appdata\roaming\") ||
+            lower.Contains(@"\appdata\locallow\") || lower.EndsWith(@"\temp") || lower.Contains(@"\temp\"))
+        {
+            return "AppData / Кеш";
+        }
+
+        if (lower.Contains(@"\downloads") || lower.Contains(@"\videos") || lower.Contains(@"\documents"))
+        {
+            return "Ігри / Медіа";
+        }
+
+        foreach (var kw in GameMediaKeywords)
+        {
+            if (lower.Contains(kw)) return "Ігри / Медіа";
+        }
+
+        return "Папка";
+    }
+
+    /// <summary>Показує коротку назву теки (останній сегмент), для кореневих тек — повний шлях.</summary>
+    private static string SafeDisplayName(string fullPath, string compareRoot)
+    {
+        try
+        {
+            string trimmed = fullPath.TrimEnd(Path.DirectorySeparatorChar);
+            if (string.Equals(trimmed, compareRoot, StringComparison.OrdinalIgnoreCase)) return trimmed;
+
+            string leaf = Path.GetFileName(trimmed);
+            return string.IsNullOrWhiteSpace(leaf) ? trimmed : leaf;
+        }
+        catch
+        {
+            return fullPath;
+        }
+    }
+
+    private static DateTime SafeLastWrite(FileInfo fi)
+    {
+        try { return fi.LastWriteTime; } catch { return DateTime.MinValue; }
+    }
+
+    private static DateTime SafeDirectoryLastWrite(string dir)
+    {
+        try { return Directory.GetLastWriteTime(dir); } catch { return DateTime.MinValue; }
+    }
+
+    /// <summary>Відкриває Провідник із виділеним файлом або відкриває саму теку.</summary>
+    public static void OpenInExplorer(DiskHeavyItem item)
+    {
+        if (item == null || string.IsNullOrWhiteSpace(item.FullPath)) return;
+        try
+        {
+            string args = item.IsDirectory
+                ? $"\"{item.FullPath}\""
+                : $"/select,\"{item.FullPath}\"";
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = args,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Аналізатор: не вдалося відкрити Провідник для {item.FullPath}: {ex.Message}", "ERROR");
+        }
+    }
+
+    /// <summary>
+    /// Безпечно видаляє важкий файл або теку (типово — у Кошик). Системні/захищені шляхи блокуються.
+    /// </summary>
+    public static async Task<bool> DeleteHeavyItemAsync(DiskHeavyItem item, bool sendToRecycleBin = true)
+    {
+        if (item == null || string.IsNullOrWhiteSpace(item.FullPath)) return false;
+
+        return await Task.Run(() =>
+        {
+            string full;
+            try { full = Path.GetFullPath(item.FullPath); }
+            catch { return false; }
+
+            if (!IsPathSafeForCleanup(full))
+            {
+                AppLogger.Log($"Аналізатор: видалення заблоковано (захищений шлях): {full}", "WARN");
+                return false;
+            }
+
+            try
+            {
+                if (File.Exists(full))
+                {
+                    if (sendToRecycleBin)
+                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(
+                            full,
+                            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                            Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                    else
+                        File.Delete(full);
+                    AppLogger.Log($"Аналізатор: видалено файл {full}", "SUCCESS");
+                    return true;
+                }
+
+                if (Directory.Exists(full))
+                {
+                    if (sendToRecycleBin)
+                        Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(
+                            full,
+                            Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
+                            Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                    else
+                        Directory.Delete(full, recursive: true);
+                    AppLogger.Log($"Аналізатор: видалено теку {full}", "SUCCESS");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Log($"Аналізатор: помилка видалення {full}: {ex.Message}", "ERROR");
+            }
+
+            return false;
+        });
     }
 
     #endregion

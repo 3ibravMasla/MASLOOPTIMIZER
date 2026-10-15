@@ -23,6 +23,37 @@
                     "SortSizeAsc":  "📦 By size (asc)",
                     "SortSafeFirst":  "🟢 Safe first",
                     "SortCategory":  "📂 By category",
+                    "Analyzer":  {
+                                     "ModeCache":  "🧹 Cache & Junk Cleanup",
+                                     "ModeAnalyzer":  "📊 Disk Analyzer (WizTree)",
+                                     "Scanning":  "Scanning the selected drive...",
+                                     "Progress":  "Scanning: {0}/{1} folders...",
+                                     "ScanDone":  "Scan complete: {0} ({1} items found)",
+                                     "ScanFailed":  "Drive scan failed.",
+                                     "PathMissing":  "The selected path is unavailable.",
+                                     "Ready":  "Choose a drive and click \"Scan drive\".",
+                                     "DriveLabel":  "{0}  (Free {1} GB of {2} GB)",
+                                     "DriveLabelShort":  "Drive:",
+                                     "FilterLabel":  "Filter:",
+                                     "PresetProfile":  "👤 User Profile & AppData",
+                                     "PresetDownloads":  "⬇️ Downloads",
+                                     "FilterFolders":  "📂 Top heavy folders",
+                                     "FilterFiles":  "📄 Top large files",
+                                     "FilterAll":  "📊 All",
+                                     "BtnScan":  "🔍 Scan drive",
+                                     "BtnOpen":  "📂 Folder",
+                                     "BtnDelete":  "🗑️ Recycle",
+                                     "ConfirmDelete":  "Move to Recycle Bin:\n\n{0}\n\nContinue?",
+                                     "ConfirmTitle":  "Disk Analyzer",
+                                     "Deleted":  "🗑️ Moved to Recycle Bin: {0}",
+                                     "DeleteFailed":  "Failed to delete item (protected path or file in use).",
+                                     "Tag":  {
+                                                 "File":  "File",
+                                                 "Folder":  "Folder",
+                                                 "AppData":  "AppData / Cache",
+                                                 "Games":  "Games / Media"
+                                             }
+                                 },
                     "Item":  {
                                  "clean_gpu_shaders":  {
                                                            "Name":  "GPU shader cache (DirectX / NVIDIA / AMD / Intel / Vulkan)",
