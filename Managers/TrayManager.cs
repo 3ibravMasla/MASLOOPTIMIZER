@@ -59,6 +59,7 @@ public static class TrayManager
         var mFlushRam = new ToolStripMenuItem("🧹 Очистити пам'ять ОЗП", null, async (s, e) => await FlushRamQuickAsync());
         var mEmptyTrash = new ToolStripMenuItem("🗑️ Очистити весь кошик", null, (s, e) => EmptyTrashQuick());
         var mHygiene = new ToolStripMenuItem("🧼 Гігієна сесії (DNS + буфер обміну)", null, OnHygieneClicked);
+        var mShortcut = new ToolStripMenuItem("🔗 Створити ярлик на Робочому столі", null, (s, e) => CreateShortcutQuick());
         var mExit = new ToolStripMenuItem("🛑 Повний вихід", null, (s, e) => FullExit());
         mExit.ForeColor = ColorTranslator.FromHtml("#F87171");
 
@@ -68,6 +69,7 @@ public static class TrayManager
         contextMenu.Items.Add(mFlushRam);
         contextMenu.Items.Add(mEmptyTrash);
         contextMenu.Items.Add(mHygiene);
+        contextMenu.Items.Add(mShortcut);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(mExit);
 
@@ -173,6 +175,51 @@ public static class TrayManager
             _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "Кошик на всіх дисках повністю очищено!", ToolTipIcon.Info);
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Створює ярлик MASLOOPTIMIZER на Робочому столі через COM WScript.Shell.
+    /// Потрібно, коли застосунок лежить у вкладеній папці (напр. C:\MASLOOPTIMIZER\app\ із ~250
+    /// файлами рантайму): ярлик дає запуск в один клік, не блукаючи по теці.
+    /// TargetPath береться з Environment.ProcessPath, тому ярлик лишається валідним
+    /// після будь-яких автооновлень — апдейтер замінює файли в тій самій теці.
+    /// </summary>
+    private static void CreateShortcutQuick()
+    {
+        try
+        {
+            string? exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
+            if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
+            {
+                _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "Не вдалося визначити шлях до програми", ToolTipIcon.Warning);
+                return;
+            }
+
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            string lnkPath = Path.Combine(desktop, "MASLOOPTIMIZER.lnk");
+
+            Type? shellType = Type.GetTypeFromProgID("WScript.Shell");
+            if (shellType == null)
+            {
+                _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "WScript.Shell недоступний", ToolTipIcon.Warning);
+                return;
+            }
+
+            dynamic shell = Activator.CreateInstance(shellType)!;
+            dynamic shortcut = shell.CreateShortcut(lnkPath);
+            shortcut.TargetPath = exePath;
+            shortcut.WorkingDirectory = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+            shortcut.IconLocation = exePath + ",0";
+            shortcut.Description = "MASLOOPTIMIZER — оптимізатор Windows";
+            shortcut.Save();
+
+            _notifyIcon?.ShowBalloonTip(2000, "MASLOOPTIMIZER", "Ярлик створено на Робочому столі", ToolTipIcon.Info);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"Не вдалося створити ярлик: {ex.Message}", "WARN");
+            _notifyIcon?.ShowBalloonTip(1500, "MASLOOPTIMIZER", "Помилка створення ярлика", ToolTipIcon.Warning);
+        }
     }
 
     /// <summary>
